@@ -1,0 +1,69 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+.pnpm-store/
+
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# Vercel
+.vercel
+
+# Testing
+/coverage
+/playwright-report/
+/test-results/
+
+# Env files: only the secret-free template is committed
+.env
+.env.*
+!.env.template
+
+# Secrets and certificates
+*.pem
+*.key
+*.p12
+*.crt
+service-account*.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Editors and local tooling
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.cursor/
+*.swp
+*.swo
+*~
+.claude/settings.local.json
+.claude/scratch/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+.cache/
+.eslintcache
+.turbo/
