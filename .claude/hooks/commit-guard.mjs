@@ -1,4 +1,4 @@
-// The commit convention in docs/git.md has no exit code of its own, and a trailer naming the assistant
+// The commit convention in .claude/rules/git.md has no exit code of its own, and a trailer naming the assistant
 // is the one line of it a model adds by reflex. This runs before every Bash call, looks only at
 // `git commit`, and refuses a message that carries a tool trailer or a subject without its type.
 import { readFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ if (!/\bgit\s+(-\S+\s+)*commit\b/.test(command)) {
 
 const TRAILER = /^\s*co-authored-by:|generated with|🤖/im;
 const SUBJECT = /^(fix|feat|refactor|docs|test|chore|skill): \S/;
-const SEE = 'See docs/git.md.';
+const SEE = 'See .claude/rules/git.md.';
 
 if (TRAILER.test(command)) {
     deny(

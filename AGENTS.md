@@ -12,8 +12,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 A hosted SEO and GEO autopilot. An owner connects a site, Citequill researches weekly, writes pages,
 publishes them to the site through an integration and reports back. Next.js App Router on Vercel,
-pnpm, TypeScript, Tailwind. The owner's language is Polish: reply, report and write docs in Polish,
-plainly, with no bold in prose.
+pnpm, TypeScript, Tailwind. The owner's language is Polish: reply and report in Polish. Everything in
+the repo is English: docs, decisions, rules, skills, comments, commit messages. Write plainly, with
+no bold in prose.
 
 ## `docs/` is the source of truth
 
@@ -40,7 +41,7 @@ until a matching file is read again, so read the rule your next edit touches.
 | [`.claude/rules/orthogonality.md`](.claude/rules/orthogonality.md) | Adding a function, constant, type, key or string: where that knowledge already lives |
 | [`.claude/rules/comments.md`](.claude/rules/comments.md)           | Writing a comment: the one kind that earns its line, and why the default is none     |
 | [`.claude/rules/testing.md`](.claude/rules/testing.md)             | Starting a feature or a fix: the gate and the two rules with no checker              |
-| [`docs/git.md`](docs/git.md)                                       | Branching or committing                                                              |
+| [`.claude/rules/git.md`](.claude/rules/git.md)                     | Branching or committing                                                              |
 
 ## Done means `pnpm verify` is green
 
@@ -58,7 +59,7 @@ Prettier, so its output is never cosmetic noise.
 Commit and push only when the owner asks. A commit subject is `type: a sentence that says what is now
 true`; the message ends with its last paragraph, with no `Co-Authored-By` and no tool name. The hook
 `.claude/hooks/commit-guard.mjs` refuses a message that breaks this. The convention is
-[`docs/git.md`](docs/git.md).
+[`.claude/rules/git.md`](.claude/rules/git.md).
 
 ## Secrets
 
@@ -69,3 +70,18 @@ it. Public client config uses `NEXT_PUBLIC_*`.
 ## Skills
 
 - `/comment-audit [path]` sweeps comments against `comments.md` and changes nothing else.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default labels, each string equal to its role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` at the root, decisions in `docs/decisions.md`. See
+`docs/agents/domain.md`.

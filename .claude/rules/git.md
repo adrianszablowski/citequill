@@ -1,3 +1,10 @@
+---
+paths:
+    - '.claude/hooks/commit-guard.mjs'
+    - '.github/**'
+    - '.gitignore'
+---
+
 # Branches and commits
 
 Read before `git checkout -b` and before `git commit`. Commit only when the owner asks.
