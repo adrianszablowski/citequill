@@ -23,6 +23,7 @@ means the two decisions were never one: write it twice.
 | A product decision, what Citequill does and why | `docs/`, the decision in `docs/decisions.md`                  |
 | What a function does with a given input         | its test                                                      |
 | A shared type                                   | `lib/types/<domain>.ts`                                       |
+| A UI primitive: button, input, field            | `components/ui/`, added with `shadcn add`                     |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.

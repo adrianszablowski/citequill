@@ -53,7 +53,7 @@ After signing in, a list of projects. Inside a project, five tabs:
 | Reports   | one report per week per project                                                                                                                                |
 | Settings  | the table above, the mode switch, the script snippet, the Content API key, instructions for IndexNow and Search Console                                        |
 
-Components from shadcn/ui on Tailwind 4.
+Components from shadcn/ui on Base UI and Tailwind 4. Forms with React Hook Form and Zod.
 
 ## MVP scope and build order
 

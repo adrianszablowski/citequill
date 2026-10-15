@@ -33,6 +33,8 @@ Write the smallest function that does the job. If naming it needs an _and_, spli
 
 - One component per file, `export default`, named after the file: `project-card.tsx` → `ProjectCard`.
   A private subcomponent used only there may sit beside it.
+- `components/ui/` is written by `pnpm dlx shadcn@latest add <name>` and keeps the shape the CLI
+  wrote; `shadcn add -o` regenerates it. The one edit after adding a component is `pnpm lint:fix`.
 - File order: exported component → private subcomponents → file-local helpers → static content.
 - Logic that closes over no state or props lives in `lib/`, with a signature a test calls directly.
   Never at module scope beside a component, never declared in two routes.
@@ -56,10 +58,21 @@ Booleans take an auxiliary verb: `isLoading`, `hasError`, `canPublish`.
 - Import through `@/` (`@/lib/projects`), never a `../../` chain.
 - Functional and declarative, no classes.
 
+## Forms
+
+A form is a `'use client'` component: `useForm` from `react-hook-form` with a Zod schema through
+`zodResolver` from `@hookform/resolvers/zod`, each field a `Controller` rendering the shadcn `Field`
+family around an input from `components/ui/`. `import * as z from 'zod'`; the values type is
+`z.infer<typeof schema>`.
+
 ## Formatting
 
 Prettier decides formatting and `pnpm lint` reports it: 4 spaces, single quotes, trailing commas,
-`printWidth: 80`. ESLint adds the whitespace Prettier leaves alone: a blank line before every `if`,
+`printWidth: 80`, Tailwind classes in the plugin's order, also inside `cn` and `cva`. A Tailwind class
+is canonical: the predefined utility where one exists (`h-3.5` over `h-[14px]`, `bg-black/6` over
+`bg-black/[.06]`, `text-lg/8` over `text-lg leading-8`, `has-focus-visible:` over
+`has-[:focus-visible]:`); `better-tailwindcss/enforce-canonical-classes` reports the rest and
+`pnpm lint:fix` rewrites it. An arbitrary value stays only where no utility carries it. ESLint adds the whitespace Prettier leaves alone: a blank line before every `if`,
 `for`, `return`, `throw`, function, class and export, after every block and run of declarations, and
 braces on every `if` and loop. `pnpm lint:fix` writes both; in VS Code save does the same. Comments
 follow [`comments.md`](comments.md).

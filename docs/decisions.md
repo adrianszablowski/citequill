@@ -148,6 +148,19 @@ Reason: drafts mode cannot break anything on the customer's site, and the author
 
 Reason: the owner's instruction of 15 October 2026; two instruction files and two decision logs are two sources of truth, and one language in the repo means the skills, the rules and the docs quote each other without translation.
 
+## 2026-10-15: the UI stack is shadcn on Base UI, and a form is React Hook Form with Zod
+
+1. `shadcn init` ran with the CLI's current defaults for an existing Next.js project: Base UI primitives (`@base-ui/react`, the default since July 2026), the `nova` style, base color `neutral`, CSS variables, Lucide icons. `components.json` records this; `style` and `baseColor` cannot change after init. The `shadcn` package is a runtime dependency because `globals.css` imports `shadcn/tailwind.css`.
+2. A form is `useForm` from `react-hook-form` with a Zod 4 schema through `zodResolver` from `@hookform/resolvers/zod`, rendered with `Controller` and the shadcn `Field` family, as the shadcn forms documentation shows. Neither library ships an ESLint plugin; a form with `useForm` and `Controller` passed the gate, including the React Compiler rules bundled in `eslint-config-next`, on 15 October 2026.
+3. `components/ui/` is written by `shadcn add`. Its files export several named components, so the one-component-per-file rule stops at that directory. After every `shadcn add`, `pnpm lint:fix` brings the files to the repo's format.
+4. `prettier-plugin-tailwindcss` sorts classes, as Tailwind's documentation recommends, also inside `cn` and `cva` calls. `tailwindStylesheet` points at `app/globals.css` because Tailwind 4 has no config file.
+5. `lib/utils.ts` is a one-line re-export of `cn` from the `cn` package, not a helper of ours, so Vitest waits for the first helper with logic in `lib/`.
+6. Dark mode is the `.dark` class on `html`, as shadcn generates it, in place of the scaffold's `prefers-color-scheme` query. Nothing toggles it yet.
+7. Geist stays wired through `--font-geist-sans` and `--font-geist-mono` in `layout.tsx`; init had rewritten `--font-sans` to reference itself, which left the page without a font.
+8. A Tailwind class is canonical. The owner saw `suggestCanonicalClasses` warnings from the Tailwind IntelliSense extension; `eslint-plugin-better-tailwindcss` ships the same check as `enforce-canonical-classes`, built on Tailwind's own `canonicalizeCandidates`, so the gate enforces it instead of the editor. Only that one rule of the plugin is on; `rootFontSize: 16` lets pixel values map to the spacing scale. The scaffold page and `field.tsx` were rewritten by `pnpm lint:fix`.
+
+Reason: the owner asked, on 15 October 2026, to install the libraries by their documentation with their full configuration before step 1 of `product.md`. The CLI defaults are the documented path and leave the fewest choices to revisit; React Hook Form with Zod is the combination shadcn documents for its `Field` components and the one the owner named. A warning only the editor shows is a rule with no checker; the lint rule is the same logic in the gate.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.

@@ -1,5 +1,6 @@
 import stylistic from '@stylistic/eslint-plugin';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import betterTailwindcss from 'eslint-plugin-better-tailwindcss';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
 import prettier from 'eslint-config-prettier';
@@ -13,8 +14,18 @@ export default defineConfig([
     ...nextTs,
     prettier,
     {
-        plugins: { '@stylistic': stylistic },
+        plugins: {
+            '@stylistic': stylistic,
+            'better-tailwindcss': betterTailwindcss,
+        },
+        settings: {
+            'better-tailwindcss': {
+                entryPoint: 'app/globals.css',
+                rootFontSize: 16,
+            },
+        },
         rules: {
+            'better-tailwindcss/enforce-canonical-classes': 'error',
             '@stylistic/padding-line-between-statements': [
                 'error',
                 { blankLine: 'always', prev: 'directive', next: '*' },
