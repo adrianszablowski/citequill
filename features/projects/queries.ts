@@ -22,3 +22,68 @@ export const getProjectList = cache(async () => {
 export type ProjectListItem = Awaited<
     ReturnType<typeof getProjectList>
 >[number];
+
+export const getProject = cache(async (id: string) => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, domain')
+        .eq('id', id)
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+});
+
+export const getProjectLocales = cache(async (projectId: string) => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('project_locales')
+        .select('id, locale, base_url, is_default')
+        .eq('project_id', projectId)
+        .order('is_default', { ascending: false })
+        .order('locale');
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+});
+
+export const getPageKinds = cache(async (projectId: string) => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('page_kinds')
+        .select('id, name, url_prefix, skills(name), authors(name)')
+        .eq('project_id', projectId)
+        .order('name');
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+});
+
+export const getAuthors = cache(async (projectId: string) => {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('authors')
+        .select('id, name, title, url')
+        .eq('project_id', projectId)
+        .order('name');
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+});

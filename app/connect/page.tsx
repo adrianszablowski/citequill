@@ -15,8 +15,8 @@ export default function ConnectPage() {
                 <CardHeader>
                     <CardTitle className="text-xl">Connect your site</CardTitle>
                     <CardDescription>
-                        One project is one domain, and the project is named
-                        after it.
+                        One project is one domain. The crawl names it after the
+                        site.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

@@ -14,6 +14,166 @@ export type Database = {
     };
     public: {
         Tables: {
+            authors: {
+                Row: {
+                    id: string;
+                    name: string;
+                    project_id: string;
+                    title: string | null;
+                    url: string | null;
+                };
+                Insert: {
+                    id?: string;
+                    name: string;
+                    project_id: string;
+                    title?: string | null;
+                    url?: string | null;
+                };
+                Update: {
+                    id?: string;
+                    name?: string;
+                    project_id?: string;
+                    title?: string | null;
+                    url?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'authors_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            crawled_pages: {
+                Row: {
+                    body: string | null;
+                    crawled_at: string;
+                    error: string | null;
+                    id: string;
+                    locale: string | null;
+                    project_id: string;
+                    reader_body: string | null;
+                    signals: Json | null;
+                    title: string | null;
+                    url: string;
+                };
+                Insert: {
+                    body?: string | null;
+                    crawled_at?: string;
+                    error?: string | null;
+                    id?: string;
+                    locale?: string | null;
+                    project_id: string;
+                    reader_body?: string | null;
+                    signals?: Json | null;
+                    title?: string | null;
+                    url: string;
+                };
+                Update: {
+                    body?: string | null;
+                    crawled_at?: string;
+                    error?: string | null;
+                    id?: string;
+                    locale?: string | null;
+                    project_id?: string;
+                    reader_body?: string | null;
+                    signals?: Json | null;
+                    title?: string | null;
+                    url?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'crawled_pages_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            page_kinds: {
+                Row: {
+                    author_id: string | null;
+                    id: string;
+                    name: string;
+                    project_id: string;
+                    skill_id: string;
+                    url_prefix: string;
+                };
+                Insert: {
+                    author_id?: string | null;
+                    id?: string;
+                    name: string;
+                    project_id: string;
+                    skill_id: string;
+                    url_prefix?: string;
+                };
+                Update: {
+                    author_id?: string | null;
+                    id?: string;
+                    name?: string;
+                    project_id?: string;
+                    skill_id?: string;
+                    url_prefix?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'page_kinds_author_id_fkey';
+                        columns: ['author_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'authors';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'page_kinds_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'page_kinds_skill_id_fkey';
+                        columns: ['skill_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'skills';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            project_locales: {
+                Row: {
+                    base_url: string;
+                    id: string;
+                    is_default: boolean;
+                    locale: string;
+                    project_id: string;
+                };
+                Insert: {
+                    base_url: string;
+                    id?: string;
+                    is_default?: boolean;
+                    locale: string;
+                    project_id: string;
+                };
+                Update: {
+                    base_url?: string;
+                    id?: string;
+                    is_default?: boolean;
+                    locale?: string;
+                    project_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'project_locales_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             projects: {
                 Row: {
                     created_at: string;
@@ -38,15 +198,126 @@ export type Database = {
                 };
                 Relationships: [];
             };
+            runs: {
+                Row: {
+                    cost_usd: number;
+                    error: string | null;
+                    finished_at: string | null;
+                    id: string;
+                    input_tokens: number;
+                    kind_id: string | null;
+                    output_tokens: number;
+                    plan: Json | null;
+                    project_id: string;
+                    started_at: string;
+                    status: Database['public']['Enums']['run_status'];
+                    topic: string | null;
+                    trigger: Database['public']['Enums']['run_trigger'];
+                };
+                Insert: {
+                    cost_usd?: number;
+                    error?: string | null;
+                    finished_at?: string | null;
+                    id?: string;
+                    input_tokens?: number;
+                    kind_id?: string | null;
+                    output_tokens?: number;
+                    plan?: Json | null;
+                    project_id: string;
+                    started_at?: string;
+                    status?: Database['public']['Enums']['run_status'];
+                    topic?: string | null;
+                    trigger: Database['public']['Enums']['run_trigger'];
+                };
+                Update: {
+                    cost_usd?: number;
+                    error?: string | null;
+                    finished_at?: string | null;
+                    id?: string;
+                    input_tokens?: number;
+                    kind_id?: string | null;
+                    output_tokens?: number;
+                    plan?: Json | null;
+                    project_id?: string;
+                    started_at?: string;
+                    status?: Database['public']['Enums']['run_status'];
+                    topic?: string | null;
+                    trigger?: Database['public']['Enums']['run_trigger'];
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'runs_kind_id_fkey';
+                        columns: ['kind_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'page_kinds';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'runs_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            skills: {
+                Row: {
+                    body: string;
+                    description: string;
+                    id: string;
+                    is_product: boolean;
+                    name: string;
+                    project_id: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    body?: string;
+                    description?: string;
+                    id?: string;
+                    is_product?: boolean;
+                    name: string;
+                    project_id: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    body?: string;
+                    description?: string;
+                    id?: string;
+                    is_product?: boolean;
+                    name?: string;
+                    project_id?: string;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'skills_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
         };
         Views: {
             [_ in never]: never;
         };
         Functions: {
-            [_ in never]: never;
+            add_run_usage: {
+                Args: {
+                    cost: number;
+                    input: number;
+                    output: number;
+                    run: string;
+                };
+                Returns: undefined;
+            };
+            is_project_owner: { Args: { project: string }; Returns: boolean };
         };
         Enums: {
-            [_ in never]: never;
+            run_status: 'running' | 'finished' | 'failed';
+            run_trigger: 'crawl' | 'weekly' | 'manual';
         };
         CompositeTypes: {
             [_ in never]: never;
@@ -176,6 +447,9 @@ export type CompositeTypes<
 
 export const Constants = {
     public: {
-        Enums: {},
+        Enums: {
+            run_status: ['running', 'finished', 'failed'],
+            run_trigger: ['crawl', 'weekly', 'manual'],
+        },
     },
 } as const;

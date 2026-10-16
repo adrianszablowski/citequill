@@ -1,0 +1,1 @@
+drop index public.skills_one_product_per_project;

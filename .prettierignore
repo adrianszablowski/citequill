@@ -4,3 +4,6 @@ pnpm-lock.yaml
 next-env.d.ts
 docs/research
 supabase/.temp
+app/.well-known/workflow
+.workflow-data
+.claude/worktrees

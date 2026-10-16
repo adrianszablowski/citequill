@@ -18,7 +18,7 @@ In the long run Citequill is the one place to run sites from: content, live anal
 
 The user signs in with Google (Supabase Auth). In the MVP only the addresses in `ALLOWED_EMAILS` get in. A user has projects. A project is one site, that is one domain. Projects are independent of each other: their own skills, page kinds, locales, keys and data.
 
-A user without a project does not see the dashboard. After the first sign-in they land on the connect page, give the address of their site, and Citequill keeps its host without `www.` as the project's domain and runs the crawl from [`workflow.md`](workflow.md); the dashboard opens only when the crawl has produced the product skill. The same page adds every later site from the project switcher. Until the crawl names the project after the site, its name is its domain.
+A user without a project does not see the dashboard. After the first sign-in they land on the connect page, give the address of their site, and Citequill keeps its host without `www.` as the project's domain and starts the crawl from [`workflow.md`](workflow.md). While it runs they see a progress page with the number of pages read so far. The dashboard opens only when the crawl has produced the product skill, and it opens on the Skills section with that skill to review. A crawl that fails shows what went wrong and a button that runs it again. The same page adds every later site from the project switcher. Until the crawl names the project after the site, its name is its domain.
 
 `citequill.com` itself is the landing page, a product page the owner writes last. A signed-in visitor who opens it is sent to the dashboard: to their first project, or to the connect page when they have none.
 
@@ -55,13 +55,13 @@ The dashboard is always one project. A sidebar on the left and the content on th
 
 The sidebar collapses to a rail of icons, with the name of each section in a tooltip; the toggle in the header, the sidebar's edge and Cmd+B open and close it. The content starts with a header: the sidebar toggle and the title of the current section. There is no list of projects. Every button and link that waits on the server shows a spinner and a pending label that reuses its verb: Connecting…, Signing out…. The five sections:
 
-| Section   | What is in it                                                                                                                                                  |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pages     | a list of pages with state, locale and kind; preview; editing the markdown in a text field; Publish and Unpublish; a "Write a page" button with topic and kind |
-| Skills    | a list of skills; editing in a text field; adding custom ones                                                                                                  |
-| Analytics | live traffic from the script; Search Console data when connected                                                                                               |
-| Reports   | one report per week per project                                                                                                                                |
-| Settings  | the table above, the mode switch, the script snippet, the Content API key, instructions for IndexNow and Search Console                                        |
+| Section   | What is in it                                                                                                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pages     | a list of pages with state, locale and kind; preview; editing the markdown in a text field; Publish and Unpublish; a "Write a page" button with topic and kind                                                |
+| Skills    | three folders of tiles: Product, Page kinds, Custom; a tile opens the skill to edit name, description and body; adding custom ones                                                                            |
+| Analytics | live traffic from the script; Search Console data when connected                                                                                                                                              |
+| Reports   | one report per week per project                                                                                                                                                                               |
+| Settings  | the table above, with what the crawl could not fill in marked as not set yet, and Run the crawl again; the mode switch, the script snippet, the Content API key, instructions for IndexNow and Search Console |
 
 The sign-in page is one card with one button, Continue with Google, with the Google logo. Components from shadcn/ui on Base UI and Tailwind 4. Forms with React Hook Form and Zod.
 

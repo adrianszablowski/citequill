@@ -20,6 +20,10 @@ export function sectionHref(projectId: string, segment: ProjectSection) {
     return `/projects/${projectId}/${segment}` as const;
 }
 
+export function skillHref(projectId: string, skillId: string) {
+    return `/projects/${projectId}/skills/${skillId}` as const;
+}
+
 export function pageTitle(pathname: string) {
     const segment = pathname.split('/')[3];
 

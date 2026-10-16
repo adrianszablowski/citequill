@@ -67,3 +67,10 @@ temp/
 .cache/
 .eslintcache
 .turbo/
+/.swc
+
+# Vercel Workflow: the Local World keeps run data here in development
+.workflow-data/
+
+# Claude desktop app: worktrees of sessions started from this checkout
+.claude/worktrees/

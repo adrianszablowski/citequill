@@ -1,8 +1,9 @@
-import type { CSSProperties } from 'react';
+import { type CSSProperties, Suspense } from 'react';
 
 import AppSidebar from '@/components/app-sidebar';
 import SiteHeader from '@/components/site-header';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import ProjectGate from '@/features/projects/components/project-gate';
 
 export default function ProjectLayout({
     children,
@@ -17,6 +18,9 @@ export default function ProjectLayout({
                 } as CSSProperties
             }
         >
+            <Suspense>
+                <ProjectGate params={params} />
+            </Suspense>
             <AppSidebar params={params} />
             <SidebarInset>
                 <SiteHeader />

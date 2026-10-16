@@ -59,5 +59,13 @@ export default defineConfig([
             curly: ['error', 'all'],
         },
     },
-    globalIgnores(['.next/**', 'out/**', 'build/**', 'next-env.d.ts']),
+    globalIgnores([
+        '.next/**',
+        'out/**',
+        'build/**',
+        'next-env.d.ts',
+        'app/.well-known/workflow/**',
+        '.workflow-data/**',
+        '.claude/worktrees/**',
+    ]),
 ]);
