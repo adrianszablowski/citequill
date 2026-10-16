@@ -142,6 +142,119 @@ export type Database = {
                     },
                 ];
             };
+            pages: {
+                Row: {
+                    author_id: string | null;
+                    body_html: string | null;
+                    body_md: string;
+                    check_note: string | null;
+                    created_at: string;
+                    excerpt: string;
+                    faq: Json;
+                    id: string;
+                    kind_id: string | null;
+                    locale: string;
+                    meta_description: string;
+                    meta_title: string;
+                    project_id: string;
+                    published_at: string | null;
+                    reading_minutes: number;
+                    redirect_to: string | null;
+                    run_id: string | null;
+                    slug: string;
+                    sources: Json;
+                    status: Database['public']['Enums']['page_status'];
+                    tags: string[];
+                    title: string;
+                    translation_group_id: string;
+                    unpublished_at: string | null;
+                    updated_at: string;
+                };
+                Insert: {
+                    author_id?: string | null;
+                    body_html?: string | null;
+                    body_md: string;
+                    check_note?: string | null;
+                    created_at?: string;
+                    excerpt?: string;
+                    faq?: Json;
+                    id?: string;
+                    kind_id?: string | null;
+                    locale: string;
+                    meta_description?: string;
+                    meta_title?: string;
+                    project_id: string;
+                    published_at?: string | null;
+                    reading_minutes?: number;
+                    redirect_to?: string | null;
+                    run_id?: string | null;
+                    slug: string;
+                    sources?: Json;
+                    status?: Database['public']['Enums']['page_status'];
+                    tags?: string[];
+                    title: string;
+                    translation_group_id?: string;
+                    unpublished_at?: string | null;
+                    updated_at?: string;
+                };
+                Update: {
+                    author_id?: string | null;
+                    body_html?: string | null;
+                    body_md?: string;
+                    check_note?: string | null;
+                    created_at?: string;
+                    excerpt?: string;
+                    faq?: Json;
+                    id?: string;
+                    kind_id?: string | null;
+                    locale?: string;
+                    meta_description?: string;
+                    meta_title?: string;
+                    project_id?: string;
+                    published_at?: string | null;
+                    reading_minutes?: number;
+                    redirect_to?: string | null;
+                    run_id?: string | null;
+                    slug?: string;
+                    sources?: Json;
+                    status?: Database['public']['Enums']['page_status'];
+                    tags?: string[];
+                    title?: string;
+                    translation_group_id?: string;
+                    unpublished_at?: string | null;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'pages_author_id_fkey';
+                        columns: ['author_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'authors';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'pages_kind_id_fkey';
+                        columns: ['kind_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'page_kinds';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'pages_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'pages_run_id_fkey';
+                        columns: ['run_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'runs';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             project_locales: {
                 Row: {
                     base_url: string;
@@ -206,6 +319,7 @@ export type Database = {
                     id: string;
                     input_tokens: number;
                     kind_id: string | null;
+                    locale: string | null;
                     output_tokens: number;
                     plan: Json | null;
                     project_id: string;
@@ -221,6 +335,7 @@ export type Database = {
                     id?: string;
                     input_tokens?: number;
                     kind_id?: string | null;
+                    locale?: string | null;
                     output_tokens?: number;
                     plan?: Json | null;
                     project_id: string;
@@ -236,6 +351,7 @@ export type Database = {
                     id?: string;
                     input_tokens?: number;
                     kind_id?: string | null;
+                    locale?: string | null;
                     output_tokens?: number;
                     plan?: Json | null;
                     project_id?: string;
@@ -316,6 +432,7 @@ export type Database = {
             is_project_owner: { Args: { project: string }; Returns: boolean };
         };
         Enums: {
+            page_status: 'draft' | 'published' | 'unpublished';
             run_status: 'running' | 'finished' | 'failed';
             run_trigger: 'crawl' | 'weekly' | 'manual';
         };
@@ -448,6 +565,7 @@ export type CompositeTypes<
 export const Constants = {
     public: {
         Enums: {
+            page_status: ['draft', 'published', 'unpublished'],
             run_status: ['running', 'finished', 'failed'],
             run_trigger: ['crawl', 'weekly', 'manual'],
         },

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { pageCap } from '@/features/crawl/rank';
 import * as steps from '@/features/crawl/steps';
 import { crawlSite } from '@/features/crawl/workflow';
+import * as runSteps from '@/features/runs/steps';
 import { productSkillNames } from '@/features/skills/product-skill';
 
 vi.mock('@/features/crawl/steps', () => {
@@ -19,12 +20,18 @@ vi.mock('@/features/crawl/steps', () => {
         nameSite: vi.fn(async () => 'Acme'),
         writeProductSkill: vi.fn(async () => 'skill'),
         createStarterKinds: vi.fn(async () => {}),
+    };
+});
+
+vi.mock('@/features/runs/steps', () => {
+    return {
         finishRun: vi.fn(async () => {}),
         failRun: vi.fn(async () => {}),
     };
 });
 
 const mocked = vi.mocked(steps);
+const runs = vi.mocked(runSteps);
 
 const site = {
     origin: 'https://acme.com',
@@ -130,8 +137,8 @@ describe('crawlSite', () => {
             'Jane',
         );
 
-        expect(mocked.finishRun).toHaveBeenCalledWith('run');
-        expect(mocked.failRun).not.toHaveBeenCalled();
+        expect(runs.finishRun).toHaveBeenCalledWith('run');
+        expect(runs.failRun).not.toHaveBeenCalled();
     });
 
     it('stops at the page cap', async () => {
@@ -156,11 +163,11 @@ describe('crawlSite', () => {
 
         await crawlSite('project', 'run');
 
-        expect(mocked.failRun).toHaveBeenCalledWith(
+        expect(runs.failRun).toHaveBeenCalledWith(
             'run',
             'The site did not answer at https://acme.com.',
         );
 
-        expect(mocked.finishRun).not.toHaveBeenCalled();
+        expect(runs.finishRun).not.toHaveBeenCalled();
     });
 });

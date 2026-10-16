@@ -18,9 +18,9 @@ import {
     FieldLabel,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import SaveButton from '@/components/save-button';
 import { Textarea } from '@/components/ui/textarea';
 import { updateSkill } from '@/features/skills/actions';
-import SkillSaveButton from '@/features/skills/components/skill-save-button';
 import type { Skill } from '@/features/skills/queries';
 import { skillSchema, type SkillValues } from '@/features/skills/schema';
 
@@ -138,7 +138,7 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
                         {form.formState.errors.root && (
                             <FieldError errors={[form.formState.errors.root]} />
                         )}
-                        <SkillSaveButton
+                        <SaveButton
                             isPending={isPending}
                             isDirty={form.formState.isDirty}
                         />

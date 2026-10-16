@@ -1,10 +1,16 @@
-export default function PagesTab() {
+import { Suspense } from 'react';
+
+import { Skeleton } from '@/components/ui/skeleton';
+import PagesSection from '@/features/pages/components/pages-section';
+
+export default function PagesTab({
+    params,
+}: PageProps<'/projects/[id]/pages'>) {
     return (
-        <section className="flex flex-col gap-2">
-            <p className="text-muted-foreground">
-                Every page of this project, draft or published, with its locale
-                and kind.
-            </p>
+        <section className="flex flex-col gap-6">
+            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+                <PagesSection params={params} />
+            </Suspense>
         </section>
     );
 }

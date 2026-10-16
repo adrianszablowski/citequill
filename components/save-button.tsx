@@ -3,15 +3,15 @@
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 
-interface SkillSaveButtonProps {
+interface SaveButtonProps {
     isPending: boolean;
     isDirty: boolean;
 }
 
-export default function SkillSaveButton({
+export default function SaveButton({
     isPending,
     isDirty,
-}: Readonly<SkillSaveButtonProps>) {
+}: Readonly<SaveButtonProps>) {
     return (
         <Button
             type="submit"

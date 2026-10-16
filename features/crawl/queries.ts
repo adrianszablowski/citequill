@@ -2,6 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
+import { isStaleRun } from '@/features/runs/stale';
 import { createClient } from '@/lib/supabase/server';
 
 export const getLatestCrawl = cache(async (projectId: string) => {
@@ -24,11 +25,7 @@ export const getLatestCrawl = cache(async (projectId: string) => {
         return null;
     }
 
-    const isStale =
-        data.status === 'running' &&
-        Date.now() - new Date(data.started_at).getTime() > staleAfterMs;
-
-    return { ...data, isStale };
+    return { ...data, isStale: isStaleRun(data) };
 });
 
 export const getCrawledPageCount = cache(async (projectId: string) => {
@@ -45,5 +42,3 @@ export const getCrawledPageCount = cache(async (projectId: string) => {
 
     return count ?? 0;
 });
-
-const staleAfterMs = 15 * 60 * 1000;

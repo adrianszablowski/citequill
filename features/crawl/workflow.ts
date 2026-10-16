@@ -4,9 +4,7 @@ import {
     createStarterKinds,
     discoverPages,
     extractFacts,
-    failRun,
     fetchPages,
-    finishRun,
     loadProject,
     nameSite,
     nextBatch,
@@ -15,6 +13,7 @@ import {
     saveLocales,
     writeProductSkill,
 } from '@/features/crawl/steps';
+import { failRun, finishRun } from '@/features/runs/steps';
 import { productSkillNames } from '@/features/skills/product-skill';
 
 export async function crawlSite(projectId: string, runId: string) {

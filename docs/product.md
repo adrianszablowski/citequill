@@ -55,13 +55,13 @@ The dashboard is always one project. A sidebar on the left and the content on th
 
 The sidebar collapses to a rail of icons, with the name of each section in a tooltip; the toggle in the header, the sidebar's edge and Cmd+B open and close it. The content starts with a header: the sidebar toggle and the title of the current section. There is no list of projects. Every button and link that waits on the server shows a spinner and a pending label that reuses its verb: Connecting…, Signing out…. The five sections:
 
-| Section   | What is in it                                                                                                                                                                                                 |
-| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pages     | a list of pages with state, locale and kind; preview; editing the markdown in a text field; Publish and Unpublish; a "Write a page" button with topic and kind                                                |
-| Skills    | three folders of tiles: Product, Page kinds, Custom; a tile opens the skill to edit name, description and body; adding custom ones                                                                            |
-| Analytics | live traffic from the script; Search Console data when connected                                                                                                                                              |
-| Reports   | one report per week per project                                                                                                                                                                               |
-| Settings  | the table above, with what the crawl could not fill in marked as not set yet, and Run the crawl again; the mode switch, the script snippet, the Content API key, instructions for IndexNow and Search Console |
+| Section   | What is in it                                                                                                                                                                                                                           |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pages     | a list of pages with state, locale and kind; a row for a run that is writing; preview; editing the markdown in a text field; Publish and Unpublish; a "Write a page" button with topic, kind and language, the main language by default |
+| Skills    | three folders of tiles: Product, Page kinds, Custom; a tile opens the skill to edit name, description and body; adding custom ones                                                                                                      |
+| Analytics | live traffic from the script; Search Console data when connected                                                                                                                                                                        |
+| Reports   | one report per week per project                                                                                                                                                                                                         |
+| Settings  | the table above, with what the crawl could not fill in marked as not set yet, and Run the crawl again; the mode switch, the script snippet, the Content API key, instructions for IndexNow and Search Console                           |
 
 The sign-in page is one card with one button, Continue with Google, with the Google logo. Components from shadcn/ui on Base UI and Tailwind 4. Forms with React Hook Form and Zod.
 
@@ -71,7 +71,7 @@ The MVP serves only the owner's projects, with no payments and no plans. We buil
 
 1. Sign-in and projects. Done when the owner signs in with Google, lands on the connect page, gives the address of a site and sees the five sections of that project.
 2. Connecting a site. Done when, after entering a domain, the crawl runs before the dashboard opens, the project has locales with base URLs, three kinds, a product skill written from the crawl, and the owner has corrected it in the dashboard. Described in [`workflow.md`](workflow.md), section "The crawl when connecting a site".
-3. Writing. Done when "Write a page" ends with a draft in every locale of the project that passed the check against the skills, and cron starts the weekly run. Described in [`workflow.md`](workflow.md).
+3. Writing. Done when "Write a page" ends with a draft in the language the owner chose that passed the check against the skills, and cron starts the weekly run. Described in [`workflow.md`](workflow.md).
 4. Content API and publishing. Done when the customer's site renders a published page from the API, and unpublishing removes it from the list and from the sitemap and returns 410 or 301. Described in [`content-api.md`](content-api.md).
 5. Live analytics. Done when the script on the customer's site sends visits, and the tab shows them within a minute with the AI group separately. Described in [`analytics.md`](analytics.md).
 6. Search Console. Done when a daily fetch saves the data in the database, the tab shows it, and the run takes it as input to research.

@@ -71,7 +71,7 @@ function primary(tag: string) {
     return tag.toLowerCase().split(/[-_]/)[0];
 }
 
-function languageName(locale: string) {
+export function languageName(locale: string) {
     try {
         return (
             new Intl.DisplayNames(['en'], {

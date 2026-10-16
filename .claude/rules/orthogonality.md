@@ -44,6 +44,9 @@ means the two decisions were never one: write it twice.
 | The groups of facts and the prompts of the crawl              | `features/crawl/prompts.ts`                                                                                            |
 | Which text of a page is facts and which is voice              | `pageBodies()` in `features/crawl/markdown-source.ts`                                                                  |
 | The site's locales, its main language and the Languages skill | `features/crawl/locales.ts`                                                                                            |
+| A run's usage, its end and when it counts as stopped          | `features/runs/`                                                                                                       |
+| The prompts of a page: brief, page, check, correction         | `features/pages/prompts.ts`                                                                                            |
+| Markdown rendered to HTML                                     | `renderMarkdown()` in `features/pages/render.ts`                                                                       |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.

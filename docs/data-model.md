@@ -28,10 +28,10 @@ Locale versions of one page share a `translation_group_id`; the API derives `tra
 
 ## Runs and reports
 
-| Table     | Columns                                                                                                                                                                                                                                                                                  |
-| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `runs`    | `id`, `project_id`, `trigger` (`crawl`, `weekly`, `manual`), `topic` (for `manual`), `kind_id` (for `manual`), `status` (`running`, `finished`, `failed`), `plan` (topics with reasoning and sources), `input_tokens`, `output_tokens`, `cost_usd`, `error`, `started_at`, `finished_at` |
-| `reports` | `id`, `project_id`, `run_id`, `week_start`, `body_md`, `created_at`                                                                                                                                                                                                                      |
+| Table     | Columns                                                                                                                                                                                                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `runs`    | `id`, `project_id`, `trigger` (`crawl`, `weekly`, `manual`), `topic`, `kind_id` and `locale` (for `manual`), `status` (`running`, `finished`, `failed`), `plan` (topics with reasoning and sources), `input_tokens`, `output_tokens`, `cost_usd`, `error`, `started_at`, `finished_at` |
+| `reports` | `id`, `project_id`, `run_id`, `week_start`, `body_md`, `created_at`                                                                                                                                                                                                                    |
 
 Every model call adds its tokens and cost to its run through the database function `add_run_usage`, which adds in place, so calls that run in parallel never overwrite each other's sums; only the service role may call it. This is the only place the report and a future spending limit read the cost from. The crawl on connection is a run with `trigger` `crawl`, so its model calls land in the same place, and its `status` and `error` are what the progress page shows.
 

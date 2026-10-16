@@ -39,7 +39,8 @@ import {
     type ProductSkillName,
 } from '@/features/skills/product-skill';
 import { starterKinds } from '@/features/skills/starter-kinds';
-import { costUsd, createAnthropic, models, type Usage } from '@/lib/anthropic';
+import { addUsage } from '@/features/runs/steps';
+import { createAnthropic, models } from '@/lib/anthropic';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Json } from '@/lib/types/database';
 
@@ -420,35 +421,6 @@ export async function createStarterKinds(
     }
 }
 
-export async function finishRun(runId: string) {
-    'use step';
-
-    const { error } = await createAdminClient()
-        .from('runs')
-        .update({
-            status: 'finished',
-            finished_at: new Date().toISOString(),
-        })
-        .eq('id', runId);
-
-    if (error) {
-        throw new Error(error.message);
-    }
-}
-
-export async function failRun(runId: string, message: string) {
-    'use step';
-
-    await createAdminClient()
-        .from('runs')
-        .update({
-            status: 'failed',
-            error: message,
-            finished_at: new Date().toISOString(),
-        })
-        .eq('id', runId);
-}
-
 const sitemapCap = 10;
 
 const skillTokens = 32_000;
@@ -639,21 +611,4 @@ async function loadPages(projectId: string, urls?: string[]) {
     return urls
         ? urls.flatMap((url) => pages.filter((page) => page.url === url))
         : pages;
-}
-
-async function addUsage(
-    runId: string,
-    model: (typeof models)[keyof typeof models],
-    usage: Usage,
-) {
-    const { error } = await createAdminClient().rpc('add_run_usage', {
-        run: runId,
-        input: usage.input_tokens,
-        output: usage.output_tokens,
-        cost: costUsd(model, usage),
-    });
-
-    if (error) {
-        throw new Error(error.message);
-    }
 }

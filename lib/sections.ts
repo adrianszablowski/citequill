@@ -24,6 +24,10 @@ export function skillHref(projectId: string, skillId: string) {
     return `/projects/${projectId}/skills/${skillId}` as const;
 }
 
+export function pageHref(projectId: string, pageId: string) {
+    return `/projects/${projectId}/pages/${pageId}` as const;
+}
+
 export function pageTitle(pathname: string) {
     const segment = pathname.split('/')[3];
 
