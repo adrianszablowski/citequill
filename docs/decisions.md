@@ -161,6 +161,55 @@ Reason: the owner's instruction of 15 October 2026; two instruction files and tw
 
 Reason: the owner asked, on 15 October 2026, to install the libraries by their documentation with their full configuration before step 1 of `product.md`. The CLI defaults are the documented path and leave the fewest choices to revisit; React Hook Form with Zod is the combination shadcn documents for its `Field` components and the one the owner named. A warning only the editor shows is a rule with no checker; the lint rule is the same logic in the gate.
 
+## 2026-10-15: step 1 signs in through Supabase Auth with Google and keeps projects behind RLS
+
+1. Sign-in starts in a server action: `signInWithOAuth` on the server client from `@supabase/ssr`, PKCE flow, `redirectTo` built from `NEXT_PUBLIC_APP_URL` plus `/auth/callback`, where the code is exchanged for a session. No Supabase client runs in the browser. The URL and the publishable key keep the `NEXT_PUBLIC_` prefix the library documents.
+2. `proxy.ts` refreshes the session with `getClaims()` on every request and sends a visitor without a session to `/login`; it decides nothing else, as the Next.js authentication guide asks of an optimistic check. `ALLOWED_EMAILS` is checked in two places that matter: the callback signs out an address off the list right after the exchange, and `getCurrentUser()` in `lib/auth.ts` repeats the check in every section and server action that reads user data. An address removed from the list loses access on its next request.
+3. A table or column enters the migration of the step that first reads it. Step 1 creates `projects` with `id`, `user_id`, `name`, `domain` and `created_at`, with row level security and two policies on `(select auth.uid())`. `user_id` references `auth.users`; the `users` table in `data-model.md` waits for a reader.
+4. Migrations live in `supabase/migrations/` and go up with `supabase db push --linked`. The CLI mints a temporary login role through the Management API, so the database password stays in the owner's password manager. `pnpm db:types` regenerates `lib/types/database.ts` from the linked project and formats it with Prettier; the generated file passes the gate as is, so it has no exemption.
+5. A project is created with a name and a domain. The domain is required because a project is one site; step 2 crawls the domain that is already there.
+6. `isAllowedEmail` is the first helper with logic in `lib/`, so Vitest arrives: `vitest.config.ts` maps `@/`, a test sits beside its module, `pnpm test` runs inside `verify`.
+7. Environment: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ALLOWED_EMAILS`. The secret key arrives with the first code that reads it.
+
+Reason: the owner created the Supabase project and the Google OAuth client on 15 October 2026 and asked for step 1. The server-only flow keeps "access only from the server" from `data-model.md` literal. RLS is the check closest to the data; the proxy cannot be, because it runs on prefetches too. A migration per step keeps the schema and the code that reads it in one commit.
+
+## 2026-10-16: the dashboard is a sidebar layout, and sign-in by email waits
+
+- The dashboard takes the structure of the shadcn dashboard block: a project switcher at the top of the sidebar, the five sections of the current project in the middle, the user at the bottom, and a header with the page title over the content. The tabs under the project name are gone.
+- The five sections, their icons and the page title derived from a path live in `lib/sections.ts`; the list of the user's projects in `getProjectList()` in `features/projects/queries.ts`, wrapped in React `cache` because the sidebar and the project list read it in the same request.
+- `createClient()` in `lib/supabase/server.ts` starts with `connection()`. With Partial Prefetching, `cookies()` keeps the caller inside the prerendered app shell, and the auth client's `Date.now()` there is a prerender error that the dev overlay reports on a signed-in reload.
+- Sign-in by email goes to the backlog. Google is enough for the owner.
+- The sign-in page is a card with one button, Continue with Google, with the Google logo, taller than the default button.
+- Reason: the owner wants the panel to look like a product dashboard from step 1, with a structure that carries every later section without a redesign.
+
+## 2026-10-16: one component per file, with no private exception
+
+- A file holds one component, `export default`, named after the file. A section behind `<Suspense>`, a loader that reads data for a client component, an error line: each is its own file. A `page.tsx` or `layout.tsx` holds only the route component.
+- `components/ui/` stays as the CLI writes it, with several components per file.
+- Reason: the owner's rule. One name per file makes a component findable from its name alone and keeps a route file a route file.
+
+## 2026-10-16: code lives by domain in `features/`, and `app/` holds only routes
+
+- `features/<domain>/` holds `actions.ts`, `queries.ts`, `schema.ts` and `components/` of one domain. Today: `auth` (sign-in, sign-out, the current user, the allowlist, the user menu) and `projects` (create, list, the form, the switcher, the header). An action is named after what it mutates, never after the page that calls it.
+- `components/` keeps only the shell shared by every domain: the sidebar, the header, the page title, the section nav. SVG icons go to `components/icons/`, one per file. `components/ui/` stays the CLI's.
+- `lib/` keeps only what crosses domains: the Supabase clients, the sections, `utils.ts`.
+- `getCurrentUser()` is wrapped in React `cache`, so the sidebar, the project list and the header share one session read per request.
+- Reason: the Next.js docs are unopinionated but every example names the action file after its domain, and the newest guide uses `features/<domain>/`. Actions placed by route scatter one domain across pages as soon as two pages mutate it; the research is in `docs/research/2026-10-16-nextjs-actions-file-structure.md`. The owner chose this option.
+
+## 2026-10-16: the dashboard is always one project, and a site is connected before it opens
+
+- There is no list of projects and no Projects entry in the sidebar. Projects are switched only in the switcher at the top of the sidebar, under the logo and the name Citequill. The root address sends the user to their first project.
+- A user without a project lands on the connect page and gives one thing: the domain. In step 2 the crawl runs there, before the dashboard opens. The same page adds every later site. The project's name is its domain until the crawl names it after the site.
+- Reason: the owner's call. Whoever is inside the dashboard has already chosen a project, and the whole dashboard changes per project, so a project list is a screen with no job. A first-time user with an empty dashboard would see nothing Citequill can do; the crawl is what makes the panel worth opening.
+
+## 2026-10-16: copy has a skill and a facts rule, the root is a landing page, and waiting shows
+
+- `/copy` in `.claude/skills/copy/` holds the rules for every line a person reads. Its facts rule: a line in the UI describes only behaviour whose MVP step is done; the docs describe the whole MVP, so the step list decides. Each claim gets a verdict (verified, narrowed, not yet, no code), the shape of Trackist's `verify-app-claims` skill. The voice rules come from the reelcaption copy skill, cut to what Citequill has, plus the signs of machine writing Wikipedia's AI Cleanup project lists and NN/g's guidance on errors and empty states; the sources are in `research.md` beside the skill.
+- The root address is the landing page, inside the `(marketing)` route group, with the product's one-sentence definition and a Sign in link until the owner writes it. `/projects` is the signed-in home that sends the user to their first project or to the connect page. The proxy sends a signed-in visitor from `/` to `/projects`; `/login` is left alone, because `getCurrentUser()` sends an address that left the allowlist there and a redirect back would loop.
+- The connect page takes the site's address as a URL or a domain and keeps the host without `www.`, so one site is one project whichever form the user pastes. The crawl in step 2 finds whether the site answers with `www` or without and keeps that as the locale's base URL. The project's name on the dashboard is the switcher's first line, with Citequill under it, so the open project is the first thing in the sidebar; the header under it is gone, because the name was the domain shown twice. The sidebar collapses to a rail of icons, the shape of the shadcn sidebar-07 block, so the sections stay one click away on a narrow window.
+- Every button that waits on the server shows a spinner and a pending label: `useFormStatus` for the Google and sign-out buttons, `useTransition` for the sign-out menu item, which stays open while it waits, `useLinkStatus` for sidebar links with a fixed-size hint toggled by opacity. The connect button stays pending after the action redirects, because the action settles without a value before the new page is on screen.
+- Reason: the owner wants copy that promises nothing the product does not do, written in plain language, and feedback on every click.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.
@@ -178,3 +227,4 @@ Things put off for later, with a date and a reason.
 - 2026-10-15: a monthly spend limit per project that stops the run. Before payments.
 - 2026-10-15: revenue in analytics: webhooks from Stripe, LemonSqueezy, Paddle, Polar, Shopify, attributing a payment to a visitor and a source, a report on "how much the Citequill pages earned". When the first customer with online payments asks for it; the columns for amount and currency already exist.
 - 2026-10-14: payments and plans. After the product meets the owner's expectations on their sites.
+- 2026-10-16: sign-in by email: a Supabase magic link or one-time code, with Citequill's email templates set in the Supabase dashboard. After the MVP; Google covers the owner.

@@ -17,13 +17,22 @@ means the two decisions were never one: write it twice.
 
 ## Where each kind of knowledge lives
 
-| The knowledge                                   | Its one home                                                  |
-| ----------------------------------------------- | ------------------------------------------------------------- |
-| An environment variable                         | `.env.template`, in the same change as the code that reads it |
-| A product decision, what Citequill does and why | `docs/`, the decision in `docs/decisions.md`                  |
-| What a function does with a given input         | its test                                                      |
-| A shared type                                   | `lib/types/<domain>.ts`                                       |
-| A UI primitive: button, input, field            | `components/ui/`, added with `shadcn add`                     |
+| The knowledge                                   | Its one home                                                                                                           |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| An environment variable                         | `.env.template`, in the same change as the code that reads it                                                          |
+| A product decision, what Citequill does and why | `docs/`, the decision in `docs/decisions.md`                                                                           |
+| What a function does with a given input         | its test                                                                                                               |
+| A shared type                                   | `lib/types/<domain>.ts`                                                                                                |
+| A UI primitive: button, input, field            | `components/ui/`, added with `shadcn add`                                                                              |
+| A table, column or policy                       | `supabase/migrations/`, pushed with `supabase db push --linked`; `pnpm db:types` regenerates `lib/types/database.ts`   |
+| Who the signed-in user is                       | `getCurrentUser()` in `features/auth/queries.ts`, called first by every section and server action that reads user data |
+| A Supabase client                               | `createClient()` in `lib/supabase/server.ts`, one per request                                                          |
+| The sections of a project and a page title      | `projectSections` and `pageTitle()` in `lib/sections.ts`                                                               |
+| The list of the user's projects                 | `getProjectList()` in `features/projects/queries.ts`                                                                   |
+| A mutation of a domain                          | `features/<domain>/actions.ts`                                                                                         |
+| A read of a domain                              | `features/<domain>/queries.ts`                                                                                         |
+| The Zod schema of a domain's form               | `features/<domain>/schema.ts`                                                                                          |
+| An SVG icon                                     | `components/icons/<name>.tsx`                                                                                          |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.

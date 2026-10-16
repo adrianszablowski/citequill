@@ -46,7 +46,7 @@ until a matching file is read again, so read the rule your next edit touches.
 ## Done means `pnpm verify` is green
 
 ```bash
-pnpm verify        # type-check + lint + format:check
+pnpm verify        # type-check + lint + format:check + test
 pnpm verify:deep   # verify + next build, before a commit
 ```
 
@@ -61,6 +61,13 @@ true`; the message ends with its last paragraph, with no `Co-Authored-By` and no
 `.claude/hooks/commit-guard.mjs` refuses a message that breaks this. The convention is
 [`.claude/rules/git.md`](.claude/rules/git.md).
 
+## Database
+
+A schema change is a migration: `supabase migration new <name>`, SQL in `supabase/migrations/`,
+`supabase db push --linked`, then `pnpm db:types` to regenerate `lib/types/database.ts`. The project
+is linked once with `supabase link --project-ref <ref>`; no database password is needed. The concepts
+behind the columns are in [`docs/data-model.md`](docs/data-model.md).
+
 ## Secrets
 
 `.env*` files are git-ignored and read-denied via `.claude/settings.local.json`. `.env.template` is
@@ -70,6 +77,7 @@ it. Public client config uses `NEXT_PUBLIC_*`.
 ## Skills
 
 - `/comment-audit [path]` sweeps comments against `comments.md` and changes nothing else.
+- `/copy [path or text]` writes or edits a line a person reads: buttons, empty states, errors, placeholders, the landing page. Every claim gets a verdict against `docs/product.md`.
 
 ## Agent skills
 

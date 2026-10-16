@@ -2,7 +2,7 @@
 
 Postgres in one Supabase project, separate from the owner's other applications. Access only from the server. TypeScript types come from `supabase gen types`, never by hand. Every table except `users` has `project_id`; it is the only boundary between projects.
 
-The column names below are concepts, not SQL. The migration implements them; when they differ, the migration is wrong.
+The column names below are concepts, not SQL. The migration implements them; when they differ, the migration is wrong. A table or column enters the migration of the step in [`product.md`](product.md) that first reads it, so an early migration holds a subset of the tables here.
 
 ## User and project
 

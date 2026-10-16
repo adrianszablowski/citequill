@@ -2,6 +2,7 @@
 paths:
     - '**/*.test.{ts,tsx}'
     - 'lib/**'
+    - 'features/**'
     - 'package.json'
     - 'tsconfig.json'
     - 'eslint.config.mjs'
@@ -14,7 +15,7 @@ paths:
 ## The gate
 
 ```bash
-pnpm verify        # type-check + lint + format:check, decides "done" for a turn
+pnpm verify        # type-check + lint + format:check + test, decides "done" for a turn
 pnpm verify:deep   # verify + next build, decides "done" before a commit
 ```
 
@@ -30,9 +31,8 @@ when a turn that touched TypeScript ends and hands failures back.
 
 ## Tests
 
-There is no test runner yet. The first pure helper in `lib/` brings Vitest in the same change, with
-the test beside its module (`lib/slugs.test.ts`), imported through `@/`, and `pnpm test` added to
-`verify`. Then:
+Vitest runs every `*.test.ts` beside its module (`features/auth/allowed-emails.test.ts`), imported through
+`@/`, with `describe`, `it` and `expect` imported from `vitest`. `pnpm test` is part of `verify`.
 
 - A bug fix ships with a test that fails without the fix.
 - Assert the contract, never the implementation. Name the test for the behavior.

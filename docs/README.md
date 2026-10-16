@@ -2,14 +2,14 @@
 
 The source of truth about the product. When code and a document disagree, the code is the bug. A change in behavior starts with the document, in the same commit as the code. A decision the owner made, or one you had to make yourself, goes into `decisions.md` with a date and a reason.
 
-| Read                               | When you work on                                                                                                 |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| [`product.md`](product.md)         | what Citequill is, principles, user and project, settings, dashboard, MVP scope                                  |
-| [`data-model.md`](data-model.md)   | a table, column, type, migration                                                                                 |
-| [`skills.md`](skills.md)           | skills: format, product skill, kind skills, how the model uses them                                              |
-| [`workflow.md`](workflow.md)       | the crawl when connecting a site, the weekly run, a page on demand, publishing, the report                       |
-| [`content-api.md`](content-api.md) | the Content API, webhook, IndexNow, redirects, sitemap                                                           |
-| [`analytics.md`](analytics.md)     | the analytics script, events, the live tab, Search Console                                                       |
-| [`decisions.md`](decisions.md)     | the question "why this way"; the backlog of things put aside                                                     |
-| `research/`                        | the facts behind decisions: competitors, costs, Google policy, Search Console and IndexNow, Vercel, Next.js 16.4 |
-| `agents/`                          | configuration for Matt Pocock's skills: issue tracker, triage labels, domain docs                                |
+| Read                               | When you work on                                                                                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`product.md`](product.md)         | what Citequill is, principles, user and project, settings, dashboard, MVP scope                                                                                           |
+| [`data-model.md`](data-model.md)   | a table, column, type, migration                                                                                                                                          |
+| [`skills.md`](skills.md)           | skills: format, product skill, kind skills, how the model uses them                                                                                                       |
+| [`workflow.md`](workflow.md)       | the crawl when connecting a site, the weekly run, a page on demand, publishing, the report                                                                                |
+| [`content-api.md`](content-api.md) | the Content API, webhook, IndexNow, redirects, sitemap                                                                                                                    |
+| [`analytics.md`](analytics.md)     | the analytics script, events, the live tab, Search Console                                                                                                                |
+| [`decisions.md`](decisions.md)     | the question "why this way"; the backlog of things put aside                                                                                                              |
+| `research/`                        | the facts behind decisions: competitors, Cogny and AI visibility trackers, costs, Google policy, Search Console and IndexNow, Vercel, Next.js 16.4 and its file structure |
+| `agents/`                          | configuration for Matt Pocock's skills: issue tracker, triage labels, domain docs                                                                                         |
