@@ -1,4 +1,5 @@
-import { costUsd, type ModelId, type Usage } from '@/lib/anthropic';
+import type { ModelId } from '@/lib/anthropic';
+import { costUsd, type Usage } from '@/lib/pricing';
 import { createAdminClient } from '@/lib/supabase/admin';
 
 export async function finishRun(runId: string) {

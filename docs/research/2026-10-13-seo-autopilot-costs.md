@@ -82,6 +82,8 @@ Prices from https://platform.claude.com/docs/en/about-claude/pricing (vendor pag
 | Claude Haiku 5.5, prompts up to 100,000 tokens | $0.10 | $0.50 | $0.01 | $0.05 | $0.25 |
 | Claude Haiku 5.5, prompts over 100,000 tokens | $0.50 | $2.50 | $0.05 | $0.25 | $1.25 |
 
+The web search tool costs $10 per 1,000 searches on top of the tokens its results add; a search that errors is not billed, and the count comes back in `usage.server_tool_use.web_search_requests` (https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool, vendor page, checked 17 October 2026).
+
 Worked estimate for one 2,500-word article: research, draft, fact-check pass and Polish translation, 150,000 input tokens and 15,000 output tokens in total across several calls. The caching column assumes half the input tokens are served as cache reads and ignores the cache write premium.
 
 | Model | Standard | With 50% cache reads | Batch API | Batch plus cache |

@@ -10,7 +10,7 @@ Five processes: crawl on connection, weekly run, page on demand, audit and publi
 | Extracting facts from the crawl, checking claims     | Sonnet 5.5                                                    |
 | Web research                                         | the web search tool in the Anthropic API, called by the model |
 
-The Anthropic SDK directly, one key `ANTHROPIC_API_KEY`. Every call adds its input and output tokens and cost to its row in `runs`; the model ids and the prices per million tokens live in `lib/anthropic.ts`, from the costs research. A call that must return data, like the facts from the crawl, uses the SDK's structured outputs with a Zod schema.
+The Anthropic SDK directly, one key `ANTHROPIC_API_KEY`. Every call adds its input and output tokens and its cost to its row in `runs`, and the cost counts the web searches the call made as well as the tokens; the model ids live in `lib/anthropic.ts` and every unit price, per million tokens and per thousand searches, in `lib/pricing.ts`, from the costs research. A call that must return data, like the facts from the crawl, uses the SDK's structured outputs with a Zod schema.
 
 ## Crawl on connection
 

@@ -34,7 +34,8 @@ means the two decisions were never one: write it twice.
 | The Zod schema of a domain's form                             | `features/<domain>/schema.ts`                                                                                          |
 | An SVG icon                                                   | `components/icons/<name>.tsx`                                                                                          |
 | A write with no user session (a Workflow step)                | `createAdminClient()` in `lib/supabase/admin.ts`, never in a route a user calls                                        |
-| A model id, a price, a model call                             | `lib/anthropic.ts`                                                                                                     |
+| A model id, a model call                                      | `lib/anthropic.ts`                                                                                                     |
+| A unit price and the cost of a usage                          | `lib/pricing.ts`                                                                                                       |
 | The product skill names and starter kinds                     | `features/skills/product-skill.ts` and `features/skills/starter-kinds.ts`                                              |
 | The folders of the Skills section                             | `skillFolders` and `skillFolder()` in `features/skills/folders.ts`                                                     |
 | The latest crawl of a project                                 | `getLatestCrawl()` in `features/crawl/queries.ts`                                                                      |
