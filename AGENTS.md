@@ -39,6 +39,7 @@ until a matching file is read again, so read the rule your next edit touches.
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | [`.claude/rules/code-style.md`](.claude/rules/code-style.md)       | Writing any TypeScript: the smallest change, KISS, naming, files, imports            |
 | [`.claude/rules/orthogonality.md`](.claude/rules/orthogonality.md) | Adding a function, constant, type, key or string: where that knowledge already lives |
+| [`.claude/rules/forms.md`](.claude/rules/forms.md)                 | Writing a form: what `useForm` gives, what a button reads, where a `useState` stays  |
 | [`.claude/rules/comments.md`](.claude/rules/comments.md)           | Writing a comment: the one kind that earns its line, and why the default is none     |
 | [`.claude/rules/testing.md`](.claude/rules/testing.md)             | Starting a feature or a fix: the gate and the two rules with no checker              |
 | [`.claude/rules/git.md`](.claude/rules/git.md)                     | Branching or committing                                                              |

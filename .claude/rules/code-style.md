@@ -71,10 +71,7 @@ Booleans take an auxiliary verb: `isLoading`, `hasError`, `canPublish`.
 
 ## Forms
 
-A form is a `'use client'` component: `useForm` from `react-hook-form` with a Zod schema through
-`zodResolver` from `@hookform/resolvers/zod`, each field a `Controller` rendering the shadcn `Field`
-family around an input from `components/ui/`. `import * as z from 'zod'`; the values type is
-`z.infer<typeof schema>`.
+A form is a `'use client'` component shaped as [`forms.md`](forms.md) says.
 
 ## Data access
 

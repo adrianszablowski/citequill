@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import {
@@ -29,7 +28,13 @@ interface SkillEditorProps {
 }
 
 export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
-    const form = useForm<SkillValues>({
+    const {
+        control,
+        handleSubmit,
+        setError,
+        reset,
+        formState: { errors },
+    } = useForm({
         resolver: zodResolver(skillSchema),
         defaultValues: {
             name: skill.name,
@@ -38,20 +43,14 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
         },
     });
 
-    const [isPending, setIsPending] = useState(false);
-
     async function onSubmit(values: SkillValues) {
-        setIsPending(true);
-
         const result = await updateSkill(skill.id, values);
 
         if (result.error) {
-            form.setError('root', { message: result.error });
+            setError('root', { message: result.error });
         } else {
-            form.reset(result.values);
+            reset(result.values);
         }
-
-        setIsPending(false);
     }
 
     return (
@@ -66,11 +65,11 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
                 )}
             </CardHeader>
             <CardContent>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
+                <form onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup>
                         <Controller
                             name="name"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel htmlFor={`${skill.id}-name`}>
@@ -91,7 +90,7 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
                         />
                         <Controller
                             name="description"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel
@@ -115,7 +114,7 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
                         />
                         <Controller
                             name="body"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel htmlFor={`${skill.id}-body`}>
@@ -135,13 +134,8 @@ export default function SkillEditor({ skill }: Readonly<SkillEditorProps>) {
                                 </Field>
                             )}
                         />
-                        {form.formState.errors.root && (
-                            <FieldError errors={[form.formState.errors.root]} />
-                        )}
-                        <SaveButton
-                            isPending={isPending}
-                            isDirty={form.formState.isDirty}
-                        />
+                        {errors.root && <FieldError errors={[errors.root]} />}
+                        <SaveButton control={control} />
                     </FieldGroup>
                 </form>
             </CardContent>

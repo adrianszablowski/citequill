@@ -1,7 +1,6 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import {
@@ -16,32 +15,30 @@ import ConnectSubmitButton from '@/features/projects/components/connect-submit-b
 import { projectSchema, type ProjectValues } from '@/features/projects/schema';
 
 export default function ConnectSiteForm() {
-    const form = useForm<ProjectValues>({
+    const {
+        control,
+        handleSubmit,
+        setError,
+        formState: { errors },
+    } = useForm({
         resolver: zodResolver(projectSchema),
         defaultValues: { domain: '' },
     });
 
-    const [isPending, setIsPending] = useState(false);
-
     async function onSubmit(values: ProjectValues) {
-        setIsPending(true);
-
-        // When the action redirects, this call settles without a value and
-        // the button stays pending until the new page is on screen.
         const result = await createProject(values);
 
         if (result?.error) {
-            form.setError('root', { message: result.error });
-            setIsPending(false);
+            setError('root', { message: result.error });
         }
     }
 
     return (
-        <form onSubmit={form.handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit)}>
             <FieldGroup>
                 <Controller
                     name="domain"
-                    control={form.control}
+                    control={control}
                     render={({ field, fieldState }) => (
                         <Field data-invalid={fieldState.invalid}>
                             <FieldLabel htmlFor="domain">
@@ -62,10 +59,8 @@ export default function ConnectSiteForm() {
                         </Field>
                     )}
                 />
-                {form.formState.errors.root && (
-                    <FieldError errors={[form.formState.errors.root]} />
-                )}
-                <ConnectSubmitButton isPending={isPending} />
+                {errors.root && <FieldError errors={[errors.root]} />}
+                <ConnectSubmitButton control={control} />
             </FieldGroup>
         </form>
     );

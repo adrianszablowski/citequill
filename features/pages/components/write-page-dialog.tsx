@@ -45,14 +45,19 @@ export default function WritePageDialog({
 }: Readonly<WritePageDialogProps>) {
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
-    const [isPending, setIsPending] = useState(false);
 
     const defaultLocale =
         locales.find((locale) => locale.isDefault)?.locale ??
         locales[0]?.locale ??
         '';
 
-    const form = useForm<WritePageValues>({
+    const {
+        control,
+        handleSubmit,
+        setError,
+        reset,
+        formState: { errors, isSubmitting },
+    } = useForm({
         resolver: zodResolver(writePageSchema),
         defaultValues: {
             topic: '',
@@ -70,19 +75,15 @@ export default function WritePageDialog({
     );
 
     async function onSubmit(values: WritePageValues) {
-        setIsPending(true);
-
         const result = await startWrite(projectId, values);
 
         if (result.error) {
-            form.setError('root', { message: result.error });
+            setError('root', { message: result.error });
         } else {
-            form.reset();
+            reset();
             setIsOpen(false);
             router.refresh();
         }
-
-        setIsPending(false);
     }
 
     return (
@@ -97,11 +98,11 @@ export default function WritePageDialog({
                         minutes.
                     </DialogDescription>
                 </DialogHeader>
-                <form onSubmit={form.handleSubmit(onSubmit)}>
+                <form onSubmit={handleSubmit(onSubmit)}>
                     <FieldGroup>
                         <Controller
                             name="topic"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel htmlFor="write-topic">
@@ -124,7 +125,7 @@ export default function WritePageDialog({
                         />
                         <Controller
                             name="kind_id"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel htmlFor="write-kind">
@@ -132,11 +133,14 @@ export default function WritePageDialog({
                                     </FieldLabel>
                                     <Select
                                         items={kindItems}
+                                        name={field.name}
                                         value={field.value}
                                         onValueChange={field.onChange}
+                                        inputRef={field.ref}
                                     >
                                         <SelectTrigger
                                             id="write-kind"
+                                            aria-invalid={fieldState.invalid}
                                             className="w-full"
                                         >
                                             <SelectValue />
@@ -162,7 +166,7 @@ export default function WritePageDialog({
                         />
                         <Controller
                             name="locale"
-                            control={form.control}
+                            control={control}
                             render={({ field, fieldState }) => (
                                 <Field data-invalid={fieldState.invalid}>
                                     <FieldLabel htmlFor="write-locale">
@@ -170,11 +174,14 @@ export default function WritePageDialog({
                                     </FieldLabel>
                                     <Select
                                         items={localeItems}
+                                        name={field.name}
                                         value={field.value}
                                         onValueChange={field.onChange}
+                                        inputRef={field.ref}
                                     >
                                         <SelectTrigger
                                             id="write-locale"
+                                            aria-invalid={fieldState.invalid}
                                             className="w-full"
                                         >
                                             <SelectValue />
@@ -198,12 +205,10 @@ export default function WritePageDialog({
                                 </Field>
                             )}
                         />
-                        {form.formState.errors.root && (
-                            <FieldError errors={[form.formState.errors.root]} />
-                        )}
-                        <Button type="submit" disabled={isPending}>
-                            {isPending && <Spinner />}
-                            {isPending ? 'Starting…' : 'Write it'}
+                        {errors.root && <FieldError errors={[errors.root]} />}
+                        <Button type="submit" disabled={isSubmitting}>
+                            {isSubmitting && <Spinner />}
+                            {isSubmitting ? 'Starting…' : 'Write it'}
                         </Button>
                     </FieldGroup>
                 </form>

@@ -291,6 +291,14 @@ Reason: the owner created the Supabase project and the Google OAuth client on 15
 - One card with two modes, Edit and Preview, flipped by one button. Preview renders the fields as they stand, before a save, through `renderMarkdown()` in the browser; the renderer is synchronous, so the same function serves the preview and the HTML of the Content API. The FAQ folds out one question at a time and the sources list their title and domain. The headings FAQ and Sources and the folding are Citequill's presentation of the fields, because the customer's site renders them in its own way.
 - Reason: the owner, on 16 October 2026, after reading the first page: the preview showed the saved text without styling, and the editor and the preview side by side left no room for either.
 
+## 2026-10-16: a form reads its state from React Hook Form
+
+- A form component destructures from `useForm` what it renders, the `formState` fields included, and takes no generic: the resolver types the values from the Zod schema. Pending is `isSubmitting`, the action's error is `setError('root', …)`, a save that keeps the form on screen ends in `reset(result.values)`, and a form whose action redirects keeps its button pending on `isSubmitSuccessful` as well.
+- A submit button in its own file takes `control` and reads `useFormState({ control })`: `SaveButton` reads `isSubmitting` and `isDirty` itself, so a flip of either re-renders the button alone.
+- `useState` stays for a UI mode the form does not own: a dialog open, the editor in preview. A form with no fields stays native, `<form action>` with a `useFormStatus` button.
+- The rule lives in `.claude/rules/forms.md`, loaded for `features/**/components/*.tsx` and `components/*.tsx`; the research with sources is `docs/research/2026-10-16-react-hook-form-rules.md`.
+- Reason: the owner, on 16 October 2026, reviewing the page editor: the form object held in a variable and a hand-made `useState` for pending and error cause renders React Hook Form already avoids, because `formState` subscribes a component only to the fields it reads during render.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.
