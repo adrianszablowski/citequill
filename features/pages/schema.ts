@@ -36,3 +36,33 @@ export const sourceItems = z.array(
     z.object({ title: z.string(), url: z.string() }),
 );
 
+export const pageStatuses = ['draft', 'published', 'unpublished'] as const;
+
+export const pageSorts = [
+    'title',
+    'locale',
+    'status',
+    'published_at',
+    'updated_at',
+] as const;
+
+export const pageSizes = [10, 50, 100] as const;
+
+const optionalText = z.string().trim().min(1).optional().catch(undefined);
+
+export const pageListQuery = z.object({
+    kind: optionalText,
+    q: optionalText,
+    locale: optionalText,
+    status: z.enum(pageStatuses).optional().catch(undefined),
+    from: z.iso.date().optional().catch(undefined),
+    to: z.iso.date().optional().catch(undefined),
+    sort: z.enum(pageSorts).catch('updated_at'),
+    dir: z.enum(['asc', 'desc']).catch('desc'),
+    page: z.coerce.number().int().min(1).catch(1),
+    size: z.coerce.number().pipe(z.literal(pageSizes)).catch(10),
+});
+
+export type PageListQuery = z.infer<typeof pageListQuery>;
+
+export const pageListDefaults = pageListQuery.parse({});

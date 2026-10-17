@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import SectionNav from '@/components/section-nav';
+import SectionNavSkeleton from '@/components/section-nav-skeleton';
 import {
     Sidebar,
     SidebarContent,
@@ -11,6 +11,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import SidebarUser from '@/features/auth/components/sidebar-user';
 import SidebarProjects from '@/features/projects/components/sidebar-projects';
+import SidebarSections from '@/features/projects/components/sidebar-sections';
 
 interface AppSidebarProps {
     params: Promise<{ id: string }>;
@@ -25,8 +26,8 @@ export default function AppSidebar({ params }: Readonly<AppSidebarProps>) {
                 </Suspense>
             </SidebarHeader>
             <SidebarContent>
-                <Suspense>
-                    <SectionNav />
+                <Suspense fallback={<SectionNavSkeleton />}>
+                    <SidebarSections params={params} />
                 </Suspense>
             </SidebarContent>
             <SidebarFooter>

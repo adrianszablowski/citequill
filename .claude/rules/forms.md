@@ -53,6 +53,12 @@ async function onSubmit(values: SkillValues) {
   component that renders it.
 - `useState` holds a UI mode the form does not own: a dialog open, an editor in preview.
 
+## A form that only changes the URL
+
+A filter form is a navigation, not a form React Hook Form owns: `<Form action={href}>` from `next/form`, the section's own href,
+with named inputs, a `Select` with `name` and `defaultValue`, hidden inputs for the parameters it
+keeps, and a submit button. It renders on the server from the parsed search parameters.
+
 ## A form with no fields
 
 One button that calls an action is `<form action={action}>` in a server component, with the button

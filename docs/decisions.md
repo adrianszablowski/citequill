@@ -303,6 +303,13 @@ Reason: the owner created the Supabase project and the Google OAuth client on 15
 
 - A page and a skill open on their own route under their section, and the way back to the section's list is `BackLink`, a ghost button with a left arrow before its text, the same component on both routes. Reason: the owner, on 16 October 2026, could hardly see the two text-only back buttons; the arrow is the sign every reader knows for back, and one component keeps the two identical.
 
+## 2026-10-17: the Pages section is a table the server filters, sorts and pages from the URL
+
+- The state of the list is its URL: `kind`, `q`, `locale`, `status`, `from`, `to`, `sort`, `dir`, `page`, `size`. The section reads `searchParams`, parses them with a Zod schema that falls back to a default on any bad value, and one database query filters, sorts and pages the rows with an exact count. The browser holds no copy of the rows and no state of the list; a filter is a GET form from `next/form`, a sort is a link in the column header, a page is a link, and the page size is a select that rewrites the URL. Reason: the owner, on 17 October 2026: as much as possible on the server, because the server is next to the database and the browser stays light; a list sorted in the browser is a list that was downloaded whole.
+- A kind is a filter, `?kind=<id>`, not a route, because `/pages/[pageId]` already takes the segment under Pages and every other dimension of the list is a search parameter too. The Pages entry in the sidebar only folds out into the project's kinds, as the shadcn sidebar-07 block does, because the owner wants the kinds kept apart; the entry of a kind opens the list of that kind alone, with the kind's address on the site, the main locale's base URL and the kind's prefix, above the table, so the owner sees where those pages land. The bare Pages URL still lists every kind, with a Kind column, for a project with no kinds yet and for a link typed by hand.
+- A page past the last one, typed into the URL or left over after rows were deleted, redirects to the last page when the count is known and to the first otherwise, because PostgREST answers a range that starts past the last row with an error and no count, which the query reads as that case. The page sizes are 10, 50 and 100, 10 by default, chosen at the bottom beside the pagination. The date filter is on `published_at`, so drafts fall out of a dated search; the state filter answers for drafts.
+- The principle goes into `.claude/rules/code-style.md` as Server first, so every later list, Reports and Analytics included, is built the same way.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.

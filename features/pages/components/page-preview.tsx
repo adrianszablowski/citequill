@@ -8,7 +8,7 @@ import {
     AccordionItem,
     AccordionTrigger,
 } from '@/components/ui/accordion';
-import { readingMinutes } from '@/features/pages/draft';
+import { pagePath, readingMinutes } from '@/features/pages/draft';
 import type { Page } from '@/features/pages/queries';
 import { renderMarkdown } from '@/features/pages/render';
 import {
@@ -38,11 +38,8 @@ export default function PagePreview({
         <article className="mx-auto prose prose-neutral dark:prose-invert prose-h2:mt-8 prose-h2:mb-3 prose-h3:mt-6 prose-h3:mb-2 prose-p:my-4 prose-p:leading-relaxed prose-ol:my-4 prose-ul:my-4 prose-li:my-1 prose-li:leading-relaxed">
             <p className="text-sm text-muted-foreground">
                 {page.page_kinds?.name ?? 'Page'} in {page.locale},{' '}
-                {readingMinutes(bodyMd)} min read, at /
-                {[page.page_kinds?.url_prefix, page.slug]
-                    .map((part) => part?.replace(/^\/+|\/+$/g, '') ?? '')
-                    .filter(Boolean)
-                    .join('/')}
+                {readingMinutes(bodyMd)} min read, at{' '}
+                {pagePath('', page.page_kinds?.url_prefix ?? '', page.slug)}
             </p>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: html }} />

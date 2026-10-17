@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { PenLineIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -88,7 +89,10 @@ export default function WritePageDialog({
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger render={<Button />}>Write a page</DialogTrigger>
+            <DialogTrigger render={<Button />}>
+                <PenLineIcon />
+                Write a page
+            </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Write a page</DialogTitle>

@@ -5,11 +5,12 @@ import PagesSection from '@/features/pages/components/pages-section';
 
 export default function PagesTab({
     params,
+    searchParams,
 }: PageProps<'/projects/[id]/pages'>) {
     return (
         <section className="flex flex-col gap-6">
             <Suspense fallback={<Skeleton className="h-96 w-full" />}>
-                <PagesSection params={params} />
+                <PagesSection params={params} searchParams={searchParams} />
             </Suspense>
         </section>
     );

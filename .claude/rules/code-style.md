@@ -80,6 +80,16 @@ never at the top of a layout or page. It calls `getCurrentUser()` first, then `c
 `@/lib/supabase/server`; row level security on the table does the rest. A server action does the
 same before it writes.
 
+## Server first
+
+Work runs on the server, next to the database; the browser renders and navigates. The state of a
+list is its URL: filter, sort, page and page size are search parameters, parsed on the server with a
+Zod schema that falls back to a default on a bad value, and the database filters, sorts and pages the
+rows in one query with an exact count. A filter is `<Form action={href}>` from `next/form` with named
+inputs, a sort or a page is a `<Link>`, and a control with no submit button, a page-size select,
+rewrites the URL with `router.push`. A `'use client'` component holds only what the server cannot:
+a focused field, an open menu, a pending link, the text of a draft before it is saved.
+
 ## Formatting
 
 Prettier decides formatting and `pnpm lint` reports it: 4 spaces, single quotes, trailing commas,

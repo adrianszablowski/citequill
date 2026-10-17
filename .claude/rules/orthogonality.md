@@ -50,6 +50,8 @@ means the two decisions were never one: write it twice.
 | The markdown a toolbar button writes around a selection       | `applyFormat()` in `features/pages/markdown-edit.ts`                                                                   |
 | The pending, dirty and error state of a form                  | `formState` of `useForm` in the form, `useFormState({ control })` in a submit button in its own file                   |
 | The link from a row's page back to its section                | `BackLink` in `components/back-link.tsx`                                                                               |
+| The filter, sort, page and size of the Pages list             | `pageListQuery` in `features/pages/schema.ts`, `pageListHref()` in `features/pages/list-query.ts`                      |
+| The address of a page on the site                             | `pagePath()` in `features/pages/draft.ts`                                                                              |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.
