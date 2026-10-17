@@ -105,6 +105,23 @@ describe('prompts', () => {
         expect(prompt).not.toContain('Body of Competitors.');
         expect(prompt).toContain('in English');
     });
+
+    it('tells the writer the body is the article alone and the page fits every reader', () => {
+        const prompt = writeSystemPrompt(context, {
+            intent: '',
+            answer: '',
+            outline: [],
+            skills: [],
+            sources: [],
+            internal_links: [],
+            length_words: 1200,
+        });
+
+        expect(prompt).toContain('with no heading above it');
+        expect(prompt).toContain('are the faq and sources fields');
+        expect(prompt).toContain('where English marks the gender');
+        expect(prompt).toContain('fit every reader');
+    });
 });
 
 describe('findingsFrom', () => {

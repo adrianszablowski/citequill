@@ -20,8 +20,8 @@ A blog post answers one question the audience asks, in 1200 to 2000 words.
 - The first paragraph gives the answer in two or three sentences. Background follows it.
 - Every heading is a question the reader would type, in the words they use.
 - Each section answers its heading in full before the next begins.
-- An FAQ at the end: three to five questions, each answered in one or two sentences.
-- A list of sources at the end, with the title and the address of each.
+- An FAQ in the faq field: three to five questions, each answered in one or two sentences.
+- The sources in the sources field, with the title and the address of each, and each linked in the text where its fact is used.
 
 ## Facts
 
@@ -37,7 +37,7 @@ A blog post answers one question the audience asks, in 1200 to 2000 words.
 ## Done when
 
 - Every claim about the product points to a sentence in a product skill.
-- Every heading is answered under it, the FAQ and the sources are there, and the post has 1200 to 2000 words.
+- Every heading is answered under it, the faq and the sources fields are filled, and the post has 1200 to 2000 words.
 `,
     },
     {
@@ -62,7 +62,7 @@ A guide takes the reader from a problem to a result, step by step.
 - What the reader needs before the first step.
 - The steps in order, numbered, each with one action and what the reader sees when it worked.
 - A section on what can go wrong, with the fix for each case.
-- An FAQ at the end: three to five questions, each answered in one or two sentences.
+- An FAQ in the faq field: three to five questions, each answered in one or two sentences.
 
 ## Facts
 
@@ -102,7 +102,7 @@ A comparison helps the reader choose between the product and one competitor.
 - A feature table: one row per feature, one column per option, facts only.
 - A section for each option on where it is the better choice, with the reason.
 - An honest "When to choose the other" section.
-- An FAQ at the end: three to five questions, each answered in one or two sentences.
+- An FAQ in the faq field: three to five questions, each answered in one or two sentences.
 
 ## Facts
 

@@ -18,7 +18,21 @@ export const pageSchema = z.object({
         .trim()
         .min(1, 'Give the page a title.')
         .max(120, 'Keep the title under 120 characters.'),
+    excerpt: z
+        .string()
+        .trim()
+        .min(1, 'Give the page an excerpt for lists and link previews.')
+        .max(300, 'Keep the excerpt under 300 characters.'),
     body_md: z.string().trim().min(1, 'The page needs a body.'),
 });
 
 export type PageValues = z.infer<typeof pageSchema>;
+
+export const faqItems = z.array(
+    z.object({ question: z.string(), answer: z.string() }),
+);
+
+export const sourceItems = z.array(
+    z.object({ title: z.string(), url: z.string() }),
+);
+

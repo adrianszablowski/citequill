@@ -55,8 +55,8 @@ Every page kind (`page_kinds`) points to a skill that says how to write such a p
 
 | Kind       | What the starter skill sets                                                                                                                            |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Blog       | the answer in the first paragraph, headings as questions, an FAQ at the end, sources, 1200 to 2000 words                                               |
-| Guide      | the problem, the steps in order, what can go wrong, an FAQ, links to the customer's pages that help with a step                                        |
+| Blog       | the answer in the first paragraph, headings as questions, an FAQ and sources in their fields, 1200 to 2000 words                                       |
+| Guide      | the problem, the steps in order, what can go wrong, an FAQ in its field, links to the customer's pages that help with a step                           |
 | Comparison | a feature table with facts only from the product skills and the competitor's pages, an honest "when to choose the other", every judgment with a source |
 
 A kind skill states every rule as a target, never as a prohibition: "the text speaks as the customer" where "never say a model wrote it" would pull that very thing into the model's attention. Its Voice section names the register of How we speak the kind writes in: Blog the blog register, Guide the plan or guide register, Comparison the comparison register, so a post does not borrow the landing page's hooks. It ends with the criteria the page is done by, so the writer can tell done from not done. The owner edits these skills like any other and adds kinds with their own skills.

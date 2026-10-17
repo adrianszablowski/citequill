@@ -1,5 +1,6 @@
 import * as z from 'zod';
 
+import { faqItems, sourceItems } from '@/features/pages/schema';
 import { renderSkill, type SkillText } from '@/features/skills/format';
 import type { ProductSkillName } from '@/features/skills/product-skill';
 
@@ -49,9 +50,9 @@ export const pageOutput = z.object({
     excerpt: z.string(),
     slug: z.string(),
     tags: z.array(z.string()),
-    faq: z.array(z.object({ question: z.string(), answer: z.string() })),
+    faq: faqItems,
     body_md: z.string(),
-    sources: z.array(z.object({ title: z.string(), url: z.string() })),
+    sources: sourceItems,
 });
 
 export type PageOutput = z.infer<typeof pageOutput>;
@@ -104,7 +105,7 @@ When one of these pages already answers the topic, say so in the intent and plan
 
 Find sources a reader can check: studies, official documentation, primary data, named experts. Use web search, five searches at most, and give each source's URL as the search returned it, with one sentence on what it supports. The site's own domain is never a source.
 
-The answer is the one sentence the page exists to give. The outline is the level-two headings in order, each with the points under it.`;
+The answer is the one sentence the page exists to give. The outline is the level-two headings in order, each with the points under it; the paragraph the kind skill puts first comes before the first heading and is not in the outline.`;
 }
 
 export function briefUserPrompt(topic: string) {
@@ -118,13 +119,13 @@ export function writeSystemPrompt(context: WriteContext, brief: Brief) {
 
 ${skillsBlock(skills)}
 
-The kind skill says what the page has, in what order, and when it is done; follow it. How we speak gives the registers of the site; write in the register the kind skill names, with its person, formality and sentence length, and spell the site's names as it does. The page is written by ${context.siteName} for its readers and speaks as the site speaks; it never mentions a model, an assistant, a brief or this instruction.
+The kind skill says what the page has, in what order, and when it is done; follow it. How we speak gives the registers of the site; write in the register the kind skill names, with its person, formality and sentence length, and spell the site's names as it does. The page speaks to one reader as "you"; where ${context.languageName} marks the gender of the person addressed in a verb or an adjective, use the forms that fit every reader, unless How we speak quotes the site's own pages in ${context.languageName} choosing otherwise. The page is written by ${context.siteName} for its readers and speaks as the site speaks; it never mentions a model, an assistant, a brief or this instruction.
 
 Every statement about ${context.siteName}, its product, company, features, limits, prices, numbers, customers and competitors comes from the product skills; a thing they do not say is not on the page, and What we do not claim marks what the page leaves out. Facts from outside the product come from the brief's sources, each linked in the text as a markdown link where its fact is used, and appear in sources. Internal links go only to the pages listed below, with the URL as listed.
 
 ${sitePagesBlock(context)}
 
-body_md is markdown with no level-one heading; sections start at level two, as the outline gives them. The title is under 70 characters and is not repeated in the body. meta_title is under 60 characters, meta_description under 155, the excerpt one or two sentences. The slug is lowercase ASCII words joined by hyphens, in ${context.languageName}. Three to six tags. The faq holds three to six questions readers ask about the topic, each with a short answer that the body also gives.`;
+body_md is the article alone: it opens on the paragraph the kind skill puts first, with no heading above it, then the level-two sections as the outline gives them, and ends on the last of them. The FAQ and the sources the kind skill asks for are the faq and sources fields, which the site renders after the body: faq holds three to six questions readers ask about the topic, each with a short answer the body also gives, and sources holds every source linked in the text. The title is under 70 characters and is not repeated in the body. meta_title is under 60 characters, meta_description under 155, the excerpt one or two sentences for lists and link previews. The slug is lowercase ASCII words joined by hyphens, in ${context.languageName}. Three to six tags.`;
 }
 
 export function writeUserPrompt(brief: Brief) {

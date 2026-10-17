@@ -43,7 +43,7 @@ Every response has `ETag` and `Cache-Control: public, s-maxage=60, stale-while-r
 | `related`                  | list of `{ title, url }` of Citequill pages in this locale, for internal linking                                           |
 | `jsonLd`                   | ready JSON-LD: `Article`, `FAQPage` when there is a FAQ, `BreadcrumbList`; author and organisation from the project fields |
 
-The customer inserts `body.html` or renders `body.markdown`, puts `jsonLd` in `<script type="application/ld+json">` and builds `<link rel="alternate" hreflang>` from `translations`. They do not have to compute anything themselves.
+The customer inserts `body.html` or renders `body.markdown`, renders `faq` and `sources` after it where the template wants them, because the body holds neither, puts `jsonLd` in `<script type="application/ld+json">` and builds `<link rel="alternate" hreflang>` from `translations`. They do not have to compute anything themselves.
 
 ## Webhook
 
