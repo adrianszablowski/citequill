@@ -1,7 +1,6 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
+import BackLink from '@/components/back-link';
 import { getCurrentUser } from '@/features/auth/queries';
 import SkillEditor from '@/features/skills/components/skill-editor';
 import { getSkill } from '@/features/skills/queries';
@@ -26,14 +25,7 @@ export default async function SkillEditorSection({
 
     return (
         <div className="flex flex-col gap-4">
-            <Button
-                nativeButton={false}
-                render={<Link href={sectionHref(id, 'skills')} />}
-                variant="ghost"
-                className="self-start"
-            >
-                Back to Skills
-            </Button>
+            <BackLink href={sectionHref(id, 'skills')}>Back to Skills</BackLink>
             <SkillEditor skill={skill} />
         </div>
     );

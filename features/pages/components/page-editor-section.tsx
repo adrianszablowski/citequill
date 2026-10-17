@@ -1,10 +1,8 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { Button } from '@/components/ui/button';
+import BackLink from '@/components/back-link';
 import { getCurrentUser } from '@/features/auth/queries';
 import PageEditor from '@/features/pages/components/page-editor';
-import PagePreview from '@/features/pages/components/page-preview';
 import { getPage } from '@/features/pages/queries';
 import { sectionHref } from '@/lib/sections';
 
@@ -27,18 +25,8 @@ export default async function PageEditorSection({
 
     return (
         <div className="flex flex-col gap-4">
-            <Button
-                nativeButton={false}
-                render={<Link href={sectionHref(id, 'pages')} />}
-                variant="ghost"
-                className="self-start"
-            >
-                Back to Pages
-            </Button>
-            <div className="grid gap-6 xl:grid-cols-2">
-                <PageEditor page={page} />
-                <PagePreview page={page} />
-            </div>
+            <BackLink href={sectionHref(id, 'pages')}>Back to Pages</BackLink>
+            <PageEditor page={page} />
         </div>
     );
 }

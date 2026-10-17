@@ -299,6 +299,10 @@ Reason: the owner created the Supabase project and the Google OAuth client on 15
 - The rule lives in `.claude/rules/forms.md`, loaded for `features/**/components/*.tsx` and `components/*.tsx`; the research with sources is `docs/research/2026-10-16-react-hook-form-rules.md`.
 - Reason: the owner, on 16 October 2026, reviewing the page editor: the form object held in a variable and a hand-made `useState` for pending and error cause renders React Hook Form already avoids, because `formState` subscribes a component only to the fields it reads during render.
 
+## 2026-10-16: the way back from a page or a skill is one link with an arrow
+
+- A page and a skill open on their own route under their section, and the way back to the section's list is `BackLink`, a ghost button with a left arrow before its text, the same component on both routes. Reason: the owner, on 16 October 2026, could hardly see the two text-only back buttons; the arrow is the sign every reader knows for back, and one component keeps the two identical.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.

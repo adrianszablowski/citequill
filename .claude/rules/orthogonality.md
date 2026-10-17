@@ -49,6 +49,7 @@ means the two decisions were never one: write it twice.
 | Markdown rendered to HTML                                     | `renderMarkdown()` in `features/pages/render.ts`                                                                       |
 | The markdown a toolbar button writes around a selection       | `applyFormat()` in `features/pages/markdown-edit.ts`                                                                   |
 | The pending, dirty and error state of a form                  | `formState` of `useForm` in the form, `useFormState({ control })` in a submit button in its own file                   |
+| The link from a row's page back to its section                | `BackLink` in `components/back-link.tsx`                                                                               |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.
