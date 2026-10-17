@@ -8,7 +8,7 @@ import AuditHistory from '@/features/audit/components/audit-history';
 import LatestAudit from '@/features/audit/components/latest-audit';
 import { getAudits, getChanges } from '@/features/audit/queries';
 import { comparedAudits, shownAudit } from '@/features/audit/shown';
-import { getCurrentUser } from '@/features/auth/queries';
+import { getCurrentUser, isOperator } from '@/features/auth/queries';
 import { getProject } from '@/features/projects/queries';
 
 interface AuditSectionProps {
@@ -24,9 +24,10 @@ export default async function AuditSection({
 
     await getCurrentUser();
 
-    const [project, audits] = await Promise.all([
+    const [project, audits, operator] = await Promise.all([
         getProject(id),
         getAudits(id),
+        isOperator(),
     ]);
 
     if (!project) {
@@ -71,7 +72,9 @@ export default async function AuditSection({
                     </CardContent>
                 </Card>
             )}
-            {audits.length > 0 && <AuditHistory audits={audits} />}
+            {audits.length > 0 && (
+                <AuditHistory audits={audits} isOperator={operator} />
+            )}
         </div>
     );
 }

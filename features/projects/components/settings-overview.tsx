@@ -1,3 +1,5 @@
+import { notFound } from 'next/navigation';
+
 import {
     Card,
     CardContent,
@@ -15,8 +17,10 @@ import {
 } from '@/components/ui/table';
 import { getCurrentUser } from '@/features/auth/queries';
 import CrawlAgainForm from '@/features/crawl/components/crawl-again-form';
+import BotSecret from '@/features/projects/components/bot-secret';
 import {
     getAuthors,
+    getBotSecret,
     getPageKinds,
     getProjectLocales,
 } from '@/features/projects/queries';
@@ -32,11 +36,16 @@ export default async function SettingsOverview({
 
     await getCurrentUser();
 
-    const [locales, kinds, authors] = await Promise.all([
+    const [locales, kinds, authors, botSecret] = await Promise.all([
         getProjectLocales(id),
         getPageKinds(id),
         getAuthors(id),
+        getBotSecret(id),
     ]);
+
+    if (botSecret === null) {
+        notFound();
+    }
 
     return (
         <div className="grid gap-6 lg:grid-cols-2">
@@ -154,6 +163,7 @@ export default async function SettingsOverview({
                     <CrawlAgainForm projectId={id} />
                 </CardContent>
             </Card>
+            <BotSecret projectId={id} secret={botSecret} />
         </div>
     );
 }

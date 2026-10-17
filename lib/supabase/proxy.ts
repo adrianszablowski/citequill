@@ -1,7 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
-const publicPaths = ['/login', '/auth/'];
+const publicPages = ['/', '/bot'];
+
+const publicPrefixes = ['/login', '/auth/'];
 
 export async function updateSession(request: NextRequest) {
     let response = NextResponse.next({ request });
@@ -39,15 +41,11 @@ export async function updateSession(request: NextRequest) {
     const { data } = await supabase.auth.getClaims();
     const { pathname } = request.nextUrl;
 
-    const isPublic =
-        pathname === '/' ||
-        publicPaths.some((path) => pathname.startsWith(path));
-
     const url = request.nextUrl.clone();
 
     url.search = '';
 
-    if (!data?.claims && !isPublic) {
+    if (!data?.claims && !isPublicPath(pathname)) {
         url.pathname = '/login';
 
         return NextResponse.redirect(url);
@@ -60,4 +58,11 @@ export async function updateSession(request: NextRequest) {
     }
 
     return response;
+}
+
+export function isPublicPath(pathname: string) {
+    return (
+        publicPages.includes(pathname) ||
+        publicPrefixes.some((prefix) => pathname.startsWith(prefix))
+    );
 }

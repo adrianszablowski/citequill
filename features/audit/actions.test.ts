@@ -62,6 +62,7 @@ function latest(status: Audit['status']): Audit {
             started_at: '2026-10-17T10:00:00Z',
             progressed_at: null,
             workflow_run_id: 'old-workflow',
+            cost_usd: 0,
         },
         audit: null,
         status,

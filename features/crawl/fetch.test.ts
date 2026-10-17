@@ -12,6 +12,12 @@ import {
     userAgent,
 } from '@/features/crawl/fetch';
 
+describe('userAgent', () => {
+    it('names CitequillBot and points at the bot page', () => {
+        expect(userAgent).toBe('CitequillBot/1.0 (+https://citequill.com/bot)');
+    });
+});
+
 describe('fetchText', () => {
     it('gives the body of a page that answers and null for one that fails or is refused', async () => {
         const deps = fakeDeps({

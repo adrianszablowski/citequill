@@ -1,12 +1,12 @@
 ---
 name: copy
-description: Write or edit any line a person reads in Citequill: the dashboard, the connect and sign-in pages, buttons, empty states, errors, placeholders, the landing page and metadata. Use before adding or changing a user-facing string.
+description: Write or edit any line a person reads in Citequill: the dashboard, the connect and sign-in pages, buttons, empty states, errors, placeholders, the landing page, the bot page and metadata. Use before adding or changing a user-facing string.
 argument-hint: '[path or the text to write]'
 ---
 
 # Copy
 
-The rules for every line a visitor or a user reads. Follow the steps in order. The rules after the steps apply to every line.
+The rules for every line a visitor or a user reads. The bot page at `/bot` has a reader of its own, the administrator of a site CitequillBot read: "you" is that administrator, and the customer is "the owner of the site". Follow the steps in order. The rules after the steps apply to every line.
 
 ## Steps
 
@@ -53,19 +53,21 @@ Every string follows the `govuk-style` skill (`~/.claude/skills/govuk-style/SKIL
 
 One word per concept:
 
-| Concept                                    | Write                                                             |
-| ------------------------------------------ | ----------------------------------------------------------------- |
-| the customer's website                     | site; "domain" only when the domain itself is meant               |
-| a site inside Citequill                    | project                                                           |
-| the six parts of the dashboard             | section, named Pages, Skills, Audit, Analytics, Reports, Settings |
-| the first setup of a project               | connect, "Connect a site"                                         |
-| a page Citequill wrote and not published   | draft                                                             |
-| the file that tells the model about a site | skill; "the product skill" for the one the crawl writes           |
-| the weekly work                            | the weekly run, the run                                           |
-| signing in and out                         | Sign in, Sign out, Continue with Google                           |
-| a fault the audit found                    | finding                                                           |
-| how much a finding costs the score         | severity: Critical, Major, Minor, Hint, Question                  |
-| a finding the owner chose to keep          | intended; the buttons Mark as intended and Unmark                 |
+| Concept                                          | Write                                                             |
+| ------------------------------------------------ | ----------------------------------------------------------------- |
+| the customer's website                           | site; "domain" only when the domain itself is meant               |
+| a site inside Citequill                          | project                                                           |
+| the six parts of the dashboard                   | section, named Pages, Skills, Audit, Analytics, Reports, Settings |
+| the first setup of a project                     | connect, "Connect a site"                                         |
+| a page Citequill wrote and not published         | draft                                                             |
+| the file that tells the model about a site       | skill; "the product skill" for the one the crawl writes           |
+| the weekly work                                  | the weekly run, the run                                           |
+| signing in and out                               | Sign in, Sign out, Continue with Google                           |
+| a fault the audit found                          | finding                                                           |
+| how much a finding costs the score               | severity: Critical, Major, Minor, Hint, Question                  |
+| a finding the owner chose to keep                | intended; the buttons Mark as intended and Unmark                 |
+| the crawler that reads the customer's site       | CitequillBot                                                      |
+| the value that lets the audit through a firewall | bot secret; the button Regenerate the secret                      |
 
 ## Kinds of line
 

@@ -21,3 +21,11 @@ export const getCurrentUser = cache(async () => {
 
     return { id: claims.sub, email: claims.email ?? '' };
 });
+
+export const isOperator = cache(async () => {
+    const { email } = await getCurrentUser();
+
+    // An unset list must stay empty: undefined would fall back to the default
+    // list, ALLOWED_EMAILS, and make everyone who signs in the operator.
+    return isAllowedEmail(email, process.env.OPERATOR_EMAILS ?? '');
+});

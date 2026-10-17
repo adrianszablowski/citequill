@@ -15,6 +15,7 @@ function entry(
             started_at: '2026-10-17T10:00:00Z',
             progressed_at: null,
             workflow_run_id: null,
+            cost_usd: 0,
         },
         audit: audit && {
             id: 'audit',

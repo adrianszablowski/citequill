@@ -12,6 +12,13 @@ export function formatCount(count: number) {
     return count.toLocaleString('en-GB');
 }
 
+export function formatUsd(amount: number) {
+    return amount.toLocaleString('en-US', {
+        style: 'currency',
+        currency: 'USD',
+    });
+}
+
 export function pagesRead(count: number) {
     if (count === 0) {
         return 'No pages read yet.';

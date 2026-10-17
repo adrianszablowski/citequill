@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { pagesRead } from '@/lib/utils';
+import { formatUsd, pagesRead } from '@/lib/utils';
+
+describe('formatUsd', () => {
+    it('shows US dollars with two decimals, zero included', () => {
+        expect(formatUsd(0)).toBe('$0.00');
+        expect(formatUsd(3.126431)).toBe('$3.13');
+        expect(formatUsd(1204.5)).toBe('$1,204.50');
+    });
+});
 
 describe('pagesRead', () => {
     it('counts the pages read with the right plural', () => {

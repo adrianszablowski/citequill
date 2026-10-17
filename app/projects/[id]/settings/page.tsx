@@ -9,8 +9,8 @@ export default function SettingsTab({
     return (
         <section className="flex flex-col gap-6">
             <p className="text-muted-foreground">
-                What the crawl found: locales, page kinds and authors. The mode
-                of the project and its keys come with the steps that need them.
+                The crawl fills in the locales, page kinds and authors. The bot
+                secret lets the audit through your firewall.
             </p>
             <Suspense fallback={<SettingsOverviewSkeleton />}>
                 <SettingsOverview params={params} />

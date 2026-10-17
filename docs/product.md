@@ -29,23 +29,23 @@ A project works in one of two modes:
 
 ### Project settings
 
-| Setting                                     | Required                                 | What it gives                                                                                                            |
-| ------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Domain and locales, each with a base URL    | yes, the crawl fills it in               | full page paths, hreflang; the crawl finds whether the site answers with `www` or without and keeps that as the base URL |
-| Page kinds: name, URL prefix, skill, author | yes, three starter kinds                 | where the page lands, how it is written, who signs it                                                                    |
-| Authors: name, title, profile URL           | yes, at least one                        | byline, JSON-LD                                                                                                          |
-| Organization: name, URL, logo               | yes                                      | JSON-LD                                                                                                                  |
-| `pagesPerWeek`, per locale                  | yes, default 3                           | how many pages the weekly run writes                                                                                     |
-| Mode: drafts or auto                        | yes, default drafts                      | whether a page goes out without a click                                                                                  |
-| Day and time of the run                     | optional, default Monday 06:00 UTC       | when the run starts                                                                                                      |
-| Links to sources in the content             | optional, on by default                  | citations in the text instead of only the `sources` field in the API                                                     |
-| Competitors: a list of addresses            | optional, the crawl suggests them        | comparisons and topic gaps with a concrete target                                                                        |
-| Webhook: URL                                | optional                                 | the customer's site knows about publishing, a change and unpublishing at once                                            |
-| IndexNow                                    | optional, a file on the domain           | faster indexing in Bing and IndexNow partners                                                                            |
-| Search Console: property address            | optional, service account as a full user | queries, impressions, positions; input to research                                                                       |
-| Analytics script                            | optional, a snippet in `<head>`          | live traffic, the AI group separately, custom events                                                                     |
-| Obey robots.txt in the audit                | optional, on by default                  | the audit sees the site as Googlebot does; off, it also reads what robots.txt hides                                      |
-| Bot secret                                  | optional, generated per project          | a header the audit sends; pasted into a Cloudflare or Vercel firewall rule, it lets CitequillBot through bot protection  |
+| Setting                                     | Required                                     | What it gives                                                                                                            |
+| ------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Domain and locales, each with a base URL    | yes, the crawl fills it in                   | full page paths, hreflang; the crawl finds whether the site answers with `www` or without and keeps that as the base URL |
+| Page kinds: name, URL prefix, skill, author | yes, three starter kinds                     | where the page lands, how it is written, who signs it                                                                    |
+| Authors: name, title, profile URL           | yes, at least one                            | byline, JSON-LD                                                                                                          |
+| Organization: name, URL, logo               | yes                                          | JSON-LD                                                                                                                  |
+| `pagesPerWeek`, per locale                  | yes, default 3                               | how many pages the weekly run writes                                                                                     |
+| Mode: drafts or auto                        | yes, default drafts                          | whether a page goes out without a click                                                                                  |
+| Day and time of the run                     | optional, default Monday 06:00 UTC           | when the run starts                                                                                                      |
+| Links to sources in the content             | optional, on by default                      | citations in the text instead of only the `sources` field in the API                                                     |
+| Competitors: a list of addresses            | optional, the crawl suggests them            | comparisons and topic gaps with a concrete target                                                                        |
+| Webhook: URL                                | optional                                     | the customer's site knows about publishing, a change and unpublishing at once                                            |
+| IndexNow                                    | optional, a file on the domain               | faster indexing in Bing and IndexNow partners                                                                            |
+| Search Console: property address            | optional, service account as a full user     | queries, impressions, positions; input to research                                                                       |
+| Analytics script                            | optional, a snippet in `<head>`              | live traffic, the AI group separately, custom events                                                                     |
+| Obey robots.txt in the audit                | optional, on by default, not yet in Settings | the audit sees the site as Googlebot does; off, it also reads what robots.txt hides                                      |
+| Bot secret                                  | optional, generated per project              | a header the audit sends; pasted into a Cloudflare or Vercel firewall rule, it lets CitequillBot through bot protection  |
 
 ## Dashboard
 

@@ -39,6 +39,22 @@ export const getProject = cache(async (id: string) => {
     return data;
 });
 
+export async function getBotSecret(projectId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('projects')
+        .select('bot_secret')
+        .eq('id', projectId)
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    return data?.bot_secret ?? null;
+}
+
 export const getProjectLocales = cache(async (projectId: string) => {
     const supabase = await createClient();
 

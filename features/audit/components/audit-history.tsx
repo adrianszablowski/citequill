@@ -11,13 +11,17 @@ import {
 import ScoreBand from '@/features/audit/components/score-band';
 import { formatDuration } from '@/features/audit/format';
 import type { Audit } from '@/features/audit/queries';
-import { formatCount, formatDate } from '@/lib/utils';
+import { formatCount, formatDate, formatUsd } from '@/lib/utils';
 
 interface AuditHistoryProps {
     audits: Audit[];
+    isOperator: boolean;
 }
 
-export default function AuditHistory({ audits }: Readonly<AuditHistoryProps>) {
+export default function AuditHistory({
+    audits,
+    isOperator,
+}: Readonly<AuditHistoryProps>) {
     return (
         <Card>
             <CardHeader>
@@ -36,6 +40,11 @@ export default function AuditHistory({ audits }: Readonly<AuditHistoryProps>) {
                             <TableHead className="text-right">
                                 Time taken
                             </TableHead>
+                            {isOperator && (
+                                <TableHead className="text-right">
+                                    Cost
+                                </TableHead>
+                            )}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -62,6 +71,11 @@ export default function AuditHistory({ audits }: Readonly<AuditHistoryProps>) {
                                         ? formatDuration(audit.duration_s)
                                         : ''}
                                 </TableCell>
+                                {isOperator && (
+                                    <TableCell className="text-right">
+                                        {formatUsd(run.cost_usd)}
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>
