@@ -1,42 +1,113 @@
+'use client';
+
+import { type Control, useWatch } from 'react-hook-form';
+
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from '@/components/ui/accordion';
+import { readingMinutes } from '@/features/pages/draft';
 import type { Page } from '@/features/pages/queries';
 import { renderMarkdown } from '@/features/pages/render';
+import {
+    faqItems,
+    type PageValues,
+    sourceItems,
+} from '@/features/pages/schema';
 
 interface PagePreviewProps {
     page: Page;
+    control: Control<PageValues>;
 }
 
-export default async function PagePreview({
+export default function PagePreview({
     page,
+    control,
 }: Readonly<PagePreviewProps>) {
-    const html = await renderMarkdown(page.body_md);
+    const [title, bodyMd] = useWatch({ control, name: ['title', 'body_md'] });
+
+    const html = renderMarkdown(bodyMd);
+
+    const faq = faqItems.safeParse(page.faq).data ?? [];
+
+    const sources = sourceItems.safeParse(page.sources).data ?? [];
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Preview</CardTitle>
-                <CardDescription>
-                    {page.page_kinds?.name ?? 'Page'} in {page.locale},{' '}
-                    {page.reading_minutes} min read, at /
-                    {[page.page_kinds?.url_prefix, page.slug]
-                        .map((part) => part?.replace(/^\/+|\/+$/g, '') ?? '')
-                        .filter(Boolean)
-                        .join('/')}
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <article className="prose prose-sm max-w-none dark:prose-invert">
-                    <h1>{page.title}</h1>
-                    <p className="lead">{page.excerpt}</p>
-                    <div dangerouslySetInnerHTML={{ __html: html }} />
-                </article>
-            </CardContent>
-        </Card>
+        <article className="mx-auto prose prose-neutral dark:prose-invert prose-h2:mt-8 prose-h2:mb-3 prose-h3:mt-6 prose-h3:mb-2 prose-p:my-4 prose-p:leading-relaxed prose-ol:my-4 prose-ul:my-4 prose-li:my-1 prose-li:leading-relaxed">
+            <p className="text-sm text-muted-foreground">
+                {page.page_kinds?.name ?? 'Page'} in {page.locale},{' '}
+                {readingMinutes(bodyMd)} min read, at /
+                {[page.page_kinds?.url_prefix, page.slug]
+                    .map((part) => part?.replace(/^\/+|\/+$/g, '') ?? '')
+                    .filter(Boolean)
+                    .join('/')}
+            </p>
+            <h1>{title}</h1>
+            <div dangerouslySetInnerHTML={{ __html: html }} />
+            {faq.length > 0 && (
+                <>
+                    <h2>FAQ</h2>
+                    <Accordion className="not-prose">
+                        {faq.map((item) => (
+                            <AccordionItem
+                                key={item.question}
+                                value={item.question}
+                            >
+                                <AccordionTrigger>
+                                    {item.question}
+                                </AccordionTrigger>
+                                <AccordionContent>
+                                    {item.answer}
+                                </AccordionContent>
+                            </AccordionItem>
+                        ))}
+                    </Accordion>
+                </>
+            )}
+            {sources.length > 0 && (
+                <>
+                    <h2>Sources</h2>
+                    <ul>
+                        {sources.map((source) => {
+                            const host = webHost(source.url);
+
+                            return (
+                                <li key={source.url}>
+                                    {host ? (
+                                        <a
+                                            href={source.url}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                        >
+                                            {source.title}
+                                        </a>
+                                    ) : (
+                                        source.title
+                                    )}
+                                    {host && (
+                                        <span className="text-muted-foreground">
+                                            {' '}
+                                            {host}
+                                        </span>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </>
+            )}
+        </article>
     );
+}
+
+function webHost(url: string) {
+    try {
+        const { protocol, hostname } = new URL(url);
+
+        return protocol === 'https:' || protocol === 'http:' ? hostname : null;
+    } catch {
+        return null;
+    }
 }

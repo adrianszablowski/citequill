@@ -284,6 +284,13 @@ Reason: the owner created the Supabase project and the Google OAuth client on 15
 - The preview shows the page as a site would: the title, the body, then the FAQ and the sources from their fields. The excerpt is edited as a field of its own beside the title, because the Content API gives it to lists and Open Graph; shown as the page's first paragraph it read as text missing from the markdown.
 - A page speaks to one reader as "you". In a language whose verbs or adjectives mark the gender of the person addressed, it uses forms that fit every reader, unless How we speak quotes the site's own pages in that language choosing otherwise. Reason: the first Polish page addressed its reader in masculine forms throughout, because the site has no Polish pages and the writer picked one gender; English hides the choice behind "you", and half the audience would read the page as not written for them. The owner decides per site through How we speak, the skill the register already lives in.
 
+## 2026-10-16: a page is edited as markdown with a toolbar and read in a Preview mode
+
+- The editor is a markdown text field with a toolbar: bold, italic, heading, list, link. A button writes markdown around the selection and nothing else. A WYSIWYG editor was rejected: the model writes markdown, the Content API sends markdown and HTML, and a rich-text editor is a large dependency and a second representation of the page that must always agree with the first.
+- A page opens in Preview, because reading the draft comes before changing it; Edit is one click. In Edit the toolbar and Save stick to the top of the window while the markdown scrolls, and the modifier key with B, I or K formats from the keyboard. Reason: the owner selected a word deep in a long page and had to scroll back up for Bold.
+- One card with two modes, Edit and Preview, flipped by one button. Preview renders the fields as they stand, before a save, through `renderMarkdown()` in the browser; the renderer is synchronous, so the same function serves the preview and the HTML of the Content API. The FAQ folds out one question at a time and the sources list their title and domain. The headings FAQ and Sources and the folding are Citequill's presentation of the fields, because the customer's site renders them in its own way.
+- Reason: the owner, on 16 October 2026, after reading the first page: the preview showed the saved text without styling, and the editor and the preview side by side left no room for either.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.
