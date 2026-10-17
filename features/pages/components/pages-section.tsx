@@ -29,7 +29,7 @@ export default async function PagesSection({
 
     await getCurrentUser();
 
-    const [{ pages, total }, runs, kinds, locales] = await Promise.all([
+    const [{ rows: pages, total }, runs, kinds, locales] = await Promise.all([
         getPageList(id, query),
         getWriteRuns(id),
         getPageKinds(id),
@@ -103,7 +103,11 @@ export default async function PagesSection({
                 locales={locales.map((locale) => locale.locale)}
             />
             <PageTable projectId={id} pages={pages} query={query} />
-            <PagePagination projectId={id} query={query} total={total} />
+            <PagePagination
+                query={query}
+                total={total}
+                hrefOf={(change) => pageListHref(id, { ...query, ...change })}
+            />
             {isWriting && <RefreshPoll />}
         </div>
     );

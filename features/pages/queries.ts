@@ -5,6 +5,7 @@ import { cache } from 'react';
 import { titlePattern } from '@/features/pages/list-query';
 import type { PageListQuery } from '@/features/pages/schema';
 import { isStaleRun } from '@/features/runs/stale';
+import { paged } from '@/lib/supabase/result';
 import { createClient } from '@/lib/supabase/server';
 
 export async function getPageList(projectId: string, query: PageListQuery) {
@@ -49,24 +50,12 @@ export async function getPageList(projectId: string, query: PageListQuery) {
         request = request.lte('published_at', `${query.to}T23:59:59.999Z`);
     }
 
-    const { data, error, count } = await request;
-
-    // PostgREST answers a range that starts past the last row with 416 and no
-    // count, so a page beyond the end is a result, not a failure.
-    if (error?.code === 'PGRST103') {
-        return { pages: [], total: null };
-    }
-
-    if (error) {
-        throw error;
-    }
-
-    return { pages: data, total: count ?? 0 };
+    return paged(await request);
 }
 
 export type PageListItem = Awaited<
     ReturnType<typeof getPageList>
->['pages'][number];
+>['rows'][number];
 
 export const getPage = cache(async (projectId: string, pageId: string) => {
     const supabase = await createClient();

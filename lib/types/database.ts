@@ -861,6 +861,34 @@ export type Database = {
                 };
                 Returns: undefined;
             };
+            audit_check_list: {
+                Args: { audit: string; locale?: string };
+                Returns: {
+                    check: string;
+                    pages_failed: number;
+                    pages_intended: number;
+                    severity: string;
+                    severity_rank: number;
+                }[];
+            };
+            audit_page_list: {
+                Args: { audit: string };
+                Returns: {
+                    canonical_url: string;
+                    findings: number;
+                    hints: number;
+                    id: string;
+                    locale: string;
+                    page_id: string;
+                    questions: number;
+                    severity_1: number;
+                    severity_2: number;
+                    severity_3: number;
+                    status_code: number;
+                    title: string;
+                    url: string;
+                }[];
+            };
             create_audit: { Args: { run: string }; Returns: string };
             is_project_owner: { Args: { project: string }; Returns: boolean };
             score_audit: {

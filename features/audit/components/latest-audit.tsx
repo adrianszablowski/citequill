@@ -9,7 +9,12 @@ import { Spinner } from '@/components/ui/spinner';
 import AuditScore from '@/features/audit/components/audit-score';
 import RunAuditForm from '@/features/audit/components/run-audit-form';
 import StopAuditForm from '@/features/audit/components/stop-audit-form';
-import { formatDuration, stalledMessage } from '@/features/audit/format';
+import {
+    type Changes,
+    changesLine,
+    formatDuration,
+    stalledMessage,
+} from '@/features/audit/format';
 import type { Audit } from '@/features/audit/queries';
 import { queueCap } from '@/features/audit/queue';
 import RefreshPoll from '@/features/crawl/components/refresh-poll';
@@ -19,12 +24,14 @@ interface LatestAuditProps {
     projectId: string;
     domain: string;
     latest: Audit | null;
+    changes: Changes | null;
 }
 
 export default function LatestAudit({
     projectId,
     domain,
     latest,
+    changes,
 }: Readonly<LatestAuditProps>) {
     if (!latest) {
         return (
@@ -86,11 +93,18 @@ export default function LatestAudit({
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     {audit.score !== null && (
-                        <AuditScore
-                            score={audit.score}
-                            checksScored={audit.checks_scored}
-                            checksTotal={audit.checks_total}
-                        />
+                        <div className="flex flex-col gap-1">
+                            <AuditScore
+                                score={audit.score}
+                                checksScored={audit.checks_scored}
+                                checksTotal={audit.checks_total}
+                            />
+                            {changes && (
+                                <p className="text-muted-foreground">
+                                    {changesLine(changes)}
+                                </p>
+                            )}
+                        </div>
                     )}
                     <dl className="grid grid-cols-3 gap-4">
                         {facts.map((fact) => (

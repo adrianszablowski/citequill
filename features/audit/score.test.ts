@@ -8,6 +8,8 @@ import {
     checksRun,
     crossPageChecks,
     gateCap,
+    hasMark,
+    isSiteCheck,
     type Mark,
     scoreAudit,
     type ScoredFinding,
@@ -416,5 +418,43 @@ describe('band', () => {
         expect(band(50)).toBe('needs-work');
         expect(band(49)).toBe('poor');
         expect(band(0)).toBe('poor');
+    });
+});
+
+describe('hasMark', () => {
+    const marks: Mark[] = [
+        { check: 'page-4xx', url: 'https://acme.com/a', selector: null },
+        { check: 'page-4xx', url: null, selector: null },
+    ];
+
+    it('finds a mark only at its own grain', () => {
+        expect(
+            hasMark(marks, { check: 'page-4xx', url: null, selector: null }),
+        ).toBe(true);
+
+        expect(
+            hasMark(marks, {
+                check: 'page-4xx',
+                url: 'https://acme.com/b',
+                selector: null,
+            }),
+        ).toBe(false);
+
+        expect(
+            hasMark(marks, { check: 'page-4xx', url: null, selector: 'img' }),
+        ).toBe(false);
+    });
+
+    it('finds nothing among no marks', () => {
+        expect(
+            hasMark([], { check: 'page-4xx', url: null, selector: null }),
+        ).toBe(false);
+    });
+});
+
+describe('isSiteCheck', () => {
+    it('tells a check on the site from a check on its pages', () => {
+        expect(isSiteCheck('sitemap-missing')).toBe(true);
+        expect(isSiteCheck('page-4xx')).toBe(false);
     });
 });

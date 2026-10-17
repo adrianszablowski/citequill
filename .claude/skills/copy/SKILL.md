@@ -63,6 +63,9 @@ One word per concept:
 | the file that tells the model about a site | skill; "the product skill" for the one the crawl writes           |
 | the weekly work                            | the weekly run, the run                                           |
 | signing in and out                         | Sign in, Sign out, Continue with Google                           |
+| a fault the audit found                    | finding                                                           |
+| how much a finding costs the score         | severity: Critical, Major, Minor, Hint, Question                  |
+| a finding the owner chose to keep          | intended; the buttons Mark as intended and Unmark                 |
 
 ## Kinds of line
 

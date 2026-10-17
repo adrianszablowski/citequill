@@ -48,6 +48,8 @@ export const pageSorts = [
 
 export const pageSizes = [10, 50, 100] as const;
 
+export type PageSize = (typeof pageSizes)[number];
+
 const optionalText = z.string().trim().min(1).optional().catch(undefined);
 
 export const pageListQuery = z.object({

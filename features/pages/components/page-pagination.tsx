@@ -1,4 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import type { Route } from 'next';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -9,20 +10,20 @@ import {
     PaginationItem,
 } from '@/components/ui/pagination';
 import PageSizeSelect from '@/features/pages/components/page-size-select';
-import { pageListHref, pageNumbers } from '@/features/pages/list-query';
-import type { PageListQuery } from '@/features/pages/schema';
+import { pageNumbers } from '@/features/pages/list-query';
+import { type PageSize, pageSizes } from '@/features/pages/schema';
 
-interface PagePaginationProps {
-    projectId: string;
-    query: PageListQuery;
+interface PagePaginationProps<T extends string> {
+    query: { page: number; size: PageSize };
     total: number;
+    hrefOf: (change: { page: number; size?: PageSize }) => Route<T>;
 }
 
-export default function PagePagination({
-    projectId,
+export default function PagePagination<T extends string>({
     query,
     total,
-}: Readonly<PagePaginationProps>) {
+    hrefOf,
+}: Readonly<PagePaginationProps<T>>) {
     if (total === 0) {
         return null;
     }
@@ -31,7 +32,7 @@ export default function PagePagination({
     const first = (query.page - 1) * query.size + 1;
 
     function href(page: number) {
-        return pageListHref(projectId, { ...query, page });
+        return hrefOf({ page });
     }
 
     return (
@@ -108,7 +109,10 @@ export default function PagePagination({
                     </PaginationItem>
                 </PaginationContent>
             </Pagination>
-            <PageSizeSelect projectId={projectId} query={query} />
+            <PageSizeSelect
+                size={query.size}
+                hrefs={pageSizes.map((size) => hrefOf({ page: 1, size }))}
+            />
         </div>
     );
 }

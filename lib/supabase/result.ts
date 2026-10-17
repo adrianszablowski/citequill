@@ -34,6 +34,28 @@ export async function all<T>(
     }
 }
 
+export function paged<T>({
+    data,
+    error,
+    count,
+}: {
+    data: T[] | null;
+    error: PostgrestError | null;
+    count: number | null;
+}) {
+    // PostgREST answers a range that starts past the last row with 416 and no
+    // count, so a page beyond the end is a result, not a failure.
+    if (error?.code === 'PGRST103') {
+        return { rows: [], total: null };
+    }
+
+    if (error) {
+        throw error;
+    }
+
+    return { rows: data ?? [], total: count ?? 0 };
+}
+
 export async function done(
     query: PromiseLike<{ error: PostgrestError | null }>,
 ) {

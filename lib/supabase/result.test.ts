@@ -1,6 +1,7 @@
+import { PostgrestError } from '@supabase/supabase-js';
 import { describe, expect, it } from 'vitest';
 
-import { all, rowsPerRead } from '@/lib/supabase/result';
+import { all, paged, rowsPerRead } from '@/lib/supabase/result';
 
 function table(size: number) {
     const ranges: [number, number][] = [];
@@ -68,5 +69,29 @@ describe('all', () => {
 
         await expect(read).rejects.toThrow('statement timeout');
         expect(ranges.map(([from]) => from)).toEqual([0, rowsPerRead]);
+    });
+});
+
+describe('paged', () => {
+    const error = (code: string) =>
+        new PostgrestError({ code, message: code, details: '', hint: '' });
+
+    it('gives the rows of a page and the exact count', () => {
+        expect(paged({ data: [1, 2], error: null, count: 12 })).toEqual({
+            rows: [1, 2],
+            total: 12,
+        });
+    });
+
+    it('reads a page past the last row as no rows and no count', () => {
+        expect(
+            paged({ data: null, error: error('PGRST103'), count: null }),
+        ).toEqual({ rows: [], total: null });
+    });
+
+    it('throws any other error', () => {
+        expect(() =>
+            paged({ data: null, error: error('42501'), count: null }),
+        ).toThrow('42501');
     });
 });

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import AuditFindingsSkeleton from '@/features/audit/components/audit-findings-skeleton';
 
 export default function AuditSectionSkeleton() {
     return (
@@ -25,6 +26,7 @@ export default function AuditSectionSkeleton() {
                     <Skeleton className="h-8 w-full sm:w-40" />
                 </CardContent>
             </Card>
+            <AuditFindingsSkeleton />
             <Card>
                 <CardHeader>
                     <Skeleton className="h-5 w-20" />

@@ -54,6 +54,8 @@ Structured data and hreflang have no area of their own: invalid markup costs on-
 | hint     | shown in the report with the sentence "Google does not count this", outside the score                                                                                                                                          |
 | question | shown as a question to the owner, because only they know the intent: a content page with noindex, a cross-domain canonical                                                                                                     |
 
+The report names them Critical, Major, Minor, Hint and Question, never by the digit alone.
+
 The gate checks are the ones Google names as technical requirements, the spam policies, and HTTPS: `robots-googlebot-blocked`, `noindex-site`, `soft-404`, `page-5xx`, `redirect-loop`, `redirect-chain-long`, `spam-pattern`, `https-missing`, `mixed-active`. A recommendation never caps the score, however common its failure, because one template element (a menu item without `href`) would otherwise cap a whole site.
 
 ### Bands
@@ -390,18 +392,20 @@ Accessibility is not a direct ranking factor. The audit scores the overlap with 
 
 ## The report
 
-The Audit section opens on the latest audit. The first card is the score with its band, the check count the score stands on, the date, the pages read and rendered, the time taken, and the difference from the previous audit when both stand on the same checks: "+7 since 3 October, 12 findings fixed, 2 new". A partial audit says so in the card. While an audit runs, the card shows its progress and a Stop button; a stalled or failed audit shows what went wrong and a button that runs it again, and a stopped audit shows its partial score with its band.
+The Audit section opens on the latest audit. The first card is the score with its band, the check count the score stands on, the date, the pages read and rendered, the time taken, and the difference from the previous audit when both stand on the same checks: "+7 since 3 October, 12 findings fixed, 2 new", with "No change" in place of the number when the score is the same. A partial audit says so in the card. While an audit runs, the card shows its progress and a Stop button; a stalled or failed audit shows what went wrong and a button that runs it again, and a stopped audit shows its partial score with its band.
 
 Two views of the findings, each a table the server filters, sorts and pages from the URL, as Pages is:
 
-- by finding: the check, its severity and area, how many pages fail it, the list of pages, what Google says with its link, how to fix it, and a button to mark it intended at the URL, selector or check grain
+- by finding: the check, its severity and area, how many pages have a finding of it and how many of those are intended, the list of pages, what Google says with its link, how to fix it, and a button to mark it intended at the URL, selector or check grain
 - by page: every finding of one URL, with the page's status, canonical, title and whether Citequill wrote it
+
+A row opens the list of its findings on the same address, paged as the table is. The tables show the latest audit whose run has ended, the partial findings of a stopped audit included; while an audit runs they show the audit before it, with its date, and offer no marks, because a mark recomputes only the latest audit.
 
 A third card lists images grouped by `src`, because a logo repeats on 300 pages and is fixed once: the image, the alt as found (absent, empty and whitespace told apart), the pages, a CSS selector, a short HTML snippet, and the ancestor that decided the verdict, the link or the figure.
 
 Every finding carries the page URL, the subject (an image `src`, a link `href`, a sitemap URL), a CSS selector built from id, classes and tag so the same element has the same selector on every page, and a short HTML snippet; the audit keeps no page HTML. A finding has a fingerprint, the hash of its check, page, subject and selector, so two audits can be compared: fixed is in the previous and not in the latest, new is in the latest and not in the previous, and a finding marked intended in between is neither. A finding on a page Citequill wrote is labelled so, because it is a regression test of Citequill's own writer and template on a real site.
 
-A filter by language narrows every view to one locale; the score stays the site's.
+A filter by language narrows every view to one locale; a finding on the site itself, such as one on robots.txt or a sitemap, stays under every language, and the score stays the site's.
 
 The history lists every audit with its score, band and counters. The owner opens any of them; the comparison is between the last two, because only they keep their findings. Older audits keep their score and counters.
 

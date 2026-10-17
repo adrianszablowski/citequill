@@ -1,7 +1,13 @@
+import { refresh } from 'next/cache';
 import { getRun, start } from 'workflow/api';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { startAudit, stopAudit } from '@/features/audit/actions';
+import {
+    markFinding,
+    startAudit,
+    stopAudit,
+    unmarkFinding,
+} from '@/features/audit/actions';
 import { stalledMessage } from '@/features/audit/format';
 import { type Audit, getAudits } from '@/features/audit/queries';
 import { auditSite } from '@/features/audit/workflow';
@@ -15,6 +21,10 @@ vi.mock('next/navigation', () => {
             throw new Error('NEXT_REDIRECT');
         }),
     };
+});
+
+vi.mock('next/cache', () => {
+    return { refresh: vi.fn() };
 });
 
 vi.mock('workflow/api', () => {
@@ -240,5 +250,176 @@ describe('stopAudit', () => {
 
         expect(fake.writes()).toEqual([]);
         expect(writeScore).not.toHaveBeenCalled();
+    });
+});
+
+describe('markFinding and unmarkFinding', () => {
+    const mark = {
+        check: 'page-4xx',
+        url: 'https://acme.com/a',
+        selector: null,
+    };
+
+    function marks({
+        audit = { id: 'audit', runs: { status: 'finished' } } as object | null,
+        answer = {} as object,
+        audits = { data: audit ? [audit] : [] } as object,
+    } = {}) {
+        const fake = fakeSupabase(({ name }) => {
+            if (name === 'audits') {
+                return audits;
+            }
+
+            return name === 'audit_marks' ? answer : {};
+        });
+
+        vi.mocked(createClient).mockResolvedValue(fake.client as never);
+
+        return fake;
+    }
+
+    it('marks a finding and recomputes the latest audit with the checks that compare pages', async () => {
+        const fake = marks();
+
+        await markFinding('project', mark);
+
+        expect(fake.writes()).toEqual(['insert audit_marks']);
+
+        expect(
+            fake.queries.find(({ name }) => name === 'audit_marks')!.calls[0],
+        ).toEqual(['insert', { project_id: 'project', ...mark }]);
+
+        expect(writeScore).toHaveBeenCalledWith(fake.client, {
+            projectId: 'project',
+            auditId: 'audit',
+            hasCrossPageChecks: true,
+        });
+
+        expect(refresh).toHaveBeenCalled();
+    });
+
+    it('recomputes a stopped audit without the checks that compare pages', async () => {
+        const fake = marks({
+            audit: { id: 'audit', runs: { status: 'failed' } },
+        });
+
+        await markFinding('project', mark);
+
+        expect(writeScore).toHaveBeenCalledWith(fake.client, {
+            projectId: 'project',
+            auditId: 'audit',
+            hasCrossPageChecks: false,
+        });
+    });
+
+    it('treats a mark that already exists as made and still recomputes', async () => {
+        marks({ answer: { error: { code: '23505', message: 'duplicate' } } });
+
+        await markFinding('project', mark);
+
+        expect(writeScore).toHaveBeenCalled();
+    });
+
+    it('throws on any other refusal of the insert', async () => {
+        marks({ answer: { error: { code: '42501', message: 'denied' } } });
+
+        await expect(markFinding('project', mark)).rejects.toThrow('denied');
+        expect(writeScore).not.toHaveBeenCalled();
+    });
+
+    it('keeps the mark but leaves the scoring to an audit that is still running', async () => {
+        const fake = marks({
+            audit: { id: 'audit', runs: { status: 'running' } },
+        });
+
+        await markFinding('project', mark);
+
+        expect(fake.writes()).toEqual(['insert audit_marks']);
+        expect(writeScore).not.toHaveBeenCalled();
+    });
+
+    it('unmarks a selector mark by its three keys and recomputes', async () => {
+        const fake = marks();
+
+        await unmarkFinding('project', {
+            check: 'page-4xx',
+            url: null,
+            selector: 'img.logo',
+        });
+
+        expect(
+            fake.queries.find(({ name }) => name === 'audit_marks')!.calls,
+        ).toEqual([
+            ['delete'],
+            ['eq', 'project_id', 'project'],
+            ['eq', 'check', 'page-4xx'],
+            ['is', 'url', null],
+            ['eq', 'selector', 'img.logo'],
+        ]);
+
+        expect(writeScore).toHaveBeenCalledWith(fake.client, {
+            projectId: 'project',
+            auditId: 'audit',
+            hasCrossPageChecks: true,
+        });
+    });
+
+    it('unmarks a URL mark by its URL and an empty selector', async () => {
+        const fake = marks();
+
+        await unmarkFinding('project', mark);
+
+        expect(
+            fake.queries.find(({ name }) => name === 'audit_marks')!.calls,
+        ).toEqual([
+            ['delete'],
+            ['eq', 'project_id', 'project'],
+            ['eq', 'check', 'page-4xx'],
+            ['eq', 'url', 'https://acme.com/a'],
+            ['is', 'selector', null],
+        ]);
+    });
+
+    it('throws when the delete is refused and recomputes nothing', async () => {
+        marks({ answer: { error: { code: '42501', message: 'denied' } } });
+
+        await expect(unmarkFinding('project', mark)).rejects.toThrow('denied');
+        expect(writeScore).not.toHaveBeenCalled();
+        expect(refresh).not.toHaveBeenCalled();
+    });
+
+    it('refuses a check the catalogue does not list and writes nothing', async () => {
+        const fake = marks();
+        const unknown = { ...mark, check: 'made-up' };
+
+        await expect(markFinding('project', unknown)).rejects.toThrow();
+        await expect(unmarkFinding('project', unknown)).rejects.toThrow();
+
+        expect(fake.queries).toEqual([]);
+        expect(writeScore).not.toHaveBeenCalled();
+    });
+
+    it('throws when the latest audit cannot be read and writes nothing', async () => {
+        const fake = marks({
+            audits: { error: { message: 'statement timeout' } },
+        });
+
+        await expect(markFinding('project', mark)).rejects.toThrow(
+            'statement timeout',
+        );
+
+        expect(fake.writes()).toEqual([]);
+        expect(writeScore).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing on a project the user does not own, because its audit reads as no row', async () => {
+        const fake = marks({ audit: null });
+
+        await markFinding('project', mark);
+        await unmarkFinding('project', mark);
+
+        expect(fake.writes()).toEqual([]);
+        expect(writeScore).not.toHaveBeenCalled();
+        expect(refresh).not.toHaveBeenCalled();
     });
 });

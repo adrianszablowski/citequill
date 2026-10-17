@@ -100,6 +100,15 @@ export function checksRun({
     );
 }
 
+export function hasMark(marks: Mark[], mark: Mark) {
+    return marks.some(
+        (other) =>
+            other.check === mark.check &&
+            other.url === mark.url &&
+            other.selector === mark.selector,
+    );
+}
+
 export function appliesTo(check: CheckId, pages: ScoredPage[]) {
     const scope = scopes[check];
 
@@ -312,7 +321,11 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'thin-page': 'indexable',
 };
 
-const shippedChecks = Object.keys(scopes) as CheckId[];
+export const shippedChecks = Object.keys(scopes) as CheckId[];
+
+export function isSiteCheck(check: CheckId) {
+    return scopes[check] === 'site';
+}
 
 function failingPages(
     check: CheckId,

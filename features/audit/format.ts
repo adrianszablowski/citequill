@@ -1,4 +1,13 @@
+import { formatCount, formatDate } from '@/lib/utils';
+
 export const stalledMessage = 'The audit made no progress for 15 minutes.';
+
+export interface Changes {
+    difference: number;
+    since: string;
+    fixed: number;
+    added: number;
+}
 
 export function formatDuration(seconds: number) {
     if (seconds < 60) {
@@ -24,4 +33,12 @@ export function startedAgo(iso: string, now: number) {
     return minutes === 1
         ? 'Started a minute ago.'
         : `Started ${minutes} minutes ago.`;
+}
+
+export function changesLine({ difference, since, fixed, added }: Changes) {
+    const sign = difference > 0 ? '+' : '';
+    const change = difference === 0 ? 'No change' : `${sign}${difference}`;
+    const findings = fixed === 1 ? 'finding' : 'findings';
+
+    return `${change} since ${formatDate(since)}, ${formatCount(fixed)} ${findings} fixed, ${formatCount(added)} new`;
 }

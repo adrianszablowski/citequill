@@ -1,5 +1,6 @@
 'use client';
 
+import type { Route } from 'next';
 import { useRouter } from 'next/navigation';
 
 import { Label } from '@/components/ui/label';
@@ -10,40 +11,33 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { pageListHref } from '@/features/pages/list-query';
-import { type PageListQuery, pageSizes } from '@/features/pages/schema';
+import { type PageSize, pageSizes } from '@/features/pages/schema';
 
-interface PageSizeSelectProps {
-    projectId: string;
-    query: PageListQuery;
+interface PageSizeSelectProps<T extends string> {
+    size: PageSize;
+    hrefs: Route<T>[];
 }
 
-export default function PageSizeSelect({
-    projectId,
-    query,
-}: Readonly<PageSizeSelectProps>) {
+export default function PageSizeSelect<T extends string>({
+    size: current,
+    hrefs,
+}: Readonly<PageSizeSelectProps<T>>) {
     const router = useRouter();
 
     return (
         <div className="flex items-center gap-2">
-            <Label htmlFor="pages-size" className="text-muted-foreground">
+            <Label htmlFor="list-size" className="text-muted-foreground">
                 Rows
             </Label>
             <Select
-                value={query.size}
+                value={current}
                 onValueChange={(size) => {
                     if (size) {
-                        router.push(
-                            pageListHref(projectId, {
-                                ...query,
-                                size,
-                                page: 1,
-                            }),
-                        );
+                        router.push(hrefs[pageSizes.indexOf(size)]);
                     }
                 }}
             >
-                <SelectTrigger id="pages-size" size="sm">
+                <SelectTrigger id="list-size" size="sm">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
