@@ -10,6 +10,10 @@ export default function AuditSectionSkeleton() {
                     <Skeleton className="h-4 w-2/3" />
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1">
+                        <Skeleton className="h-10 w-32" />
+                        <Skeleton className="h-5 w-48" />
+                    </div>
                     <div className="grid grid-cols-3 gap-4">
                         {facts.map((fact) => (
                             <div key={fact} className="flex flex-col gap-1">

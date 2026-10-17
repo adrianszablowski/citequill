@@ -30,6 +30,16 @@ export function siteHosts(domain: string, baseUrls: string[]) {
     ];
 }
 
+export function siteBaseUrls(domain: string, locales: { base_url: string }[]) {
+    return locales.length > 0
+        ? locales.map((locale) => locale.base_url)
+        : [`https://${domain}`];
+}
+
+export function homePages(baseUrls: string[]) {
+    return [...new Set(baseUrls.map((url) => new URL(url).href))];
+}
+
 export function siteOrigins(hosts: string[]) {
     return schemes.flatMap((scheme) =>
         hosts.map((host) => `${scheme}//${host}`),

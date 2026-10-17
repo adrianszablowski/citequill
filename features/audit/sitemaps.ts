@@ -2,7 +2,11 @@ import type { SiteClient } from '@/features/audit/client';
 import { hasStopped } from '@/features/audit/pacing';
 import { linkTarget } from '@/features/audit/queue';
 import type { Fetched } from '@/features/crawl/fetch';
-import { readSitemap, type Sitemap } from '@/features/crawl/sitemap';
+import {
+    emptySitemap,
+    readSitemap,
+    type Sitemap,
+} from '@/features/crawl/sitemap';
 
 export interface SitemapFile {
     url: string;
@@ -37,7 +41,7 @@ export async function readSitemaps(
 
         const sitemap =
             fetched instanceof Error || !fetched.ok
-                ? { urls: [], sitemaps: [] }
+                ? emptySitemap
                 : readSitemap(fetched.body);
 
         files.push({ url, fetched, sitemap });

@@ -1,10 +1,11 @@
 import { getRun, start } from 'workflow/api';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { startAudit } from '@/features/audit/actions';
+import { startAudit, stopAudit } from '@/features/audit/actions';
 import { stalledMessage } from '@/features/audit/format';
 import { type Audit, getAudits } from '@/features/audit/queries';
 import { auditSite } from '@/features/audit/workflow';
+import { writeScore } from '@/features/audit/write-score';
 import { fakeSupabase } from '@/lib/supabase/fake';
 import { createClient } from '@/lib/supabase/server';
 
@@ -26,6 +27,10 @@ vi.mock('@/features/audit/queries', () => {
 
 vi.mock('@/features/audit/workflow', () => {
     return { auditSite: vi.fn() };
+});
+
+vi.mock('@/features/audit/write-score', () => {
+    return { writeScore: vi.fn(async () => {}) };
 });
 
 vi.mock('@/features/auth/queries', () => {
@@ -54,10 +59,14 @@ function latest(status: Audit['status']): Audit {
     };
 }
 
-function database() {
+function database({ hasEnded = true } = {}) {
     const fake = fakeSupabase(({ name, calls }) => {
         if (name === 'create_audit') {
             return { data: 'new-audit' };
+        }
+
+        if (name === 'runs' && calls[0][0] === 'update') {
+            return { data: hasEnded ? [{ id: 'old-run' }] : [] };
         }
 
         return calls[0][0] === 'insert' ? { data: { id: 'new-run' } } : {};
@@ -109,6 +118,7 @@ describe('startAudit', () => {
                 ],
                 ['eq', 'id', 'old-run'],
                 ['eq', 'status', 'running'],
+                ['select', 'id'],
             ],
         });
 
@@ -151,5 +161,84 @@ describe('startAudit', () => {
 
         expect(cancel).not.toHaveBeenCalled();
         expect(fake.writes()[0]).toBe('insert runs');
+    });
+});
+
+describe('stopAudit', () => {
+    function running(): Audit {
+        return {
+            ...latest('running'),
+            audit: {
+                id: 'audit',
+                created_at: '2026-10-17T10:00:00Z',
+                pages_read: 120,
+                pages_indexable: 0,
+                duration_s: null,
+                is_partial: false,
+                score: null,
+                is_gated: false,
+                checks_scored: 0,
+                checks_total: 0,
+            },
+        };
+    }
+
+    it('ends the run, marks the audit partial, then scores the pages read without the checks that compare pages', async () => {
+        const fake = database();
+
+        vi.mocked(getAudits).mockResolvedValue([running()]);
+
+        await expect(stopAudit('project')).rejects.toThrow('NEXT_REDIRECT');
+
+        expect(cancel).toHaveBeenCalled();
+        expect(fake.writes()).toEqual(['update runs', 'rpc stop_audit']);
+
+        expect(fake.queries[0].calls[0]).toEqual([
+            'update',
+            {
+                status: 'failed',
+                error: 'You stopped the audit.',
+                finished_at: expect.any(String),
+            },
+        ]);
+
+        expect(writeScore).toHaveBeenCalledWith(fake.client, {
+            projectId: 'project',
+            auditId: 'audit',
+            hasCrossPageChecks: false,
+        });
+    });
+
+    it('marks and scores nothing when the run finished on its own before the click landed', async () => {
+        const fake = database({ hasEnded: false });
+
+        vi.mocked(getAudits).mockResolvedValue([running()]);
+
+        await expect(stopAudit('project')).rejects.toThrow('NEXT_REDIRECT');
+
+        expect(fake.writes()).toEqual(['update runs']);
+        expect(writeScore).not.toHaveBeenCalled();
+    });
+
+    it('leaves the stopped audit unscored and still opens the section when the score fails to write', async () => {
+        const fake = database();
+
+        vi.mocked(writeScore).mockRejectedValueOnce(new Error('score_audit'));
+        vi.mocked(getAudits).mockResolvedValue([running()]);
+
+        await expect(stopAudit('project')).rejects.toThrow('NEXT_REDIRECT');
+
+        expect(fake.writes()).toEqual(['update runs', 'rpc stop_audit']);
+    });
+
+    it('stops and scores nothing when the latest audit is not running', async () => {
+        const fake = database();
+
+        vi.mocked(getAudits).mockResolvedValue([latest('finished')]);
+
+        await expect(stopAudit('project')).rejects.toThrow('NEXT_REDIRECT');
+
+        expect(fake.writes()).toEqual([]);
+        expect(writeScore).not.toHaveBeenCalled();
     });
 });

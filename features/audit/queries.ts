@@ -12,7 +12,7 @@ export const getAudits = cache(async (projectId: string) => {
     const { data, error } = await supabase
         .from('runs')
         .select(
-            'id, status, error, started_at, progressed_at, workflow_run_id, audits(id, created_at, pages_read, pages_indexable, duration_s, is_partial)',
+            'id, status, error, started_at, progressed_at, workflow_run_id, audits(id, created_at, pages_read, pages_indexable, duration_s, is_partial, score, is_gated, checks_scored, checks_total)',
         )
         .eq('project_id', projectId)
         .eq('trigger', 'audit')

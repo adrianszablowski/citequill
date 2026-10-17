@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { blockedBy, parseRobots, robotsFile } from '@/features/audit/robots';
+import {
+    blockedBy,
+    googlebotBlocks,
+    parseRobots,
+    robotsFile,
+} from '@/features/audit/robots';
 
 const robotsUrl = 'https://acme.com/robots.txt';
 
@@ -157,5 +162,19 @@ describe('blockedBy', () => {
         expect(isBlocked('https://www.acme.com/private/a')).toBe(true);
         expect(isBlocked('http://acme.com/private/a')).toBe(true);
         expect(isBlocked('http://acme.com/pricing')).toBe(false);
+    });
+});
+
+describe('googlebotBlocks', () => {
+    it('answers for Googlebot alone, whatever the CitequillBot group says', () => {
+        const isBlocked = googlebotBlocks([
+            file(
+                'User-agent: Googlebot\nDisallow: /private\n\nUser-agent: CitequillBot\nDisallow: /cart',
+            ),
+        ]);
+
+        expect(isBlocked('https://acme.com/private/a')).toBe(true);
+        expect(isBlocked('https://acme.com/cart')).toBe(false);
+        expect(isBlocked('https://acme.de/private/a')).toBe(false);
     });
 });

@@ -1,10 +1,12 @@
-import { XMLParser } from 'fast-xml-parser';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
 
 import type { Alternate } from '@/features/crawl/html';
 
 export interface SitemapUrl {
     loc: string;
     lastmod: string | null;
+    priority: string | null;
+    changefreq: string | null;
     alternates: Alternate[];
     images: Record<string, unknown>[];
     videos: Record<string, unknown>[];
@@ -13,7 +15,20 @@ export interface SitemapUrl {
 export interface Sitemap {
     urls: SitemapUrl[];
     sitemaps: { loc: string; lastmod: string | null }[];
+    root: 'urlset' | 'sitemapindex' | null;
+    namespace: string | null;
+    isWellFormed: boolean;
+    rejected: string[];
 }
+
+export const emptySitemap: Sitemap = {
+    urls: [],
+    sitemaps: [],
+    root: null,
+    namespace: null,
+    isWellFormed: false,
+    rejected: [],
+};
 
 export function sitemapsFromRobots(robots: string) {
     return robots
@@ -39,11 +54,14 @@ export function readSitemap(xml: string): Sitemap {
     try {
         parsed = parser.parse(xml) as Parsed;
     } catch {
-        return { urls: [], sitemaps: [] };
+        return emptySitemap;
     }
 
+    const urls = parsed.urlset?.url ?? [];
+    const sitemaps = parsed.sitemapindex?.sitemap ?? [];
+
     return {
-        urls: (parsed.urlset?.url ?? []).flatMap((entry) => {
+        urls: urls.flatMap((entry) => {
             const loc = text(entry.loc);
 
             return isHttpUrl(loc)
@@ -51,6 +69,8 @@ export function readSitemap(xml: string): Sitemap {
                       {
                           loc,
                           lastmod: text(entry.lastmod) || null,
+                          priority: text(entry.priority) || null,
+                          changefreq: text(entry.changefreq) || null,
                           alternates: (entry.link ?? []).flatMap(alternate),
                           images: entry.image ?? [],
                           videos: entry.video ?? [],
@@ -58,19 +78,30 @@ export function readSitemap(xml: string): Sitemap {
                   ]
                 : [];
         }),
-        sitemaps: (parsed.sitemapindex?.sitemap ?? []).flatMap((entry) => {
+        sitemaps: sitemaps.flatMap((entry) => {
             const loc = text(entry.loc);
 
             return isHttpUrl(loc)
                 ? [{ loc, lastmod: text(entry.lastmod) || null }]
                 : [];
         }),
+        root: rootOf(parsed),
+        namespace:
+            /<(?:urlset|sitemapindex)\b[^>]*\sxmlns\s*=\s*["']([^"']*)["']/.exec(
+                xml,
+            )?.[1] ?? null,
+        isWellFormed: XMLValidator.validate(xml) === true,
+        rejected: [...urls, ...sitemaps]
+            .map((entry) => text(entry.loc))
+            .filter((loc) => !isHttpUrl(loc)),
     };
 }
 
 interface Entry {
     loc?: unknown;
     lastmod?: unknown;
+    priority?: unknown;
+    changefreq?: unknown;
     link?: Record<string, unknown>[];
     image?: Record<string, unknown>[];
     video?: Record<string, unknown>[];
@@ -90,6 +121,14 @@ const parser = new XMLParser({
     parseTagValue: false,
     isArray: (name) => repeated.has(name),
 });
+
+function rootOf(parsed: Parsed) {
+    if (parsed.urlset !== undefined) {
+        return 'urlset';
+    }
+
+    return parsed.sitemapindex === undefined ? null : 'sitemapindex';
+}
 
 function text(value: unknown) {
     return typeof value === 'string' ? value.trim() : '';

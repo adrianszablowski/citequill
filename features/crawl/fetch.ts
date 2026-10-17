@@ -22,6 +22,7 @@ export interface Fetched {
     url: string;
     headers: Headers;
     body: string;
+    isTruncated: boolean;
     hops: Hop[];
 }
 
@@ -88,12 +89,18 @@ export async function fetchPublic(
             await response.body?.cancel();
         }
 
+        const { body, isTruncated } =
+            method === 'HEAD'
+                ? { body: '', isTruncated: false }
+                : await readBody(response, maxBytes);
+
         return {
             ok: response.ok,
             status: response.status,
             url: current.href,
             headers: response.headers,
-            body: method === 'HEAD' ? '' : await readBody(response, maxBytes),
+            body,
+            isTruncated,
             hops,
         };
     }
@@ -187,7 +194,7 @@ async function assertPublic(url: URL, lookup: FetchDeps['lookup']) {
 
 async function readBody(response: Response, limit: number) {
     if (!response.body) {
-        return '';
+        return { body: '', isTruncated: false };
     }
 
     const reader = response.body.getReader();
@@ -207,9 +214,12 @@ async function readBody(response: Response, limit: number) {
 
     await reader.cancel();
 
-    return decoder(response.headers).decode(
-        Buffer.concat(chunks).subarray(0, limit),
-    );
+    return {
+        body: decoder(response.headers).decode(
+            Buffer.concat(chunks).subarray(0, limit),
+        ),
+        isTruncated: size > limit,
+    };
 }
 
 function decoder(headers: Headers) {

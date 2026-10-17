@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import {
     addToQueue,
     batchSize,
+    homePages,
     linkDepth,
     linkTarget,
     nextBatch,
     type Queue,
     queueCap,
     queryUrlsPerPath,
+    siteBaseUrls,
     siteHosts,
     siteOrigins,
 } from '@/features/audit/queue';
@@ -22,6 +24,24 @@ describe('siteHosts', () => {
             'www.acme.com',
             'acme.de',
             'www.acme.de',
+        ]);
+    });
+});
+
+describe('homePages', () => {
+    it("is the home page of every locale's base URL, once each, or of the domain when the project has no locales", () => {
+        expect(
+            homePages(
+                siteBaseUrls('acme.com', [
+                    { base_url: 'https://acme.com' },
+                    { base_url: 'https://acme.com/' },
+                    { base_url: 'https://acme.com/de' },
+                ]),
+            ),
+        ).toEqual(['https://acme.com/', 'https://acme.com/de']);
+
+        expect(homePages(siteBaseUrls('acme.com', []))).toEqual([
+            'https://acme.com/',
         ]);
     });
 });

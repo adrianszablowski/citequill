@@ -1,4 +1,5 @@
 import {
+    checkSite,
     closeAudit,
     discoverSite,
     readPages,
@@ -23,6 +24,7 @@ export async function auditSite(
             reading = await readPages(projectId, runId, auditId, reading.pace);
         }
 
+        await checkSite(projectId, runId, auditId);
         await closeAudit(projectId, runId, auditId);
     } catch (error) {
         await failRun(

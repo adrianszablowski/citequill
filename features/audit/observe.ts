@@ -6,6 +6,7 @@ import {
     type QueueEntry,
 } from '@/features/audit/queue';
 import { type Fetched, type Hop, isHtml } from '@/features/crawl/fetch';
+import { absolute } from '@/features/crawl/html';
 import { type Locale, localeOf } from '@/features/crawl/locales';
 import type { Json, TablesInsert } from '@/lib/types/database';
 
@@ -50,15 +51,19 @@ export function observeRead(
             ? readAuditPage(fetched.body, fetched.url)
             : null;
 
+    const directives = googlebotDirectives(
+        page?.robotsMeta ?? [],
+        fetched?.headers.get('x-robots-tag') ?? null,
+    );
+
     const observation = observePage(
         fetched && {
             hops: fetched.hops,
             title: page?.title ?? null,
-            canonical: page?.canonical ?? null,
-            directives: googlebotDirectives(
-                page?.robotsMeta ?? [],
-                fetched.headers.get('x-robots-tag'),
-            ),
+            canonical:
+                page?.canonical ??
+                headerCanonical(fetched.headers.get('link'), fetched.url),
+            directives,
         },
     );
 
@@ -91,6 +96,8 @@ export function observeRead(
 
     return {
         row,
+        page,
+        directives,
         candidates:
             landing && landing !== entry.url
                 ? [...links, { url: landing, depth: entry.depth }]
@@ -141,6 +148,20 @@ export function googlebotDirectives(
     ]
         .map((directive) => directive.trim().toLowerCase())
         .filter(Boolean);
+}
+
+export function headerCanonical(header: string | null, url: string) {
+    for (const [, href, params] of (header ?? '').matchAll(
+        /<([^>]*)>([^<]*)/g,
+    )) {
+        const rel = /rel\s*=\s*"?([^";,]*)/i.exec(params)?.[1] ?? '';
+
+        if (rel.toLowerCase().split(/\s+/).includes('canonical')) {
+            return absolute(href, new URL(url));
+        }
+    }
+
+    return null;
 }
 
 const unanswered: Observation = {

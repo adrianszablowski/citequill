@@ -9,6 +9,7 @@ vi.mock('@/features/audit/steps', () => {
     return {
         discoverSite: vi.fn(),
         readPages: vi.fn(),
+        checkSite: vi.fn(async () => {}),
         closeAudit: vi.fn(async () => {}),
     };
 });
@@ -28,7 +29,7 @@ beforeEach(() => {
 });
 
 describe('auditSite', () => {
-    it('reads while a step reports work left, hands each step the pace of the last, then closes', async () => {
+    it('reads while a step reports work left, hands each step the pace of the last, then checks the site and closes', async () => {
         const paces = [1, 2, 3].map((streak) => ({ ...firstPace, streak }));
 
         mocked.readPages
@@ -42,16 +43,30 @@ describe('auditSite', () => {
             [firstPace, paces[0], paces[1]],
         );
 
+        expect(mocked.checkSite).toHaveBeenCalledWith(
+            'project',
+            'run',
+            'audit',
+        );
+
         expect(mocked.closeAudit).toHaveBeenCalledWith(
             'project',
             'run',
             'audit',
         );
 
+        expect(mocked.checkSite.mock.invocationCallOrder[0]).toBeGreaterThan(
+            mocked.readPages.mock.invocationCallOrder[2],
+        );
+
+        expect(mocked.closeAudit.mock.invocationCallOrder[0]).toBeGreaterThan(
+            mocked.checkSite.mock.invocationCallOrder[0],
+        );
+
         expect(runs.failRun).not.toHaveBeenCalled();
     });
 
-    it('fails the run with the message when a step throws, and does not close', async () => {
+    it('fails the run with the message when a step throws, and neither checks the site nor closes', async () => {
         mocked.readPages.mockRejectedValue(
             new Error('The site stopped answering.'),
         );
@@ -63,6 +78,7 @@ describe('auditSite', () => {
             'The site stopped answering.',
         );
 
+        expect(mocked.checkSite).not.toHaveBeenCalled();
         expect(mocked.closeAudit).not.toHaveBeenCalled();
     });
 });

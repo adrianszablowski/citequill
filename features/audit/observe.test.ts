@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     googlebotDirectives,
+    headerCanonical,
     isIndexable,
     observePage,
     observeRead,
@@ -36,6 +37,7 @@ function page(
         url: hops.at(-1)!.url,
         headers: new Headers({ 'content-type': 'text/html' }),
         body: `<html><body>${body}</body></html>`,
+        isTruncated: false,
         hops,
     } satisfies Fetched;
 }
@@ -226,5 +228,25 @@ describe('observePage', () => {
             status_code: null,
             is_indexable: false,
         });
+    });
+});
+
+describe('headerCanonical', () => {
+    it('reads the canonical a Link header names, among other links', () => {
+        expect(
+            headerCanonical(
+                '<https://cdn.acme.com/a.css>; rel=preload, </pricing>; rel="canonical"',
+                'https://acme.com/pricing?ref=x',
+            ),
+        ).toBe('https://acme.com/pricing');
+
+        expect(
+            headerCanonical(
+                '<https://acme.com/a.css>; rel=preload',
+                'https://acme.com/',
+            ),
+        ).toBeNull();
+
+        expect(headerCanonical(null, 'https://acme.com/')).toBeNull();
     });
 });

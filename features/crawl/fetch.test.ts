@@ -167,14 +167,20 @@ describe('fetchPublic', () => {
         ]);
     });
 
-    it('cuts the body at the size cap', async () => {
+    it('cuts the body at the size cap and says it did', async () => {
         const deps = fakeDeps({
             'https://acme.com/': page('x'.repeat(maxBytes + 1000)),
+            'https://acme.com/small': page('x'.repeat(maxBytes)),
         });
 
         const result = await fetchPublic('https://acme.com/', deps);
 
         expect(result.body).toHaveLength(maxBytes);
+        expect(result.isTruncated).toBe(true);
+
+        expect(
+            (await fetchPublic('https://acme.com/small', deps)).isTruncated,
+        ).toBe(false);
     });
 });
 

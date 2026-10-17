@@ -58,12 +58,52 @@ describe('readAuditPage', () => {
         expect(changed.bodyHash).not.toBe(one.bodyHash);
     });
 
-    it('has no hash for a page with no text', () => {
+    it('has no hash and no words for a page with no text', () => {
+        const page = readAuditPage(
+            '<html><body><div id="root"></div></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.bodyHash).toBeNull();
+        expect(page.wordCount).toBe(0);
+    });
+
+    it('keeps every canonical tag as written, where it sits and what it looks like', () => {
+        const page = readAuditPage(
+            `<html><head><link rel="canonical" href="/a"></head><body><p>Text</p><link rel="canonical" class="seo" href="https://acme.com/b"></body></html>`,
+            'https://acme.com/a',
+        );
+
+        expect(page.canonical).toBe('https://acme.com/a');
+
+        expect(page.canonicals).toEqual([
+            {
+                href: '/a',
+                isInHead: true,
+                selector: 'link',
+                snippet: '<link rel="canonical" href="/a">',
+            },
+            {
+                href: 'https://acme.com/b',
+                isInHead: false,
+                selector: 'link.seo',
+                snippet:
+                    '<link rel="canonical" class="seo" href="https://acme.com/b">',
+            },
+        ]);
+    });
+
+    it('reads a meta refresh and counts the words of the main text', () => {
+        const page = readAuditPage(
+            '<html><head><meta http-equiv="Refresh" content="0; url=/new"></head><body><nav>Menu items here</nav><main>One two  three\nfour</main></body></html>',
+            'https://acme.com/old',
+        );
+
+        expect(page.refresh).toBe('0; url=/new');
+        expect(page.wordCount).toBe(4);
+
         expect(
-            readAuditPage(
-                '<html><body><div id="root"></div></body></html>',
-                'https://acme.com/',
-            ).bodyHash,
+            readAuditPage(html, 'https://acme.com/pricing').refresh,
         ).toBeNull();
     });
 });

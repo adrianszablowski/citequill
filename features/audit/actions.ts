@@ -6,6 +6,7 @@ import { getRun, start } from 'workflow/api';
 import { stalledMessage } from '@/features/audit/format';
 import { type Audit, getAudits } from '@/features/audit/queries';
 import { auditSite } from '@/features/audit/workflow';
+import { writeScore } from '@/features/audit/write-score';
 import { getCurrentUser } from '@/features/auth/queries';
 import { sectionHref } from '@/lib/sections';
 import { createClient } from '@/lib/supabase/server';
@@ -76,10 +77,22 @@ export async function stopAudit(projectId: string) {
 
     const supabase = await createClient();
 
-    await endRun(supabase, latest.run, 'You stopped the audit.');
+    const hasEnded = await endRun(
+        supabase,
+        latest.run,
+        'You stopped the audit.',
+    );
 
-    if (latest.audit) {
+    if (hasEnded && latest.audit) {
         await supabase.rpc('stop_audit', { audit: latest.audit.id });
+
+        // The run has ended either way; a score that fails to write leaves the
+        // stopped audit unscored and the owner still lands on the section.
+        await writeScore(supabase, {
+            projectId,
+            auditId: latest.audit.id,
+            hasCrossPageChecks: false,
+        }).catch(() => undefined);
     }
 
     redirect(sectionHref(projectId, 'audit'));
@@ -98,7 +111,7 @@ async function endRun(
             .catch(() => undefined);
     }
 
-    await supabase
+    const { data } = await supabase
         .from('runs')
         .update({
             status: 'failed',
@@ -106,5 +119,8 @@ async function endRun(
             finished_at: new Date().toISOString(),
         })
         .eq('id', run.id)
-        .eq('status', 'running');
+        .eq('status', 'running')
+        .select('id');
+
+    return (data ?? []).length > 0;
 }

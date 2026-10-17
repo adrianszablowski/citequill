@@ -83,6 +83,8 @@ describe('readSitemap', () => {
             {
                 loc: 'https://yoursite.com/en/pricing',
                 lastmod: '2026-10-01',
+                priority: null,
+                changefreq: null,
                 alternates: [
                     { lang: 'en', href: 'https://yoursite.com/en/pricing' },
                     { lang: 'de', href: 'https://yoursite.com/de/preise' },
@@ -98,6 +100,8 @@ describe('readSitemap', () => {
             {
                 loc: 'https://yoursite.com/en/about',
                 lastmod: null,
+                priority: null,
+                changefreq: null,
                 alternates: [],
                 images: [],
                 videos: [],
@@ -113,5 +117,39 @@ describe('readSitemap', () => {
             { loc: 'https://yoursite.com/a.xml', lastmod: '2026-09-30' },
             { loc: 'https://yoursite.com/b.xml', lastmod: null },
         ]);
+    });
+
+    it('says how the file is written: its root, its namespace, whether it is well formed and the locations it could not take', () => {
+        const xml =
+            '<urlset xmlns="http://www.google.com/schemas/sitemap/0.84"><url><loc>/relative</loc></url><url><loc>https://yoursite.com/a?x=1&y=2</loc><priority>0.8</priority><changefreq>daily</changefreq></url></urlset>';
+
+        expect(readSitemap(xml)).toMatchObject({
+            root: 'urlset',
+            namespace: 'http://www.google.com/schemas/sitemap/0.84',
+            isWellFormed: false,
+            rejected: ['/relative'],
+            urls: [
+                {
+                    loc: 'https://yoursite.com/a?x=1&y=2',
+                    priority: '0.8',
+                    changefreq: 'daily',
+                },
+            ],
+        });
+
+        expect(
+            readSitemap(
+                '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></sitemapindex>',
+            ),
+        ).toMatchObject({
+            root: 'sitemapindex',
+            namespace: 'http://www.sitemaps.org/schemas/sitemap/0.9',
+            isWellFormed: true,
+        });
+
+        expect(readSitemap('<html><body>404</body></html>')).toMatchObject({
+            root: null,
+            namespace: null,
+        });
     });
 });

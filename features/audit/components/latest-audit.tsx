@@ -6,6 +6,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import AuditScore from '@/features/audit/components/audit-score';
 import RunAuditForm from '@/features/audit/components/run-audit-form';
 import StopAuditForm from '@/features/audit/components/stop-audit-form';
 import { formatDuration, stalledMessage } from '@/features/audit/format';
@@ -84,8 +85,13 @@ export default function LatestAudit({
                     )}
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                    {/* TODO: the score with its band and the check count go
-                    here; backlog 2026-10-17, the rest of audit slice 1. */}
+                    {audit.score !== null && (
+                        <AuditScore
+                            score={audit.score}
+                            checksScored={audit.checks_scored}
+                            checksTotal={audit.checks_total}
+                        />
+                    )}
                     <dl className="grid grid-cols-3 gap-4">
                         {facts.map((fact) => (
                             <div
@@ -121,7 +127,20 @@ export default function LatestAudit({
                           'The audit stopped without a message.')}
                 </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
+                {audit && audit.score !== null && (
+                    <div className="flex flex-col gap-1">
+                        <AuditScore
+                            score={audit.score}
+                            checksScored={audit.checks_scored}
+                            checksTotal={audit.checks_total}
+                        />
+                        <p className="text-muted-foreground">
+                            This score is partial. It counts only the pages read
+                            before the audit stopped.
+                        </p>
+                    </div>
+                )}
                 <RunAuditForm
                     projectId={projectId}
                     label="Run the audit again"

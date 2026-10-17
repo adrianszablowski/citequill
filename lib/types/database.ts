@@ -863,6 +863,23 @@ export type Database = {
             };
             create_audit: { Args: { run: string }; Returns: string };
             is_project_owner: { Args: { project: string }; Returns: boolean };
+            score_audit: {
+                Args: {
+                    audit: string;
+                    checks_scored: number;
+                    checks_total: number;
+                    hints: number;
+                    intended: string[];
+                    is_gated: boolean;
+                    questions: number;
+                    results: Json;
+                    score: number;
+                    severity_1: number;
+                    severity_2: number;
+                    severity_3: number;
+                };
+                Returns: undefined;
+            };
             stop_audit: { Args: { audit: string }; Returns: undefined };
         };
         Enums: {

@@ -77,16 +77,10 @@ export function parseRobots(text: string) {
 }
 
 export function blockedBy(files: RobotsFile[], obeyRobots: boolean) {
-    const readers = files.map((file) => ({
-        origin: new URL(file.url).origin,
-        robots: robotsParser(file.url, robotsText(file.groups)),
-        hasOwnGroup: ownGroups(file).length > 0,
-    }));
+    const readers = robotsReaders(files);
 
     return (url: string) => {
-        const reader = readers.find(
-            (candidate) => candidate.origin === new URL(url).origin,
-        );
+        const reader = readerOf(readers, url);
 
         if (!reader) {
             return false;
@@ -102,7 +96,28 @@ export function blockedBy(files: RobotsFile[], obeyRobots: boolean) {
     };
 }
 
+export function googlebotBlocks(files: RobotsFile[]) {
+    const readers = robotsReaders(files);
+
+    return (url: string) =>
+        readerOf(readers, url)?.robots.isAllowed(url, 'Googlebot') === false;
+}
+
 const ownAgent = agentToken(userAgent);
+
+type RobotsReader = ReturnType<typeof robotsReaders>[number];
+
+function robotsReaders(files: RobotsFile[]) {
+    return files.map((file) => ({
+        origin: new URL(file.url).origin,
+        robots: robotsParser(file.url, robotsText(file.groups)),
+        hasOwnGroup: ownGroups(file).length > 0,
+    }));
+}
+
+function readerOf(readers: RobotsReader[], url: string) {
+    return readers.find((reader) => reader.origin === new URL(url).origin);
+}
 
 function agentToken(agent: string) {
     return agent.toLowerCase().split('/')[0].trim();

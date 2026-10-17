@@ -8,6 +8,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import ScoreBand from '@/features/audit/components/score-band';
 import { formatDuration } from '@/features/audit/format';
 import type { Audit } from '@/features/audit/queries';
 import { formatCount, formatDate } from '@/lib/utils';
@@ -28,6 +29,7 @@ export default function AuditHistory({ audits }: Readonly<AuditHistoryProps>) {
                         <TableRow>
                             <TableHead>Date</TableHead>
                             <TableHead>State</TableHead>
+                            <TableHead>Score</TableHead>
                             <TableHead className="text-right">
                                 Pages read
                             </TableHead>
@@ -46,6 +48,11 @@ export default function AuditHistory({ audits }: Readonly<AuditHistoryProps>) {
                                     <Badge variant={states[status].variant}>
                                         {states[status].label}
                                     </Badge>
+                                </TableCell>
+                                <TableCell>
+                                    {audit && audit.score !== null && (
+                                        <ScoreBand score={audit.score} />
+                                    )}
                                 </TableCell>
                                 <TableCell className="text-right">
                                     {formatCount(audit?.pages_read ?? 0)}

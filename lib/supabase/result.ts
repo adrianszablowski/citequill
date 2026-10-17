@@ -13,6 +13,27 @@ export async function one<T>(query: PromiseLike<PostgrestSingleResponse<T>>) {
     return data;
 }
 
+export const rowsPerRead = 1_000;
+
+export async function all<T>(
+    range: (
+        from: number,
+        to: number,
+    ) => PromiseLike<PostgrestSingleResponse<T[]>>,
+) {
+    const rows: T[] = [];
+
+    for (let from = 0; ; from += rowsPerRead) {
+        const page = await one(range(from, from + rowsPerRead - 1));
+
+        rows.push(...page);
+
+        if (page.length < rowsPerRead) {
+            return rows;
+        }
+    }
+}
+
 export async function done(
     query: PromiseLike<{ error: PostgrestError | null }>,
 ) {
