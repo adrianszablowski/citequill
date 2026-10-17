@@ -90,6 +90,17 @@ inputs, a sort or a page is a `<Link>`, and a control with no submit button, a p
 rewrites the URL with `router.push`. A `'use client'` component holds only what the server cannot:
 a focused field, an open menu, a pending link, the text of a draft before it is saved.
 
+## Streaming and skeletons
+
+A `page.tsx` is static: its text and its `<Suspense>` boundaries prerender, so a click in the
+sidebar swaps the page at once and the sections stream into it. Every boundary has a fallback, and
+the fallback is a skeleton of the section, `<name>-skeleton.tsx` beside it: the same outer layout,
+heights and gaps as the loaded component, with a few `Skeleton` blocks where the title, a row and a
+button will be, so nothing moves when the data lands. A skeleton has no random width:
+`SidebarMenuSkeleton` calls `Math.random()` and blocks prerendering. A boundary that only redirects
+shows a `Spinner`. Mobile first: a layout is written for a narrow screen, and `sm:` and `lg:` widen
+it; a skeleton follows the same breakpoints.
+
 ## Formatting
 
 Prettier decides formatting and `pnpm lint` reports it: 4 spaces, single quotes, trailing commas,

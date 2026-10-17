@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 
 import PageTitle from '@/components/page-title';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 
 export default function SiteHeader() {
@@ -13,7 +14,7 @@ export default function SiteHeader() {
                     orientation="vertical"
                     className="mx-2 h-4 data-vertical:self-auto"
                 />
-                <Suspense>
+                <Suspense fallback={<Skeleton className="h-5 w-20" />}>
                     <PageTitle />
                 </Suspense>
             </div>

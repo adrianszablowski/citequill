@@ -310,6 +310,11 @@ Reason: the owner created the Supabase project and the Google OAuth client on 15
 - A page past the last one, typed into the URL or left over after rows were deleted, redirects to the last page when the count is known and to the first otherwise, because PostgREST answers a range that starts past the last row with an error and no count, which the query reads as that case. The page sizes are 10, 50 and 100, 10 by default, chosen at the bottom beside the pagination. The date filter is on `published_at`, so drafts fall out of a dated search; the state filter answers for drafts.
 - The principle goes into `.claude/rules/code-style.md` as Server first, so every later list, Reports and Analytics included, is built the same way.
 
+## 2026-10-17: a section streams in behind a skeleton of its own shape
+
+- Cache Components prerender every `page.tsx` with its `<Suspense>` boundaries, so a click in the sidebar swaps the page at once and the data streams into it. Each boundary's fallback is a skeleton that keeps the section's layout, heights and gaps, with a few blocks where the title, a row and a button will be: `pages-section-skeleton.tsx`, `page-editor-skeleton.tsx`, `skill-folders-skeleton.tsx`, `skill-editor-skeleton.tsx`, `settings-overview-skeleton.tsx`, `crawl-progress-skeleton.tsx`, the sidebar's `section-nav-skeleton.tsx`, `project-switcher-skeleton.tsx` and `nav-user-skeleton.tsx`, and a small one for the header's title. A boundary that only redirects shows a spinner. The rule is Streaming and skeletons in `.claude/rules/code-style.md`, with mobile first beside it.
+- Reason: the owner, on 17 October 2026: a bare grey rectangle of a fixed height is a jump when the content lands and a wait with no sign of what comes; the pending spinner on a link stays for the cases where a navigation cannot be instant, sign-in among them.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.

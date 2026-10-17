@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import SkillFolders from '@/features/skills/components/skill-folders';
+import SkillFoldersSkeleton from '@/features/skills/components/skill-folders-skeleton';
 
 export default function SkillsTab({
     params,
@@ -12,7 +12,7 @@ export default function SkillsTab({
                 What Citequill knows about this site. Open a skill to read or
                 edit it.
             </p>
-            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+            <Suspense fallback={<SkillFoldersSkeleton />}>
                 <SkillFolders params={params} />
             </Suspense>
         </section>

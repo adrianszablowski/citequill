@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import SettingsOverview from '@/features/projects/components/settings-overview';
+import SettingsOverviewSkeleton from '@/features/projects/components/settings-overview-skeleton';
 
 export default function SettingsTab({
     params,
@@ -12,7 +12,7 @@ export default function SettingsTab({
                 What the crawl found: locales, page kinds and authors. The mode
                 of the project and its keys come with the steps that need them.
             </p>
-            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+            <Suspense fallback={<SettingsOverviewSkeleton />}>
                 <SettingsOverview params={params} />
             </Suspense>
         </section>

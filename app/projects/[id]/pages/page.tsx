@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import PagesSection from '@/features/pages/components/pages-section';
+import PagesSectionSkeleton from '@/features/pages/components/pages-section-skeleton';
 
 export default function PagesTab({
     params,
@@ -9,7 +9,7 @@ export default function PagesTab({
 }: PageProps<'/projects/[id]/pages'>) {
     return (
         <section className="flex flex-col gap-6">
-            <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+            <Suspense fallback={<PagesSectionSkeleton />}>
                 <PagesSection params={params} searchParams={searchParams} />
             </Suspense>
         </section>
