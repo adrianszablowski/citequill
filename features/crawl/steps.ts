@@ -2,6 +2,8 @@ import { FatalError } from 'workflow';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import robotsParser from 'robots-parser';
 
+import { observePage } from '@/features/audit/observe';
+import { writeSitePages } from '@/features/audit/site-pages';
 import { chunkText, pageChunks } from '@/features/crawl/budget';
 import {
     fetchPublic,
@@ -39,7 +41,7 @@ import {
     type ProductSkillName,
 } from '@/features/skills/product-skill';
 import { starterKinds } from '@/features/skills/starter-kinds';
-import { addUsage } from '@/features/runs/steps';
+import { addUsage, markProgress } from '@/features/runs/steps';
 import { createAnthropic, models } from '@/lib/anthropic';
 import { createAdminClient } from '@/lib/supabase/admin';
 import type { Json } from '@/lib/types/database';
@@ -76,8 +78,10 @@ export interface Batch {
     candidates: string[];
 }
 
-export async function loadProject(projectId: string) {
+export async function loadProject(projectId: string, runId: string) {
     'use step';
+
+    await markProgress(runId);
 
     const { data, error } = await createAdminClient()
         .from('projects')
@@ -92,8 +96,10 @@ export async function loadProject(projectId: string) {
     return data;
 }
 
-export async function clearCrawl(projectId: string) {
+export async function clearCrawl(projectId: string, runId: string) {
     'use step';
+
+    await markProgress(runId);
 
     const { error } = await createAdminClient()
         .from('crawled_pages')
@@ -105,8 +111,13 @@ export async function clearCrawl(projectId: string) {
     }
 }
 
-export async function discoverPages(domain: string): Promise<Discovery> {
+export async function discoverPages(
+    runId: string,
+    domain: string,
+): Promise<Discovery> {
     'use step';
+
+    await markProgress(runId);
 
     const home = await findHome(domain);
     const origin = new URL(home.url).origin;
@@ -148,11 +159,14 @@ export async function discoverPages(domain: string): Promise<Discovery> {
 }
 
 export async function nextBatch(
+    runId: string,
     site: Site,
     seen: string[],
     candidates: string[],
 ): Promise<Batch> {
     'use step';
+
+    await markProgress(runId);
 
     const ranked = rank(site, seen, candidates, frontierCap + batchSize);
 
@@ -164,14 +178,17 @@ export async function nextBatch(
 
 export async function fetchPages(
     projectId: string,
+    runId: string,
     urls: string[],
     llmsLinks: string[],
 ): Promise<PageMeta[]> {
     'use step';
 
+    await markProgress(runId);
+
     const supabase = createAdminClient();
 
-    return Promise.all(
+    const pages = await Promise.all(
         urls.map(async (url) => {
             const page = await fetchPage(url, llmsLinks);
 
@@ -194,23 +211,38 @@ export async function fetchPages(
                 throw new Error(error.message);
             }
 
-            return {
-                url,
-                lang: page.lang,
-                alternates: page.alternates,
-                author: page.author,
-                links: page.links.slice(0, linksPerPage),
-            };
+            return { url, page };
         }),
     );
+
+    await writeSitePages(
+        pages.map(({ url, page }) => ({
+            project_id: projectId,
+            url,
+            locale: page.lang,
+            ...observePage(page.answer),
+            is_blocked: false,
+        })),
+    );
+
+    return pages.map(({ url, page }) => ({
+        url,
+        lang: page.lang,
+        alternates: page.alternates,
+        author: page.author,
+        links: page.links.slice(0, linksPerPage),
+    }));
 }
 
 export async function saveLocales(
     projectId: string,
+    runId: string,
     origin: string,
     pages: PageMeta[],
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const supabase = createAdminClient();
     const locales = localesFrom(origin, pages);
@@ -235,8 +267,13 @@ export async function saveLocales(
     }
 }
 
-export async function planChunks(projectId: string): Promise<string[][]> {
+export async function planChunks(
+    projectId: string,
+    runId: string,
+): Promise<string[][]> {
     'use step';
+
+    await markProgress(runId);
 
     const pages = await loadPages(projectId);
 
@@ -270,6 +307,8 @@ export async function extractFacts(
 ): Promise<Facts> {
     'use step';
 
+    await markProgress(runId);
+
     const pages = await loadPages(projectId, urls);
 
     const message = await createAnthropic().messages.parse({
@@ -291,11 +330,14 @@ export async function extractFacts(
 
 export async function nameSite(
     projectId: string,
+    runId: string,
     domain: string,
     home: string,
     parts: Facts[],
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const [homePage] = await loadPages(projectId, [home]);
 
@@ -324,6 +366,8 @@ export async function writeProductSkill(
     parts: Facts[],
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const supabase = createAdminClient();
 
@@ -359,10 +403,13 @@ export async function writeProductSkill(
 
 export async function createStarterKinds(
     projectId: string,
+    runId: string,
     urls: string[],
     authorName: string | null,
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const supabase = createAdminClient();
 

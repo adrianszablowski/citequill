@@ -42,6 +42,19 @@ export function localesFrom(origin: string, pages: LocaleSource[]): Locale[] {
     }));
 }
 
+export function localeOf(url: string, locales: Locale[]) {
+    return (
+        locales
+            .filter(
+                ({ base_url }) =>
+                    url === base_url ||
+                    url.startsWith(`${base_url.replace(/\/+$/, '')}/`),
+            )
+            .sort((a, b) => b.base_url.length - a.base_url.length)[0]?.locale ??
+        null
+    );
+}
+
 export function isSameLanguage(
     lang: string | null,
     locale: string | null | undefined,

@@ -3,8 +3,29 @@ import { describe, expect, it } from 'vitest';
 import {
     isSameLanguage,
     languagesSkill,
+    localeOf,
     localesFrom,
 } from '@/features/crawl/locales';
+
+describe('localeOf', () => {
+    const locales = [
+        { locale: 'en', base_url: 'https://acme.com', is_default: true },
+        { locale: 'de', base_url: 'https://acme.com/de', is_default: false },
+        { locale: 'fr', base_url: 'https://acme.fr', is_default: false },
+    ];
+
+    it('names the locale whose base URL holds the page, the longest one first', () => {
+        expect(localeOf('https://acme.com/pricing', locales)).toBe('en');
+        expect(localeOf('https://acme.com/de/preise', locales)).toBe('de');
+        expect(localeOf('https://acme.com/de', locales)).toBe('de');
+        expect(localeOf('https://acme.fr/', locales)).toBe('fr');
+    });
+
+    it('matches a prefix only at a segment and nothing on another host', () => {
+        expect(localeOf('https://acme.com/deals', locales)).toBe('en');
+        expect(localeOf('https://www.acme.com/pricing', locales)).toBeNull();
+    });
+});
 
 describe('localesFrom', () => {
     it('reads a locale per hreflang with its base URL and skips x-default', () => {

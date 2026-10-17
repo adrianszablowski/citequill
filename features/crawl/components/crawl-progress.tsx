@@ -17,6 +17,7 @@ import { getCrawledPageCount, getLatestCrawl } from '@/features/crawl/queries';
 import { getProject } from '@/features/projects/queries';
 import { hasProductSkill } from '@/features/skills/queries';
 import { sectionHref } from '@/lib/sections';
+import { pagesRead } from '@/lib/utils';
 
 interface CrawlProgressProps {
     params: Promise<{ id: string }>;
@@ -105,16 +106,8 @@ function stoppedReason(
     }
 
     if (crawl.status === 'running') {
-        return 'The crawl did not finish in 15 minutes.';
+        return 'The crawl made no progress for 15 minutes.';
     }
 
     return crawl.error ?? 'The crawl stopped without a message.';
-}
-
-function pagesRead(count: number) {
-    if (count === 0) {
-        return 'No pages read yet.';
-    }
-
-    return count === 1 ? '1 page read so far.' : `${count} pages read so far.`;
 }

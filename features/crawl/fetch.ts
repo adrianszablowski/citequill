@@ -1,13 +1,20 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
 
-export const userAgent = 'CitequillBot/0.1 (+https://citequill.com)';
+export const userAgent = 'CitequillBot/1.0 (+https://citequill.com/bot)';
+
+export const botSecretHeader = 'citequill-bot-secret';
 
 export const timeoutMs = 15_000;
 
 export const maxBytes = 2_000_000;
 
-export const maxHops = 5;
+export const maxHops = 10;
+
+export interface Hop {
+    url: string;
+    status: number;
+}
 
 export interface Fetched {
     ok: boolean;
@@ -15,6 +22,7 @@ export interface Fetched {
     url: string;
     headers: Headers;
     body: string;
+    hops: Hop[];
 }
 
 export interface FetchDeps {
@@ -22,29 +30,62 @@ export interface FetchDeps {
     lookup: (hostname: string) => Promise<string[]>;
 }
 
+export interface FetchOptions {
+    method?: 'GET' | 'HEAD';
+    headers?: Record<string, string>;
+    botSecret?: { value: string; hosts: string[] };
+}
+
 export async function fetchPublic(
     url: string,
     deps: FetchDeps = defaultDeps,
+    { method = 'GET', headers = {}, botSecret }: FetchOptions = {},
 ): Promise<Fetched> {
     const signal = AbortSignal.timeout(timeoutMs);
+    const hops: Hop[] = [];
     let current = new URL(url);
 
-    for (let hop = 0; hop <= maxHops; hop++) {
+    for (;;) {
         await assertPublic(current, deps.lookup);
 
+        const sent = new Headers({
+            'user-agent': userAgent,
+            accept: 'text/html,*/*',
+        });
+
+        for (const [name, value] of Object.entries(headers)) {
+            sent.set(name, value);
+        }
+
+        if (botSecret?.hosts.includes(current.hostname)) {
+            sent.set(botSecretHeader, botSecret.value);
+        }
+
         const response = await deps.fetch(current.href, {
-            headers: { 'user-agent': userAgent, accept: 'text/html,*/*' },
+            method,
+            headers: sent,
             redirect: 'manual',
             signal,
         });
 
+        hops.push({ url: current.href, status: response.status });
+
         const location = response.headers.get('location');
 
-        if (response.status >= 300 && response.status < 400 && location) {
+        if (
+            response.status >= 300 &&
+            response.status < 400 &&
+            location &&
+            hops.length <= maxHops
+        ) {
             await response.body?.cancel();
             current = new URL(location, current);
 
             continue;
+        }
+
+        if (method === 'HEAD') {
+            await response.body?.cancel();
         }
 
         return {
@@ -52,11 +93,10 @@ export async function fetchPublic(
             status: response.status,
             url: current.href,
             headers: response.headers,
-            body: await readBody(response, maxBytes),
+            body: method === 'HEAD' ? '' : await readBody(response, maxBytes),
+            hops,
         };
     }
-
-    throw new Error(`${url} redirects more than ${maxHops} times.`);
 }
 
 export async function fetchText(url: string, deps?: FetchDeps) {
@@ -91,7 +131,7 @@ export function isHtml(headers: Headers) {
     return type === '' || /^(text\/html|application\/xhtml\+xml)/i.test(type);
 }
 
-const defaultDeps: FetchDeps = {
+export const defaultDeps: FetchDeps = {
     fetch,
     lookup: async (hostname) =>
         (await dnsLookup(hostname, { all: true })).map(

@@ -20,17 +20,21 @@ export async function crawlSite(projectId: string, runId: string) {
     'use workflow';
 
     try {
-        const { domain } = await loadProject(projectId);
+        const { domain } = await loadProject(projectId, runId);
 
-        await clearCrawl(projectId);
+        await clearCrawl(projectId, runId);
 
-        const { candidates: initial, ...site } = await discoverPages(domain);
+        const { candidates: initial, ...site } = await discoverPages(
+            runId,
+            domain,
+        );
+
         const seen: string[] = [];
         const pages: PageMeta[] = [];
         let candidates = initial;
 
         while (seen.length < pageCap) {
-            const next = await nextBatch(site, seen, candidates);
+            const next = await nextBatch(runId, site, seen, candidates);
 
             if (next.batch.length === 0) {
                 break;
@@ -38,6 +42,7 @@ export async function crawlSite(projectId: string, runId: string) {
 
             const fetched = await fetchPages(
                 projectId,
+                runId,
                 next.batch,
                 site.llmsLinks,
             );
@@ -51,15 +56,21 @@ export async function crawlSite(projectId: string, runId: string) {
             ];
         }
 
-        await saveLocales(projectId, site.origin, pages);
+        await saveLocales(projectId, runId, site.origin, pages);
 
-        const chunks = await planChunks(projectId);
+        const chunks = await planChunks(projectId, runId);
 
         const facts = await Promise.all(
             chunks.map((urls) => extractFacts(projectId, runId, urls)),
         );
 
-        const siteName = await nameSite(projectId, domain, site.home, facts);
+        const siteName = await nameSite(
+            projectId,
+            runId,
+            domain,
+            site.home,
+            facts,
+        );
 
         await Promise.all(
             productSkillNames.map((name) =>
@@ -69,6 +80,7 @@ export async function crawlSite(projectId: string, runId: string) {
 
         await createStarterKinds(
             projectId,
+            runId,
             seen,
             pages.find((page) => page.author)?.author ?? null,
         );

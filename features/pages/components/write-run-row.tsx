@@ -27,7 +27,7 @@ export default function WriteRunRow({
             <div className="flex flex-1 flex-col gap-1">
                 <span>{label} did not finish.</span>
                 <span className="text-muted-foreground">
-                    {run.error ?? 'It did not finish in 15 minutes.'}
+                    {run.error ?? 'It made no progress for 15 minutes.'}
                 </span>
             </div>
             <RetryWriteForm projectId={projectId} runId={run.id} />

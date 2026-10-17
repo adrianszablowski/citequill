@@ -53,16 +53,16 @@ Every string follows the `govuk-style` skill (`~/.claude/skills/govuk-style/SKIL
 
 One word per concept:
 
-| Concept                                    | Write                                                      |
-| ------------------------------------------ | ---------------------------------------------------------- |
-| the customer's website                     | site; "domain" only when the domain itself is meant        |
-| a site inside Citequill                    | project                                                    |
-| the five parts of the dashboard            | section, named Pages, Skills, Analytics, Reports, Settings |
-| the first setup of a project               | connect, "Connect a site"                                  |
-| a page Citequill wrote and not published   | draft                                                      |
-| the file that tells the model about a site | skill; "the product skill" for the one the crawl writes    |
-| the weekly work                            | the weekly run, the run                                    |
-| signing in and out                         | Sign in, Sign out, Continue with Google                    |
+| Concept                                    | Write                                                             |
+| ------------------------------------------ | ----------------------------------------------------------------- |
+| the customer's website                     | site; "domain" only when the domain itself is meant               |
+| a site inside Citequill                    | project                                                           |
+| the six parts of the dashboard             | section, named Pages, Skills, Audit, Analytics, Reports, Settings |
+| the first setup of a project               | connect, "Connect a site"                                         |
+| a page Citequill wrote and not published   | draft                                                             |
+| the file that tells the model about a site | skill; "the product skill" for the one the crawl writes           |
+| the weekly work                            | the weekly run, the run                                           |
+| signing in and out                         | Sign in, Sign out, Continue with Google                           |
 
 ## Kinds of line
 

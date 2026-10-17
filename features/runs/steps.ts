@@ -11,7 +11,8 @@ export async function finishRun(runId: string) {
             status: 'finished',
             finished_at: new Date().toISOString(),
         })
-        .eq('id', runId);
+        .eq('id', runId)
+        .eq('status', 'running');
 
     if (error) {
         throw new Error(error.message);
@@ -28,7 +29,19 @@ export async function failRun(runId: string, message: string) {
             error: message,
             finished_at: new Date().toISOString(),
         })
+        .eq('id', runId)
+        .eq('status', 'running');
+}
+
+export async function markProgress(runId: string) {
+    const { error } = await createAdminClient()
+        .from('runs')
+        .update({ progressed_at: new Date().toISOString() })
         .eq('id', runId);
+
+    if (error) {
+        throw new Error(error.message);
+    }
 }
 
 export async function addUsage(runId: string, model: ModelId, usage: Usage) {

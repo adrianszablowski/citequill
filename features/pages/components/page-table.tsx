@@ -14,6 +14,7 @@ import { hasFilters, pageListHref } from '@/features/pages/list-query';
 import type { PageListItem } from '@/features/pages/queries';
 import type { PageListQuery, pageSorts } from '@/features/pages/schema';
 import { pageHref } from '@/lib/sections';
+import { formatDate } from '@/lib/utils';
 
 interface PageTableProps {
     projectId: string;
@@ -127,12 +128,4 @@ function stateVariant(page: PageListItem) {
     }
 
     return page.status === 'published' ? 'default' : 'outline';
-}
-
-function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-    });
 }

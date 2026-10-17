@@ -53,6 +53,20 @@ means the two decisions were never one: write it twice.
 | The link from a row's page back to its section                | `BackLink` in `components/back-link.tsx`                                                                               |
 | The filter, sort, page and size of the Pages list             | `pageListQuery` in `features/pages/schema.ts`, `pageListHref()` in `features/pages/list-query.ts`                      |
 | The address of a page on the site                             | `pagePath()` in `features/pages/draft.ts`                                                                              |
+| The site's pages, written by the crawl and every audit        | `writeSitePages()` in `features/audit/site-pages.ts`                                                                   |
+| What one fetch says about a URL: status, redirect, indexable  | `observePage()` in `features/audit/observe.ts`                                                                         |
+| What one read gives the audit: its page row and its links     | `observeRead()` in `features/audit/observe.ts`                                                                         |
+| The sitemap files the audit reads, 50 at most                 | `readSitemaps()` in `features/audit/sitemaps.ts`                                                                       |
+| The rules of a robots.txt and whether a URL is blocked        | `features/audit/robots.ts`                                                                                             |
+| Which URLs the audit reads, and in what order                 | `addToQueue()` and `nextBatch()` in `features/audit/queue.ts`                                                          |
+| The origins the audit may fetch, so the robots.txt it reads   | `siteOrigins()` in `features/audit/queue.ts`                                                                           |
+| How fast the audit asks a site, its backoff and its streak    | `features/audit/pacing.ts`, applied to every request by `siteClient()` in `features/audit/client.ts`                   |
+| The entries of a sitemap                                      | `readSitemap()` in `features/crawl/sitemap.ts`                                                                         |
+| The audits of a project                                       | `getAudits()` in `features/audit/queries.ts`                                                                           |
+| The data or the error of a Supabase query                     | `one()` and `done()` in `lib/supabase/result.ts`                                                                       |
+| A Supabase client in a test, recording what it was asked      | `fakeSupabase()` in `lib/supabase/fake.ts`                                                                             |
+| A date as the dashboard shows it                              | `formatDate()` in `lib/utils.ts`                                                                                       |
+| A count, and the pages read so far, as the dashboard shows it | `formatCount()` and `pagesRead()` in `lib/utils.ts`                                                                    |
 
 Add a row when a new kind of knowledge gets a home. A kind with no row has no home yet, so the first
 file that holds it becomes the home and earns its row in the same change.

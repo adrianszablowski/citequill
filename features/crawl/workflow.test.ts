@@ -54,20 +54,22 @@ beforeEach(() => {
         candidates: [url(1), url(2)],
     });
 
-    mocked.nextBatch.mockImplementation(async (_site, seen, candidates) => {
-        const unseen = candidates.filter(
-            (candidate) => !seen.includes(candidate),
-        );
+    mocked.nextBatch.mockImplementation(
+        async (_run, _site, seen, candidates) => {
+            const unseen = candidates.filter(
+                (candidate) => !seen.includes(candidate),
+            );
 
-        const count = Math.min(steps.batchSize, pageCap - seen.length);
+            const count = Math.min(steps.batchSize, pageCap - seen.length);
 
-        return {
-            batch: unseen.slice(0, count),
-            candidates: unseen.slice(count),
-        };
-    });
+            return {
+                batch: unseen.slice(0, count),
+                candidates: unseen.slice(count),
+            };
+        },
+    );
 
-    mocked.fetchPages.mockImplementation(async (_project, urls) =>
+    mocked.fetchPages.mockImplementation(async (_project, _run, urls) =>
         urls.map((page) => ({
             url: page,
             lang: 'en',
@@ -101,7 +103,7 @@ describe('crawlSite', () => {
     it('reads the ranked batches, follows the links it finds, extracts every chunk, writes every product skill and finishes the run', async () => {
         await crawlSite('project', 'run');
 
-        expect(mocked.fetchPages.mock.calls.map(([, urls]) => urls)).toEqual([
+        expect(mocked.fetchPages.mock.calls.map(([, , urls]) => urls)).toEqual([
             [url(1), url(2)],
             [url(3)],
         ]);
@@ -110,6 +112,7 @@ describe('crawlSite', () => {
 
         expect(mocked.nameSite).toHaveBeenCalledWith(
             'project',
+            'run',
             'acme.com',
             'https://acme.com/',
             expect.arrayContaining([
@@ -133,6 +136,7 @@ describe('crawlSite', () => {
 
         expect(mocked.createStarterKinds).toHaveBeenCalledWith(
             'project',
+            'run',
             [url(1), url(2), url(3)],
             'Jane',
         );
@@ -150,7 +154,7 @@ describe('crawlSite', () => {
         await crawlSite('project', 'run');
 
         const fetched = mocked.fetchPages.mock.calls.flatMap(
-            ([, urls]) => urls,
+            ([, , urls]) => urls,
         );
 
         expect(fetched).toHaveLength(pageCap);

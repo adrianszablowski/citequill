@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { pageTitle, sectionHref } from '@/lib/sections';
+import { pageTitle, projectSections, sectionHref } from '@/lib/sections';
 
 describe('pageTitle', () => {
     it('names a section of a project', () => {
@@ -10,6 +10,19 @@ describe('pageTitle', () => {
     it('has no title for an unknown path', () => {
         expect(pageTitle('/projects/abc/other')).toBeUndefined();
         expect(pageTitle('/login')).toBeUndefined();
+    });
+});
+
+describe('projectSections', () => {
+    it('lists the six sections in the order of the dashboard', () => {
+        expect(projectSections.map((section) => section.title)).toEqual([
+            'Pages',
+            'Skills',
+            'Audit',
+            'Analytics',
+            'Reports',
+            'Settings',
+        ]);
     });
 });
 

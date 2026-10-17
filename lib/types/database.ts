@@ -14,6 +14,329 @@ export type Database = {
     };
     public: {
         Tables: {
+            audit_check_results: {
+                Row: {
+                    audit_id: string;
+                    check: string;
+                    pages_checked: number;
+                    pages_failed: number;
+                    pages_intended: number;
+                    project_id: string;
+                };
+                Insert: {
+                    audit_id: string;
+                    check: string;
+                    pages_checked?: number;
+                    pages_failed?: number;
+                    pages_intended?: number;
+                    project_id: string;
+                };
+                Update: {
+                    audit_id?: string;
+                    check?: string;
+                    pages_checked?: number;
+                    pages_failed?: number;
+                    pages_intended?: number;
+                    project_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_check_results_audit_id_fkey';
+                        columns: ['audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'audit_check_results_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audit_findings: {
+                Row: {
+                    audit_id: string;
+                    check: string;
+                    detail: Json | null;
+                    fingerprint: string;
+                    id: string;
+                    is_intended: boolean;
+                    project_id: string;
+                    selector: string | null;
+                    severity: string;
+                    site_page_id: string | null;
+                    snippet: string | null;
+                    subject: string | null;
+                };
+                Insert: {
+                    audit_id: string;
+                    check: string;
+                    detail?: Json | null;
+                    fingerprint: string;
+                    id?: string;
+                    is_intended?: boolean;
+                    project_id: string;
+                    selector?: string | null;
+                    severity: string;
+                    site_page_id?: string | null;
+                    snippet?: string | null;
+                    subject?: string | null;
+                };
+                Update: {
+                    audit_id?: string;
+                    check?: string;
+                    detail?: Json | null;
+                    fingerprint?: string;
+                    id?: string;
+                    is_intended?: boolean;
+                    project_id?: string;
+                    selector?: string | null;
+                    severity?: string;
+                    site_page_id?: string | null;
+                    snippet?: string | null;
+                    subject?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_findings_audit_id_fkey';
+                        columns: ['audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'audit_findings_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'audit_findings_site_page_id_fkey';
+                        columns: ['site_page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'site_pages';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audit_marks: {
+                Row: {
+                    check: string;
+                    created_at: string;
+                    id: string;
+                    note: string | null;
+                    project_id: string;
+                    selector: string | null;
+                    url: string | null;
+                };
+                Insert: {
+                    check: string;
+                    created_at?: string;
+                    id?: string;
+                    note?: string | null;
+                    project_id: string;
+                    selector?: string | null;
+                    url?: string | null;
+                };
+                Update: {
+                    check?: string;
+                    created_at?: string;
+                    id?: string;
+                    note?: string | null;
+                    project_id?: string;
+                    selector?: string | null;
+                    url?: string | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_marks_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audit_queue: {
+                Row: {
+                    audit_id: string;
+                    depth: number | null;
+                    in_sitemap: boolean;
+                    inbound_links: number;
+                    state: Database['public']['Enums']['audit_queue_state'];
+                    url: string;
+                };
+                Insert: {
+                    audit_id: string;
+                    depth?: number | null;
+                    in_sitemap?: boolean;
+                    inbound_links?: number;
+                    state?: Database['public']['Enums']['audit_queue_state'];
+                    url: string;
+                };
+                Update: {
+                    audit_id?: string;
+                    depth?: number | null;
+                    in_sitemap?: boolean;
+                    inbound_links?: number;
+                    state?: Database['public']['Enums']['audit_queue_state'];
+                    url?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_queue_audit_id_fkey';
+                        columns: ['audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audit_renders: {
+                Row: {
+                    audit_id: string;
+                    posted_at: string;
+                    result: Json;
+                    site_page_id: string;
+                };
+                Insert: {
+                    audit_id: string;
+                    posted_at?: string;
+                    result: Json;
+                    site_page_id: string;
+                };
+                Update: {
+                    audit_id?: string;
+                    posted_at?: string;
+                    result?: Json;
+                    site_page_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_renders_audit_id_fkey';
+                        columns: ['audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'audit_renders_site_page_id_fkey';
+                        columns: ['site_page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'site_pages';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audits: {
+                Row: {
+                    checks_scored: number;
+                    checks_total: number;
+                    created_at: string;
+                    duration_s: number | null;
+                    hints: number;
+                    host_429_count: number;
+                    host_5xx_count: number;
+                    id: string;
+                    is_gated: boolean;
+                    is_partial: boolean;
+                    pages_indexable: number;
+                    pages_read: number;
+                    pages_rendered: number;
+                    project_id: string;
+                    questions: number;
+                    render_token_expires_at: string | null;
+                    render_token_hash: string | null;
+                    request_count: number;
+                    robots_rules: Json | null;
+                    run_id: string;
+                    sandbox_cpu_s: number;
+                    sandbox_gb_h: number;
+                    sandbox_names: Json | null;
+                    score: number | null;
+                    severity_1: number;
+                    severity_2: number;
+                    severity_3: number;
+                };
+                Insert: {
+                    checks_scored?: number;
+                    checks_total?: number;
+                    created_at?: string;
+                    duration_s?: number | null;
+                    hints?: number;
+                    host_429_count?: number;
+                    host_5xx_count?: number;
+                    id?: string;
+                    is_gated?: boolean;
+                    is_partial?: boolean;
+                    pages_indexable?: number;
+                    pages_read?: number;
+                    pages_rendered?: number;
+                    project_id: string;
+                    questions?: number;
+                    render_token_expires_at?: string | null;
+                    render_token_hash?: string | null;
+                    request_count?: number;
+                    robots_rules?: Json | null;
+                    run_id: string;
+                    sandbox_cpu_s?: number;
+                    sandbox_gb_h?: number;
+                    sandbox_names?: Json | null;
+                    score?: number | null;
+                    severity_1?: number;
+                    severity_2?: number;
+                    severity_3?: number;
+                };
+                Update: {
+                    checks_scored?: number;
+                    checks_total?: number;
+                    created_at?: string;
+                    duration_s?: number | null;
+                    hints?: number;
+                    host_429_count?: number;
+                    host_5xx_count?: number;
+                    id?: string;
+                    is_gated?: boolean;
+                    is_partial?: boolean;
+                    pages_indexable?: number;
+                    pages_read?: number;
+                    pages_rendered?: number;
+                    project_id?: string;
+                    questions?: number;
+                    render_token_expires_at?: string | null;
+                    render_token_hash?: string | null;
+                    request_count?: number;
+                    robots_rules?: Json | null;
+                    run_id?: string;
+                    sandbox_cpu_s?: number;
+                    sandbox_gb_h?: number;
+                    sandbox_names?: Json | null;
+                    score?: number | null;
+                    severity_1?: number;
+                    severity_2?: number;
+                    severity_3?: number;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audits_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'audits_run_id_fkey';
+                        columns: ['run_id'];
+                        isOneToOne: true;
+                        referencedRelation: 'runs';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
             authors: {
                 Row: {
                     id: string;
@@ -289,24 +612,30 @@ export type Database = {
             };
             projects: {
                 Row: {
+                    bot_secret: string;
                     created_at: string;
                     domain: string;
                     id: string;
                     name: string;
+                    obey_robots: boolean;
                     user_id: string;
                 };
                 Insert: {
+                    bot_secret?: string;
                     created_at?: string;
                     domain: string;
                     id?: string;
                     name: string;
+                    obey_robots?: boolean;
                     user_id?: string;
                 };
                 Update: {
+                    bot_secret?: string;
                     created_at?: string;
                     domain?: string;
                     id?: string;
                     name?: string;
+                    obey_robots?: boolean;
                     user_id?: string;
                 };
                 Relationships: [];
@@ -322,11 +651,13 @@ export type Database = {
                     locale: string | null;
                     output_tokens: number;
                     plan: Json | null;
+                    progressed_at: string | null;
                     project_id: string;
                     started_at: string;
                     status: Database['public']['Enums']['run_status'];
                     topic: string | null;
                     trigger: Database['public']['Enums']['run_trigger'];
+                    workflow_run_id: string | null;
                 };
                 Insert: {
                     cost_usd?: number;
@@ -338,11 +669,13 @@ export type Database = {
                     locale?: string | null;
                     output_tokens?: number;
                     plan?: Json | null;
+                    progressed_at?: string | null;
                     project_id: string;
                     started_at?: string;
                     status?: Database['public']['Enums']['run_status'];
                     topic?: string | null;
                     trigger: Database['public']['Enums']['run_trigger'];
+                    workflow_run_id?: string | null;
                 };
                 Update: {
                     cost_usd?: number;
@@ -354,11 +687,13 @@ export type Database = {
                     locale?: string | null;
                     output_tokens?: number;
                     plan?: Json | null;
+                    progressed_at?: string | null;
                     project_id?: string;
                     started_at?: string;
                     status?: Database['public']['Enums']['run_status'];
                     topic?: string | null;
                     trigger?: Database['public']['Enums']['run_trigger'];
+                    workflow_run_id?: string | null;
                 };
                 Relationships: [
                     {
@@ -370,6 +705,103 @@ export type Database = {
                     },
                     {
                         foreignKeyName: 'runs_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            site_pages: {
+                Row: {
+                    body_hash: string | null;
+                    canonical_url: string | null;
+                    click_depth: number | null;
+                    final_url: string | null;
+                    first_seen_at: string;
+                    hreflang: Json | null;
+                    id: string;
+                    in_sitemap: boolean;
+                    inbound_links: number;
+                    is_blocked: boolean;
+                    is_gone: boolean;
+                    is_indexable: boolean;
+                    last_audit_id: string | null;
+                    last_seen_at: string;
+                    locale: string | null;
+                    page_id: string | null;
+                    project_id: string;
+                    raw_extract: Json | null;
+                    redirect_to: string | null;
+                    status_code: number | null;
+                    title: string | null;
+                    url: string;
+                };
+                Insert: {
+                    body_hash?: string | null;
+                    canonical_url?: string | null;
+                    click_depth?: number | null;
+                    final_url?: string | null;
+                    first_seen_at?: string;
+                    hreflang?: Json | null;
+                    id?: string;
+                    in_sitemap?: boolean;
+                    inbound_links?: number;
+                    is_blocked?: boolean;
+                    is_gone?: boolean;
+                    is_indexable?: boolean;
+                    last_audit_id?: string | null;
+                    last_seen_at?: string;
+                    locale?: string | null;
+                    page_id?: string | null;
+                    project_id: string;
+                    raw_extract?: Json | null;
+                    redirect_to?: string | null;
+                    status_code?: number | null;
+                    title?: string | null;
+                    url: string;
+                };
+                Update: {
+                    body_hash?: string | null;
+                    canonical_url?: string | null;
+                    click_depth?: number | null;
+                    final_url?: string | null;
+                    first_seen_at?: string;
+                    hreflang?: Json | null;
+                    id?: string;
+                    in_sitemap?: boolean;
+                    inbound_links?: number;
+                    is_blocked?: boolean;
+                    is_gone?: boolean;
+                    is_indexable?: boolean;
+                    last_audit_id?: string | null;
+                    last_seen_at?: string;
+                    locale?: string | null;
+                    page_id?: string | null;
+                    project_id?: string;
+                    raw_extract?: Json | null;
+                    redirect_to?: string | null;
+                    status_code?: number | null;
+                    title?: string | null;
+                    url?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'site_pages_last_audit_id_fkey';
+                        columns: ['last_audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'site_pages_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'pages';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'site_pages_project_id_fkey';
                         columns: ['project_id'];
                         isOneToOne: false;
                         referencedRelation: 'projects';
@@ -429,12 +861,15 @@ export type Database = {
                 };
                 Returns: undefined;
             };
+            create_audit: { Args: { run: string }; Returns: string };
             is_project_owner: { Args: { project: string }; Returns: boolean };
+            stop_audit: { Args: { audit: string }; Returns: undefined };
         };
         Enums: {
+            audit_queue_state: 'queued' | 'read' | 'blocked';
             page_status: 'draft' | 'published' | 'unpublished';
             run_status: 'running' | 'finished' | 'failed';
-            run_trigger: 'crawl' | 'weekly' | 'manual';
+            run_trigger: 'crawl' | 'weekly' | 'manual' | 'audit';
         };
         CompositeTypes: {
             [_ in never]: never;
@@ -565,9 +1000,10 @@ export type CompositeTypes<
 export const Constants = {
     public: {
         Enums: {
+            audit_queue_state: ['queued', 'read', 'blocked'],
             page_status: ['draft', 'published', 'unpublished'],
             run_status: ['running', 'finished', 'failed'],
-            run_trigger: ['crawl', 'weekly', 'manual'],
+            run_trigger: ['crawl', 'weekly', 'manual', 'audit'],
         },
     },
 } as const;

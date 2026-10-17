@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    botSecretHeader,
     type FetchDeps,
     fetchPublic,
     fetchText,
     isHtml,
     isPublicAddress,
     maxBytes,
+    maxHops,
+    userAgent,
 } from '@/features/crawl/fetch';
 
 describe('fetchText', () => {
@@ -97,14 +100,71 @@ describe('fetchPublic', () => {
         ).rejects.toThrow('not an http or https address');
     });
 
-    it('gives up after too many redirects', async () => {
+    it('stops after ten hops and returns the redirect it ended on with the chain', async () => {
         const deps = fakeDeps({
             'https://acme.com/': redirect('https://acme.com/'),
         });
 
-        await expect(fetchPublic('https://acme.com/', deps)).rejects.toThrow(
-            'redirects more than',
+        const result = await fetchPublic('https://acme.com/', deps);
+
+        expect(result.ok).toBe(false);
+        expect(result.status).toBe(302);
+        expect(result.hops).toHaveLength(maxHops + 1);
+    });
+
+    it('records every hop with its status', async () => {
+        const deps = fakeDeps({
+            'https://acme.com/a': redirect('/b', 301),
+            'https://acme.com/b': redirect('https://www.acme.com/b'),
+            'https://www.acme.com/b': page('<h1>B</h1>'),
+        });
+
+        const result = await fetchPublic('https://acme.com/a', deps);
+
+        expect(result.hops).toEqual([
+            { url: 'https://acme.com/a', status: 301 },
+            { url: 'https://acme.com/b', status: 302 },
+            { url: 'https://www.acme.com/b', status: 200 },
+        ]);
+    });
+
+    it('sends the bot secret to the site hosts only and drops it on a hop off the site', async () => {
+        const { deps, sent } = recordingDeps({
+            'https://acme.com/': redirect('https://www.acme.com/'),
+            'https://www.acme.com/': redirect('https://cdn.other.com/page'),
+            'https://cdn.other.com/page': page('<h1>Elsewhere</h1>'),
+        });
+
+        await fetchPublic('https://acme.com/', deps, {
+            botSecret: { value: 's3cret', hosts: ['acme.com', 'www.acme.com'] },
+        });
+
+        expect(sent.map((request) => request.secret)).toEqual([
+            's3cret',
+            's3cret',
+            null,
+        ]);
+
+        expect(sent.every((request) => request.userAgent === userAgent)).toBe(
+            true,
         );
+    });
+
+    it('asks with HEAD without reading a body and lets a header replace a default', async () => {
+        const { deps, sent } = recordingDeps({
+            'https://acme.com/': page('<h1>Acme</h1>'),
+        });
+
+        const result = await fetchPublic('https://acme.com/', deps, {
+            method: 'HEAD',
+            headers: { 'User-Agent': 'Phone' },
+        });
+
+        expect(result.body).toBe('');
+
+        expect(sent).toEqual([
+            { method: 'HEAD', userAgent: 'Phone', secret: null },
+        ]);
     });
 
     it('cuts the body at the size cap', async () => {
@@ -141,8 +201,35 @@ function page(body: string) {
     });
 }
 
-function redirect(location: string) {
-    return new Response(null, { status: 302, headers: { location } });
+function redirect(location: string, status = 302) {
+    return new Response(null, { status, headers: { location } });
+}
+
+function recordingDeps(responses: Record<string, Response>) {
+    const sent: {
+        method: string | undefined;
+        userAgent: string | null;
+        secret: string | null;
+    }[] = [];
+
+    const inner = fakeDeps(responses);
+
+    const deps: FetchDeps = {
+        ...inner,
+        fetch: async (input, init) => {
+            const headers = new Headers(init?.headers);
+
+            sent.push({
+                method: init?.method,
+                userAgent: headers.get('user-agent'),
+                secret: headers.get(botSecretHeader),
+            });
+
+            return inner.fetch(input, init);
+        },
+    };
+
+    return { deps, sent };
 }
 
 function fakeDeps(

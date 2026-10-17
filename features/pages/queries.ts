@@ -95,7 +95,7 @@ export const getWriteRuns = cache(async (projectId: string) => {
     const { data, error } = await supabase
         .from('runs')
         .select(
-            'id, topic, locale, kind_id, status, error, started_at, page_kinds(name), pages(id)',
+            'id, topic, locale, kind_id, status, error, started_at, progressed_at, page_kinds(name), pages(id)',
         )
         .eq('project_id', projectId)
         .eq('trigger', 'manual')
@@ -118,6 +118,7 @@ export type WriteRun = Awaited<ReturnType<typeof getWriteRuns>>[number];
 function outcomeOf(run: {
     status: string;
     started_at: string;
+    progressed_at: string | null;
     pages: { id: string }[];
 }) {
     const isStale = isStaleRun(run);

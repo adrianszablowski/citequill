@@ -63,6 +63,33 @@ describe('fetchPage', () => {
         expect(result.error).toBeNull();
     });
 
+    it('answers with the status, the canonical and the robots directives the site pages list needs', async () => {
+        const deps = fakeDeps({
+            'https://trackist.me/': page(
+                html.replace(
+                    '<head>',
+                    '<head><link rel="canonical" href="/"><meta name="robots" content="noindex">',
+                ),
+                { 'x-robots-tag': 'nosnippet' },
+            ),
+            'https://trackist.me/missing': new Response('', { status: 404 }),
+        });
+
+        expect(
+            (await fetchPage('https://trackist.me/', [], deps)).answer,
+        ).toEqual({
+            hops: [{ url: 'https://trackist.me/', status: 200 }],
+            title: 'Trackist',
+            canonical: 'https://trackist.me/',
+            directives: ['noindex', 'nosnippet'],
+        });
+
+        expect(
+            (await fetchPage('https://trackist.me/missing', [], deps)).answer
+                ?.hops,
+        ).toEqual([{ url: 'https://trackist.me/missing', status: 404 }]);
+    });
+
     it('records an error and an empty body for a failed fetch or a page that is not HTML', async () => {
         const deps = fakeDeps({
             'https://trackist.me/missing': new Response('', { status: 404 }),

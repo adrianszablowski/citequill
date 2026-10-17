@@ -17,6 +17,7 @@ export interface PageData {
     title: string;
     lang: string | null;
     alternates: Alternate[];
+    robots: string[];
     author: string | null;
     links: string[];
     navLinks: string[];
@@ -27,16 +28,8 @@ export interface PageData {
 export function readPage(html: string, url: string): PageData {
     const $ = cheerio.load(html);
     const base = new URL(url);
-
-    const alternates = $('link[rel="alternate"][hreflang]')
-        .toArray()
-        .flatMap((element) => {
-            const lang = $(element).attr('hreflang')?.trim().toLowerCase();
-            const href = absolute($(element).attr('href'), base);
-
-            return lang && href ? [{ lang, href }] : [];
-        });
-
+    const alternates = alternatesOf($, base);
+    const robots = robotsMetaOf($);
     const links = siteLinks($, 'a[href]', base);
     const navLinks = siteLinks($, 'header a, nav a, footer a', base);
     const signals = readSignals($, base);
@@ -45,24 +38,73 @@ export function readPage(html: string, url: string): PageData {
         $('meta[name="author"]').attr('content')?.trim() ||
         jsonLdAuthor(jsonLdNodes($));
 
-    $(stripped).remove();
-
-    const content =
-        $('main').html() ||
-        $('[role="main"]').html() ||
-        $('article').html() ||
-        $('body').html();
+    const content = mainContent($);
 
     return {
         title: $('title').first().text().trim(),
         lang: $('html').attr('lang')?.trim().toLowerCase() || null,
         alternates,
+        robots,
         author: author || null,
         links,
         navLinks,
         signals,
-        markdown: toMarkdown(content ?? ''),
+        markdown: toMarkdown(content),
     };
+}
+
+export function alternatesOf($: cheerio.CheerioAPI, base: URL): Alternate[] {
+    return $('link[rel="alternate"][hreflang]')
+        .toArray()
+        .flatMap((element) => {
+            const lang = $(element).attr('hreflang')?.trim().toLowerCase();
+            const href = absolute($(element).attr('href'), base);
+
+            return lang && href ? [{ lang, href }] : [];
+        });
+}
+
+export function robotsMetaOf($: cheerio.CheerioAPI) {
+    return $('meta[name][content]')
+        .toArray()
+        .filter((element) =>
+            robotsMetaNames.has(
+                ($(element).attr('name') ?? '').trim().toLowerCase(),
+            ),
+        )
+        .map((element) => $(element).attr('content') ?? '');
+}
+
+export function mainContent($: cheerio.CheerioAPI) {
+    $(stripped).remove();
+
+    return (
+        $('main').html() ||
+        $('[role="main"]').html() ||
+        $('article').html() ||
+        $('body').html() ||
+        ''
+    );
+}
+
+export function absolute(href: string | null | undefined, base: URL) {
+    if (!href) {
+        return null;
+    }
+
+    try {
+        const url = new URL(href, base);
+
+        if (!/^https?:$/.test(url.protocol)) {
+            return null;
+        }
+
+        url.hash = '';
+
+        return url.href;
+    } catch {
+        return null;
+    }
 }
 
 export function toMarkdown(html: string) {
@@ -90,6 +132,8 @@ const stripped = [
     '[style*="display: none"]',
 ].join(', ');
 
+const robotsMetaNames = new Set(['robots', 'googlebot']);
+
 const turndown = new TurndownService({
     headingStyle: 'atx',
     codeBlockStyle: 'fenced',
@@ -108,26 +152,6 @@ function siteLinks($: cheerio.CheerioAPI, selector: string, base: URL) {
                     href !== null && sameSite(new URL(href), base),
             ),
     );
-}
-
-function absolute(href: string | undefined, base: URL) {
-    if (!href) {
-        return null;
-    }
-
-    try {
-        const url = new URL(href, base);
-
-        if (!/^https?:$/.test(url.protocol)) {
-            return null;
-        }
-
-        url.hash = '';
-
-        return url.href;
-    } catch {
-        return null;
-    }
 }
 
 function sameSite(url: URL, base: URL) {

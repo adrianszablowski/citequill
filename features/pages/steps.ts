@@ -1,7 +1,6 @@
 import { FatalError } from 'workflow';
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
-import type { PostgrestSingleResponse } from '@supabase/supabase-js';
 
 import { languageName } from '@/features/crawl/locales';
 import {
@@ -27,9 +26,10 @@ import {
     writeSystemPrompt,
     writeUserPrompt,
 } from '@/features/pages/prompts';
-import { addUsage } from '@/features/runs/steps';
+import { addUsage, markProgress } from '@/features/runs/steps';
 import { createAnthropic, models } from '@/lib/anthropic';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { one } from '@/lib/supabase/result';
 
 export interface WriteTarget {
     context: WriteContext;
@@ -42,6 +42,8 @@ export async function loadWriteContext(
     runId: string,
 ): Promise<WriteTarget> {
     'use step';
+
+    await markProgress(runId);
 
     const supabase = createAdminClient();
 
@@ -163,6 +165,8 @@ export async function writeBrief(
 ): Promise<Brief> {
     'use step';
 
+    await markProgress(runId);
+
     const client = createAnthropic();
 
     const messages: MessageParam[] = [
@@ -212,6 +216,8 @@ export async function writeDraft(
 ) {
     'use step';
 
+    await markProgress(runId);
+
     return askForPage(
         runId,
         writeSystemPrompt(context, brief),
@@ -228,6 +234,8 @@ export async function correctDraft(
 ) {
     'use step';
 
+    await markProgress(runId);
+
     return askForPage(
         runId,
         writeSystemPrompt(context, brief),
@@ -241,6 +249,8 @@ export async function checkDraft(
     page: PageOutput,
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const message = await createAnthropic().messages.parse({
         model: models.extractor,
@@ -274,6 +284,8 @@ export async function saveDraft(
     findings: string[],
 ) {
     'use step';
+
+    await markProgress(runId);
 
     const supabase = createAdminClient();
 
@@ -343,16 +355,6 @@ function textOf(content: { type: string; text?: string }[]) {
         .filter((block) => block.type === 'text')
         .map((block) => block.text ?? '')
         .join('');
-}
-
-async function one<T>(query: PromiseLike<PostgrestSingleResponse<T>>) {
-    const { data, error } = await query;
-
-    if (error || data === null) {
-        throw new Error(error?.message ?? 'The row is gone.');
-    }
-
-    return data;
 }
 
 const briefTurns = 3;

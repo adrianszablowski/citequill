@@ -76,6 +76,7 @@ describe('readPage', () => {
             title: '',
             lang: null,
             alternates: [],
+            robots: [],
             author: null,
             links: [],
             navLinks: [],
@@ -100,6 +101,16 @@ describe('readPage', () => {
             'https://acme.com/',
             'https://acme.com/pricing',
             'https://acme.com/about',
+        ]);
+    });
+
+    it('keeps the content of the robots and googlebot meta tags only', () => {
+        const html =
+            '<html><head><meta name="ROBOTS" content="noindex, follow"><meta name="googlebot" content="nosnippet"><meta name="bingbot" content="noarchive"></head></html>';
+
+        expect(readPage(html, 'https://acme.com/').robots).toEqual([
+            'noindex, follow',
+            'nosnippet',
         ]);
     });
 

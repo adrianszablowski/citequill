@@ -10,7 +10,7 @@ export const getLatestCrawl = cache(async (projectId: string) => {
 
     const { data, error } = await supabase
         .from('runs')
-        .select('id, status, error, started_at')
+        .select('id, status, error, started_at, progressed_at')
         .eq('project_id', projectId)
         .eq('trigger', 'crawl')
         .order('started_at', { ascending: false })

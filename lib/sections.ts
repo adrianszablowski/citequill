@@ -1,6 +1,7 @@
 import {
     BarChart3Icon,
     FileTextIcon,
+    GaugeIcon,
     NotebookPenIcon,
     ScrollTextIcon,
     SettingsIcon,
@@ -9,6 +10,7 @@ import {
 export const projectSections = [
     { segment: 'pages', title: 'Pages', icon: FileTextIcon },
     { segment: 'skills', title: 'Skills', icon: NotebookPenIcon },
+    { segment: 'audit', title: 'Audit', icon: GaugeIcon },
     { segment: 'analytics', title: 'Analytics', icon: BarChart3Icon },
     { segment: 'reports', title: 'Reports', icon: ScrollTextIcon },
     { segment: 'settings', title: 'Settings', icon: SettingsIcon },
