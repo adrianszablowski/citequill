@@ -2,6 +2,7 @@ import {
     checkSorts,
     type FindingListQuery,
     findingListDefaults,
+    imageSorts,
     sitePageSorts,
 } from '@/features/audit/schema';
 import { sectionHref } from '@/lib/sections';
@@ -42,6 +43,10 @@ export function keptFindingParams(query: FindingListQuery) {
 }
 
 export function hasFindingFilters(query: FindingListQuery) {
+    if (query.view === 'image') {
+        return query.locale !== undefined;
+    }
+
     return Boolean(
         query.severity ||
         query.locale ||
@@ -55,4 +60,8 @@ export function checkSort(query: FindingListQuery) {
 
 export function sitePageSort(query: FindingListQuery) {
     return sitePageSorts.find((sort) => sort === query.sort) ?? 'findings';
+}
+
+export function imageSort(query: FindingListQuery) {
+    return imageSorts.find((sort) => sort === query.sort) ?? 'pages';
 }

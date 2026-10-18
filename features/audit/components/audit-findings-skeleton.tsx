@@ -11,6 +11,7 @@ export default function AuditFindingsSkeleton() {
                 <div className="flex gap-2">
                     <Skeleton className="h-8 w-24" />
                     <Skeleton className="h-8 w-20" />
+                    <Skeleton className="h-8 w-22" />
                 </div>
                 <div className="flex flex-wrap items-end gap-3">
                     <Skeleton className="h-8 w-36" />

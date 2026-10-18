@@ -2,6 +2,8 @@ import { type Finding, snippetOf } from '@/features/audit/finding';
 import { generatorMarker, type PageImage } from '@/features/audit/images';
 import { repeatedWord } from '@/features/audit/on-page-checks';
 
+export type AltState = 'absent' | 'empty' | 'whitespace';
+
 export const altMaxLength = 100;
 
 export const altStuffedTerms = 4;
@@ -120,14 +122,14 @@ function altVerdicts(image: PageImage): Finding['check'][] {
 
 function altAsFound(alt: string | null) {
     if (alt === null) {
-        return 'absent';
+        return 'absent' satisfies AltState;
     }
 
     if (alt === '') {
-        return 'empty';
+        return 'empty' satisfies AltState;
     }
 
-    return alt.trim() ? snippetOf(alt) : 'whitespace';
+    return alt.trim() ? snippetOf(alt) : ('whitespace' satisfies AltState);
 }
 
 function fileName(src: string | null) {

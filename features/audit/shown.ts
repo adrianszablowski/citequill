@@ -1,3 +1,4 @@
+import { comparedPair } from '@/features/audit/changes';
 import type { Audit } from '@/features/audit/queries';
 
 export function shownAudit(audits: Audit[]) {
@@ -25,23 +26,12 @@ export function comparedAudits(audits: Audit[]) {
         return null;
     }
 
-    const previous = older.find(
-        ({ run, audit }) => audit !== null && run.status !== 'running',
-    )?.audit;
+    const { findings_fixed: fixed, findings_new: added } = latest.audit;
+    const pair = comparedPair(latest.audit, older);
 
-    if (
-        !previous ||
-        latest.audit.score === null ||
-        previous.score === null ||
-        previous.checks_scored !== latest.audit.checks_scored
-    ) {
+    if (!pair || fixed === null || added === null) {
         return null;
     }
 
-    return {
-        latestId: latest.audit.id,
-        previousId: previous.id,
-        since: previous.created_at,
-        difference: latest.audit.score - previous.score,
-    };
+    return { since: pair.since, difference: pair.difference, fixed, added };
 }

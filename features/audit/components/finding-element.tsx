@@ -1,7 +1,9 @@
 import type { FindingItem } from '@/features/audit/queries';
 
 interface FindingElementProps {
-    finding: FindingItem;
+    finding: Pick<FindingItem, 'selector' | 'snippet'> & {
+        subject?: string | null;
+    };
 }
 
 export default function FindingElement({

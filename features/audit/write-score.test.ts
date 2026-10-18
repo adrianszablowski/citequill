@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { writeScore } from '@/features/audit/write-score';
-import { fakeSupabase } from '@/lib/supabase/fake';
+import { type FakeQuery, fakeSupabase } from '@/lib/supabase/fake';
 import { rowsPerRead } from '@/lib/supabase/result';
 
 function database(overrides: Record<string, object> = {}) {
     const answers: Record<string, object> = {
         projects: { data: { domain: 'acme.com', obey_robots: true } },
-        audits: { data: { robots_rules: [] } },
+        audits: {
+            data: { robots_rules: [], created_at: '2026-10-18T10:00:00Z' },
+        },
+        'older audits': { data: [] },
         project_locales: { data: [{ base_url: 'https://acme.com' }] },
         site_pages: {
             data: ['/', '/a', '/b', '/c'].map((path, index) => ({
@@ -30,6 +33,7 @@ function database(overrides: Record<string, object> = {}) {
                     site_page_id: 'page-1',
                     subject: null,
                     selector: null,
+                    fingerprint: 'kept',
                 },
                 {
                     id: 'finding-2',
@@ -38,6 +42,7 @@ function database(overrides: Record<string, object> = {}) {
                     site_page_id: 'page-2',
                     subject: 'https://acme.com/gone',
                     selector: null,
+                    fingerprint: 'new',
                 },
             ],
         },
@@ -47,8 +52,70 @@ function database(overrides: Record<string, object> = {}) {
         ...overrides,
     };
 
-    return fakeSupabase(({ name }) => answers[name] ?? {});
+    return fakeSupabase((query) => answers[answerOf(query)] ?? {});
 }
+
+function answerOf({ name, calls }: FakeQuery) {
+    const isOn = (column: string, value: string) =>
+        calls.some(
+            ([method, ...args]) =>
+                method === 'eq' && args[0] === column && args[1] === value,
+        );
+
+    if (name === 'audits' && !isOn('id', 'audit')) {
+        return 'older audits';
+    }
+
+    if (name === 'audit_findings' && isOn('audit_id', 'previous')) {
+        return 'previous findings';
+    }
+
+    return name;
+}
+
+function previousAudit(checksScored: number) {
+    return {
+        'older audits': {
+            data: [
+                {
+                    id: 'running',
+                    created_at: '2026-10-10T10:00:00Z',
+                    score: 70,
+                    checks_scored: checksScored,
+                    runs: { status: 'running' },
+                },
+                {
+                    id: 'previous',
+                    created_at: '2026-10-03T10:00:00Z',
+                    score: 60,
+                    checks_scored: checksScored,
+                    runs: { status: 'finished' },
+                },
+            ],
+        },
+        'previous findings': {
+            data: [
+                { fingerprint: 'kept' },
+                { fingerprint: 'fixed-1' },
+                { fingerprint: 'fixed-2' },
+            ],
+        },
+    };
+}
+
+async function checksScored() {
+    const fake = database();
+
+    await writeScore(fake.client as never, request);
+
+    return scored(fake).checks_scored as number;
+}
+
+const request = {
+    projectId: 'project',
+    auditId: 'audit',
+    hasCrossPageChecks: true,
+};
 
 function scored(fake: ReturnType<typeof database>) {
     const rpc = fake.queries.find(({ name }) => name === 'score_audit')!;
@@ -143,6 +210,59 @@ describe('writeScore', () => {
                 ['range', 0, rowsPerRead - 1],
             ]),
         );
+    });
+
+    it('writes the findings fixed and new against the last earlier audit that ended on the same checks', async () => {
+        const fake = database(previousAudit(await checksScored()));
+
+        await writeScore(fake.client as never, request);
+
+        expect(scored(fake)).toMatchObject({
+            findings_fixed: 2,
+            findings_new: 1,
+        });
+    });
+
+    it('reads only the audits created before the one it scores', async () => {
+        const fake = database();
+
+        await writeScore(fake.client as never, request);
+
+        const older = fake.queries.find(
+            (query) => answerOf(query) === 'older audits',
+        )!;
+
+        expect(older.calls).toContainEqual(['eq', 'project_id', 'project']);
+
+        expect(older.calls).toContainEqual([
+            'lt',
+            'created_at',
+            '2026-10-18T10:00:00Z',
+        ]);
+    });
+
+    it('writes no counts for the first audit of a project', async () => {
+        const fake = database();
+
+        await writeScore(fake.client as never, request);
+
+        expect(scored(fake).findings_fixed).toBeUndefined();
+        expect(scored(fake).findings_new).toBeUndefined();
+    });
+
+    it('writes no counts, and reads no earlier findings, when the earlier audit stood on other checks', async () => {
+        const fake = database(previousAudit((await checksScored()) + 1));
+
+        await writeScore(fake.client as never, request);
+
+        expect(scored(fake).findings_fixed).toBeUndefined();
+        expect(scored(fake).findings_new).toBeUndefined();
+
+        expect(
+            fake.queries.some(
+                (query) => answerOf(query) === 'previous findings',
+            ),
+        ).toBe(false);
     });
 
     it('throws when score_audit refuses the write', async () => {

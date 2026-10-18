@@ -28,6 +28,8 @@ function entry(
             is_gated: false,
             checks_scored: 40,
             checks_total: 116,
+            findings_fixed: 0,
+            findings_new: 0,
             ...audit,
         },
         status,
@@ -77,7 +79,12 @@ describe('comparedAudits', () => {
     it('compares the latest audit with the one before when both stand on the same checks', () => {
         expect(
             comparedAudits([
-                entry('finished', { id: 'b', score: 87 }),
+                entry('finished', {
+                    id: 'b',
+                    score: 87,
+                    findings_fixed: 12,
+                    findings_new: 2,
+                }),
                 entry('finished', {
                     id: 'a',
                     score: 80,
@@ -85,11 +92,20 @@ describe('comparedAudits', () => {
                 }),
             ]),
         ).toEqual({
-            latestId: 'b',
-            previousId: 'a',
             since: '2026-10-03T10:00:00Z',
             difference: 7,
+            fixed: 12,
+            added: 2,
         });
+    });
+
+    it('compares nothing for an audit scored before its counts were stored', () => {
+        expect(
+            comparedAudits([
+                entry('finished', { findings_fixed: null, findings_new: null }),
+                entry('finished'),
+            ]),
+        ).toBeNull();
     });
 
     it('compares nothing when the check counts differ', () => {

@@ -28,3 +28,11 @@ export function pagesRead(count: number) {
         ? '1 page read so far.'
         : `${formatCount(count)} pages read so far.`;
 }
+
+export function isWebUrl(value: string) {
+    try {
+        return ['http:', 'https:'].includes(new URL(value).protocol);
+    } catch {
+        return false;
+    }
+}

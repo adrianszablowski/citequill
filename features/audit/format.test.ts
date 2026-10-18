@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    altAsShown,
+    ancestorAsShown,
     changesLine,
     formatDuration,
     startedAgo,
@@ -60,5 +62,25 @@ describe('changesLine', () => {
                 added: 0,
             }),
         ).toBe('No change since 3 Oct 2026, 0 findings fixed, 0 new');
+    });
+});
+
+describe('altAsShown', () => {
+    it('tells an absent, an empty and a whitespace alt apart in words', () => {
+        expect(altAsShown('absent')).toBe('No alt attribute');
+        expect(altAsShown('empty')).toBe('Empty alt');
+        expect(altAsShown('whitespace')).toBe('Whitespace alt');
+    });
+
+    it('quotes any other alt as found', () => {
+        expect(altAsShown('Acme logo')).toBe('"Acme logo"');
+        expect(altAsShown('constructor')).toBe('"constructor"');
+    });
+});
+
+describe('ancestorAsShown', () => {
+    it('names the ancestor that decided the verdict', () => {
+        expect(ancestorAsShown('link')).toBe('In a link');
+        expect(ancestorAsShown('figure')).toBe('In a figure');
     });
 });

@@ -3,14 +3,17 @@ import 'server-only';
 import { cache } from 'react';
 
 import { catalogue } from '@/features/audit/catalogue';
-import { auditChanges } from '@/features/audit/changes';
 import { startedAgo } from '@/features/audit/format';
-import { checkSort, sitePageSort } from '@/features/audit/list-query';
+import {
+    checkSort,
+    imageSort,
+    sitePageSort,
+} from '@/features/audit/list-query';
 import {
     type FindingListQuery,
     severityColumns,
 } from '@/features/audit/schema';
-import { isSiteCheck } from '@/features/audit/score';
+import { checksInScope, isSiteCheck } from '@/features/audit/score';
 import { titlePattern } from '@/features/pages/list-query';
 import { isStaleRun } from '@/features/runs/stale';
 import { all, paged } from '@/lib/supabase/result';
@@ -22,7 +25,7 @@ export const getAudits = cache(async (projectId: string) => {
     const { data, error } = await supabase
         .from('runs')
         .select(
-            'id, status, error, started_at, progressed_at, workflow_run_id, cost_usd, audits(id, created_at, pages_read, pages_indexable, duration_s, is_partial, score, is_gated, checks_scored, checks_total)',
+            'id, status, error, started_at, progressed_at, workflow_run_id, cost_usd, audits(id, created_at, pages_read, pages_indexable, duration_s, is_partial, score, is_gated, checks_scored, checks_total, findings_fixed, findings_new)',
         )
         .eq('project_id', projectId)
         .eq('trigger', 'audit')
@@ -44,32 +47,18 @@ export const getAudits = cache(async (projectId: string) => {
 
 export type Audit = Awaited<ReturnType<typeof getAudits>>[number];
 
-export async function getChanges(latestId: string, previousId: string) {
-    const supabase = await createClient();
-
-    const fingerprints = (auditId: string) =>
-        all((from, to) =>
-            supabase
-                .from('audit_findings')
-                .select('fingerprint')
-                .eq('audit_id', auditId)
-                .order('id')
-                .range(from, to),
-        );
-
-    const [latest, previous] = await Promise.all([
-        fingerprints(latestId),
-        fingerprints(previousId),
-    ]);
-
-    return auditChanges(previous, latest);
-}
-
 export async function getFindingList(auditId: string, query: FindingListQuery) {
-    if (query.check || query.site_page) {
+    if (query.check || query.site_page || query.subject) {
         return {
             kind: 'finding' as const,
             ...(await getFindings(auditId, query)),
+        };
+    }
+
+    if (query.view === 'image') {
+        return {
+            kind: 'image' as const,
+            ...(await getImageList(auditId, query)),
         };
     }
 
@@ -167,12 +156,56 @@ export type SitePageListItem = NonNullable<
     Awaited<ReturnType<typeof getSitePageList>>['rows']
 >[number];
 
+export async function getImageList(auditId: string, query: FindingListQuery) {
+    const supabase = await createClient();
+    const first = (query.page - 1) * query.size;
+
+    let request = supabase.rpc(
+        'audit_image_list',
+        imageListArgs(auditId, query.locale),
+        { count: 'exact' },
+    );
+
+    request =
+        imageSort(query) === 'subject'
+            ? request.order('subject')
+            : request.order('pages', { ascending: false }).order('subject');
+
+    return paged(await request.range(first, first + query.size - 1));
+}
+
+export type ImageListItem = NonNullable<
+    Awaited<ReturnType<typeof getImageList>>['rows']
+>[number];
+
+export async function getImage(
+    auditId: string,
+    subject: string,
+    locale: string | undefined,
+) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .rpc('audit_image_list', imageListArgs(auditId, locale))
+        .eq('subject', subject)
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
+
 export async function getFindings(auditId: string, query: FindingListQuery) {
     const supabase = await createClient();
     const first = (query.page - 1) * query.size;
 
-    const locale =
-        query.check && !isSiteCheck(query.check) ? query.locale : undefined;
+    const isOnPages =
+        query.subject !== undefined ||
+        (query.check !== undefined && !isSiteCheck(query.check));
+
+    const locale = isOnPages ? query.locale : undefined;
 
     let request = supabase
         .from('audit_findings')
@@ -182,9 +215,10 @@ export async function getFindings(auditId: string, query: FindingListQuery) {
         )
         .eq('audit_id', auditId);
 
-    request = query.check
-        ? request.order('site_pages(url)', { nullsFirst: true })
-        : request.order('check').order('subject', { nullsFirst: true });
+    request =
+        query.check || query.subject
+            ? request.order('site_pages(url)', { nullsFirst: true })
+            : request.order('check').order('subject', { nullsFirst: true });
 
     request = request.order('id').range(first, first + query.size - 1);
 
@@ -194,6 +228,12 @@ export async function getFindings(auditId: string, query: FindingListQuery) {
 
     if (query.site_page) {
         request = request.eq('site_page_id', query.site_page);
+    }
+
+    if (query.subject) {
+        request = request
+            .eq('subject', query.subject)
+            .in('check', checksInScope('images'));
     }
 
     if (locale) {
@@ -237,4 +277,12 @@ export async function getMarks(projectId: string) {
             .order('id')
             .range(from, to),
     );
+}
+
+function imageListArgs(auditId: string, locale: string | undefined) {
+    return {
+        audit: auditId,
+        check_ids: checksInScope('images'),
+        ...(locale && { locale }),
+    };
 }

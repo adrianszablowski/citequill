@@ -1,4 +1,3 @@
-import { ArrowDownIcon, ChevronsUpDownIcon } from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +9,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import SortHead from '@/features/audit/components/sort-head';
 import { severityNames } from '@/features/audit/check-texts';
 import {
     findingListHref,
@@ -21,7 +21,6 @@ import {
     type FindingListQuery,
     severities,
     severityColumns,
-    type sitePageSorts,
 } from '@/features/audit/schema';
 import { formatCount } from '@/lib/utils';
 
@@ -54,42 +53,31 @@ export default function SitePageTable({
         return row.canonical_url === row.url ? 'Itself' : row.canonical_url;
     }
 
-    function sortHead(sort: Sort, label: string, className?: string) {
-        const isActive = sitePageSort(query) === sort;
-        const Icon = isActive ? ArrowDownIcon : ChevronsUpDownIcon;
-
-        return (
-            <TableHead className={className}>
-                <Link
-                    href={findingListHref(projectId, {
-                        ...query,
-                        sort,
-                        page: 1,
-                    })}
-                    className="inline-flex items-center gap-1 hover:text-foreground"
-                >
-                    {label}
-                    <Icon
-                        className={
-                            isActive
-                                ? 'size-3.5'
-                                : 'size-3.5 text-muted-foreground'
-                        }
-                    />
-                </Link>
-            </TableHead>
-        );
-    }
-
     return (
         <Table>
             <TableHeader>
                 <TableRow>
-                    {sortHead('url', 'Page')}
+                    <SortHead
+                        href={findingListHref(projectId, {
+                            ...query,
+                            sort: 'url',
+                            page: 1,
+                        })}
+                        label="Page"
+                        isActive={sitePageSort(query) === 'url'}
+                    />
                     <TableHead>Status</TableHead>
                     <TableHead>Canonical</TableHead>
                     <TableHead>Title</TableHead>
-                    {sortHead('findings', 'Findings')}
+                    <SortHead
+                        href={findingListHref(projectId, {
+                            ...query,
+                            sort: 'findings',
+                            page: 1,
+                        })}
+                        label="Findings"
+                        isActive={sitePageSort(query) === 'findings'}
+                    />
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -149,5 +137,3 @@ export default function SitePageTable({
         </Table>
     );
 }
-
-type Sort = (typeof sitePageSorts)[number];

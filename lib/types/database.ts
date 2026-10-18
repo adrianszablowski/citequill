@@ -238,6 +238,8 @@ export type Database = {
                     checks_total: number;
                     created_at: string;
                     duration_s: number | null;
+                    findings_fixed: number | null;
+                    findings_new: number | null;
                     hints: number;
                     host_429_count: number;
                     host_5xx_count: number;
@@ -267,6 +269,8 @@ export type Database = {
                     checks_total?: number;
                     created_at?: string;
                     duration_s?: number | null;
+                    findings_fixed?: number | null;
+                    findings_new?: number | null;
                     hints?: number;
                     host_429_count?: number;
                     host_5xx_count?: number;
@@ -296,6 +300,8 @@ export type Database = {
                     checks_total?: number;
                     created_at?: string;
                     duration_s?: number | null;
+                    findings_fixed?: number | null;
+                    findings_new?: number | null;
                     hints?: number;
                     host_429_count?: number;
                     host_5xx_count?: number;
@@ -877,6 +883,19 @@ export type Database = {
                     severity_rank: number;
                 }[];
             };
+            audit_image_list: {
+                Args: { audit: string; check_ids: string[]; locale?: string };
+                Returns: {
+                    alts: string[];
+                    ancestors: string[];
+                    checks: string[];
+                    pages: number;
+                    pages_intended: number;
+                    selector: string;
+                    snippet: string;
+                    subject: string;
+                }[];
+            };
             audit_page_list: {
                 Args: { audit: string };
                 Returns: {
@@ -902,6 +921,8 @@ export type Database = {
                     audit: string;
                     checks_scored: number;
                     checks_total: number;
+                    findings_fixed?: number;
+                    findings_new?: number;
                     hints: number;
                     intended: string[];
                     is_gated: boolean;

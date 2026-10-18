@@ -8,7 +8,7 @@ import {
 } from '@/features/audit/catalogue';
 import { pageSizes } from '@/features/pages/schema';
 
-export const findingViews = ['finding', 'page'] as const;
+export const findingViews = ['finding', 'page', 'image'] as const;
 
 export const severities = [
     '3',
@@ -30,6 +30,17 @@ export const checkSorts = ['severity', 'pages'] as const;
 
 export const sitePageSorts = ['findings', 'url'] as const;
 
+export const imageSorts = ['pages', 'subject'] as const;
+
+type Sort =
+    | (typeof checkSorts)[number]
+    | (typeof sitePageSorts)[number]
+    | (typeof imageSorts)[number];
+
+const sorts = [
+    ...new Set([...checkSorts, ...sitePageSorts, ...imageSorts]),
+] as [Sort, ...Sort[]];
+
 const optionalText = z.string().trim().min(1).optional().catch(undefined);
 
 const checkId = z.enum(
@@ -40,6 +51,7 @@ export const findingListQuery = z.object({
     view: z.enum(findingViews).catch('finding'),
     check: checkId.optional().catch(undefined),
     site_page: z.uuid().optional().catch(undefined),
+    subject: optionalText,
     severity: z.enum(severities).optional().catch(undefined),
     area: z
         .enum(Object.keys(areaWeights) as [keyof typeof areaWeights])
@@ -48,10 +60,7 @@ export const findingListQuery = z.object({
     locale: optionalText,
     written: z.enum(['yes', 'no']).optional().catch(undefined),
     q: optionalText,
-    sort: z
-        .enum([...checkSorts, ...sitePageSorts])
-        .optional()
-        .catch(undefined),
+    sort: z.enum(sorts).optional().catch(undefined),
     page: z.coerce.number().int().min(1).catch(1),
     size: z.coerce.number().pipe(z.literal(pageSizes)).catch(10),
 });

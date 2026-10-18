@@ -28,58 +28,64 @@ export default function AuditHistory({
                 <CardTitle>History</CardTitle>
             </CardHeader>
             <CardContent>
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>State</TableHead>
-                            <TableHead>Score</TableHead>
-                            <TableHead className="text-right">
-                                Pages read
-                            </TableHead>
-                            <TableHead className="text-right">
-                                Time taken
-                            </TableHead>
-                            {isOperator && (
+                {audits.length === 0 ? (
+                    <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        Every audit lands here, with its date, state and score.
+                    </p>
+                ) : (
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>State</TableHead>
+                                <TableHead>Score</TableHead>
                                 <TableHead className="text-right">
-                                    Cost
+                                    Pages read
                                 </TableHead>
-                            )}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {audits.map(({ run, audit, status }) => (
-                            <TableRow key={run.id}>
-                                <TableCell>
-                                    {formatDate(run.started_at)}
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant={states[status].variant}>
-                                        {states[status].label}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell>
-                                    {audit && audit.score !== null && (
-                                        <ScoreBand score={audit.score} />
-                                    )}
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    {formatCount(audit?.pages_read ?? 0)}
-                                </TableCell>
-                                <TableCell className="text-right text-muted-foreground">
-                                    {audit && audit.duration_s !== null
-                                        ? formatDuration(audit.duration_s)
-                                        : ''}
-                                </TableCell>
+                                <TableHead className="text-right">
+                                    Time taken
+                                </TableHead>
                                 {isOperator && (
-                                    <TableCell className="text-right">
-                                        {formatUsd(run.cost_usd)}
-                                    </TableCell>
+                                    <TableHead className="text-right">
+                                        Cost
+                                    </TableHead>
                                 )}
                             </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
+                        </TableHeader>
+                        <TableBody>
+                            {audits.map(({ run, audit, status }) => (
+                                <TableRow key={run.id}>
+                                    <TableCell>
+                                        {formatDate(run.started_at)}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant={states[status].variant}>
+                                            {states[status].label}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell>
+                                        {audit && audit.score !== null && (
+                                            <ScoreBand score={audit.score} />
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        {formatCount(audit?.pages_read ?? 0)}
+                                    </TableCell>
+                                    <TableCell className="text-right text-muted-foreground">
+                                        {audit && audit.duration_s !== null
+                                            ? formatDuration(audit.duration_s)
+                                            : ''}
+                                    </TableCell>
+                                    {isOperator && (
+                                        <TableCell className="text-right">
+                                            {formatUsd(run.cost_usd)}
+                                        </TableCell>
+                                    )}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
             </CardContent>
         </Card>
     );

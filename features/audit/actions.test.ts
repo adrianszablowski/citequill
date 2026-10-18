@@ -190,6 +190,8 @@ describe('stopAudit', () => {
                 is_gated: false,
                 checks_scored: 0,
                 checks_total: 0,
+                findings_fixed: null,
+                findings_new: null,
             },
         };
     }

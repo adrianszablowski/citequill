@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { auditChanges, comparedPair } from '@/features/audit/changes';
 import { homePages, siteBaseUrls } from '@/features/audit/queue';
 import {
     checksRun,
@@ -31,7 +32,7 @@ export async function writeScore(
             one(
                 supabase
                     .from('audits')
-                    .select('robots_rules')
+                    .select('robots_rules, created_at')
                     .eq('id', auditId)
                     .single(),
             ),
@@ -53,7 +54,7 @@ export async function writeScore(
                 supabase
                     .from('audit_findings')
                     .select(
-                        'id, check, severity, site_page_id, subject, selector',
+                        'id, check, severity, site_page_id, subject, selector, fingerprint',
                     )
                     .eq('audit_id', auditId)
                     .order('id')
@@ -82,11 +83,41 @@ export async function writeScore(
         homes: homePages(siteBaseUrls(project.domain, locales)),
     });
 
+    const older = await one(
+        supabase
+            .from('audits')
+            .select('id, created_at, score, checks_scored, runs(status)')
+            .eq('project_id', projectId)
+            .lt('created_at', audit.created_at)
+            .order('created_at', { ascending: false }),
+    );
+
+    const pair = comparedPair(
+        score,
+        older.map(({ runs, ...previous }) => ({ run: runs, audit: previous })),
+    );
+
+    const changes =
+        pair &&
+        auditChanges(
+            await all((from, to) =>
+                supabase
+                    .from('audit_findings')
+                    .select('fingerprint')
+                    .eq('audit_id', pair.previousId)
+                    .order('id')
+                    .range(from, to),
+            ),
+            findings,
+        );
+
     await done(
         supabase.rpc('score_audit', {
             audit: auditId,
             ...score,
             results,
+            findings_fixed: changes?.fixed,
+            findings_new: changes?.added,
         }),
     );
 }

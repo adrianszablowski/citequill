@@ -1,3 +1,5 @@
+import type { AltState } from '@/features/audit/image-checks';
+import type { PageImage } from '@/features/audit/images';
 import { formatCount, formatDate } from '@/lib/utils';
 
 export const stalledMessage = 'The audit made no progress for 15 minutes.';
@@ -42,3 +44,26 @@ export function changesLine({ difference, since, fixed, added }: Changes) {
 
     return `${change} since ${formatDate(since)}, ${formatCount(fixed)} ${findings} fixed, ${formatCount(added)} new`;
 }
+
+export function altAsShown(alt: string) {
+    return Object.hasOwn(altStates, alt)
+        ? altStates[alt as keyof typeof altStates]
+        : `"${alt}"`;
+}
+
+export function ancestorAsShown(ancestor: string) {
+    return Object.hasOwn(ancestors, ancestor)
+        ? ancestors[ancestor as keyof typeof ancestors]
+        : ancestor;
+}
+
+const altStates = {
+    absent: 'No alt attribute',
+    empty: 'Empty alt',
+    whitespace: 'Whitespace alt',
+} satisfies Record<AltState, string>;
+
+const ancestors = {
+    link: 'In a link',
+    figure: 'In a figure',
+} satisfies Record<NonNullable<PageImage['ancestor']>, string>;

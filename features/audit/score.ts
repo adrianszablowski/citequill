@@ -364,6 +364,10 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];
 
+export function checksInScope(scope: PageScope | 'site') {
+    return shippedChecks.filter((check) => scopes[check] === scope);
+}
+
 export function isSiteCheck(check: CheckId) {
     return scopes[check] === 'site';
 }

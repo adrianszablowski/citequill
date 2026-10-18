@@ -32,41 +32,8 @@ export default function FindingFilters({
     query,
     locales,
 }: Readonly<FindingFiltersProps>) {
-    const selects = [
-        {
-            name: 'severity',
-            label: 'Severity',
-            value: query.severity,
-            options: [
-                ['', 'Any severity'],
-                ...severities.map((severity) => [
-                    severity,
-                    severityNames[severity],
-                ]),
-            ],
-        },
-        ...(query.view === 'finding'
-            ? [
-                  {
-                      name: 'area',
-                      label: 'Area',
-                      value: query.area,
-                      options: [['', 'Any area'], ...Object.entries(areaNames)],
-                  },
-              ]
-            : [
-                  {
-                      name: 'written',
-                      label: 'Written by Citequill',
-                      value: query.written,
-                      options: [
-                          ['', 'Any'],
-                          ['yes', 'Yes'],
-                          ['no', 'No'],
-                      ],
-                  },
-              ]),
-        ...(locales.length > 1
+    const localeSelects =
+        locales.length > 1
             ? [
                   {
                       name: 'locale',
@@ -78,8 +45,50 @@ export default function FindingFilters({
                       ],
                   },
               ]
-            : []),
-    ];
+            : [];
+
+    const selects =
+        query.view === 'image'
+            ? localeSelects
+            : [
+                  {
+                      name: 'severity',
+                      label: 'Severity',
+                      value: query.severity,
+                      options: [
+                          ['', 'Any severity'],
+                          ...severities.map((severity) => [
+                              severity,
+                              severityNames[severity],
+                          ]),
+                      ],
+                  },
+                  query.view === 'finding'
+                      ? {
+                            name: 'area',
+                            label: 'Area',
+                            value: query.area,
+                            options: [
+                                ['', 'Any area'],
+                                ...Object.entries(areaNames),
+                            ],
+                        }
+                      : {
+                            name: 'written',
+                            label: 'Written by Citequill',
+                            value: query.written,
+                            options: [
+                                ['', 'Any'],
+                                ['yes', 'Yes'],
+                                ['no', 'No'],
+                            ],
+                        },
+                  ...localeSelects,
+              ];
+
+    if (selects.length === 0) {
+        return null;
+    }
 
     return (
         <Form

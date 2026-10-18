@@ -6,7 +6,7 @@ import AuditFindings from '@/features/audit/components/audit-findings';
 import AuditFindingsSkeleton from '@/features/audit/components/audit-findings-skeleton';
 import AuditHistory from '@/features/audit/components/audit-history';
 import LatestAudit from '@/features/audit/components/latest-audit';
-import { getAudits, getChanges } from '@/features/audit/queries';
+import { getAudits } from '@/features/audit/queries';
 import { comparedAudits, shownAudit } from '@/features/audit/shown';
 import { getCurrentUser, isOperator } from '@/features/auth/queries';
 import { getProject } from '@/features/projects/queries';
@@ -34,13 +34,6 @@ export default async function AuditSection({
         notFound();
     }
 
-    const compared = comparedAudits(audits);
-
-    const changes = compared && {
-        ...compared,
-        ...(await getChanges(compared.latestId, compared.previousId)),
-    };
-
     const shown = shownAudit(audits);
 
     return (
@@ -49,7 +42,7 @@ export default async function AuditSection({
                 projectId={id}
                 domain={project.domain}
                 latest={audits[0] ?? null}
-                changes={changes}
+                changes={comparedAudits(audits)}
             />
             {shown ? (
                 <Suspense fallback={<AuditFindingsSkeleton />}>
@@ -67,14 +60,12 @@ export default async function AuditSection({
                     <CardContent>
                         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                             Once an audit ends, Citequill lists its findings
-                            here, by check and by page.
+                            here, by finding, by page and by image.
                         </p>
                     </CardContent>
                 </Card>
             )}
-            {audits.length > 0 && (
-                <AuditHistory audits={audits} isOperator={operator} />
-            )}
+            <AuditHistory audits={audits} isOperator={operator} />
         </div>
     );
 }

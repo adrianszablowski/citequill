@@ -5,6 +5,7 @@ import {
     appliesTo,
     auditScore,
     band,
+    checksInScope,
     checksRun,
     crossPageChecks,
     gateCap,
@@ -530,5 +531,23 @@ describe('isSiteCheck', () => {
     it('tells a check on the site from a check on its pages', () => {
         expect(isSiteCheck('sitemap-missing')).toBe(true);
         expect(isSiteCheck('page-4xx')).toBe(false);
+    });
+});
+
+describe('checksInScope', () => {
+    it('lists the checks of one page scope and no other', () => {
+        const images = checksInScope('images');
+
+        expect(images).toEqual(
+            expect.arrayContaining(['img-alt-missing', 'svg-no-name']),
+        );
+
+        expect(images).not.toContain('title-missing');
+        expect(images.some(isSiteCheck)).toBe(false);
+    });
+
+    it('lists the checks on the site for the site scope', () => {
+        expect(checksInScope('site')).toContain('sitemap-missing');
+        expect(checksInScope('site').every(isSiteCheck)).toBe(true);
     });
 });

@@ -1,4 +1,3 @@
-import { ArrowDownIcon, ChevronsUpDownIcon } from 'lucide-react';
 import Link from 'next/link';
 
 import {
@@ -15,6 +14,7 @@ import {
     type Severity,
 } from '@/features/audit/catalogue';
 import SeverityBadge from '@/features/audit/components/severity-badge';
+import SortHead from '@/features/audit/components/sort-head';
 import { areaNames, checkText } from '@/features/audit/check-texts';
 import {
     checkSort,
@@ -22,7 +22,7 @@ import {
     hasFindingFilters,
 } from '@/features/audit/list-query';
 import type { CheckListItem } from '@/features/audit/queries';
-import type { checkSorts, FindingListQuery } from '@/features/audit/schema';
+import type { FindingListQuery } from '@/features/audit/schema';
 import { isSiteCheck } from '@/features/audit/score';
 import { formatCount } from '@/lib/utils';
 
@@ -47,41 +47,31 @@ export default function CheckTable({
         );
     }
 
-    function sortHead(sort: Sort, label: string, className?: string) {
-        const isActive = checkSort(query) === sort;
-        const Icon = isActive ? ArrowDownIcon : ChevronsUpDownIcon;
-
-        return (
-            <TableHead className={className}>
-                <Link
-                    href={findingListHref(projectId, {
-                        ...query,
-                        sort,
-                        page: 1,
-                    })}
-                    className="inline-flex items-center gap-1 hover:text-foreground"
-                >
-                    {label}
-                    <Icon
-                        className={
-                            isActive
-                                ? 'size-3.5'
-                                : 'size-3.5 text-muted-foreground'
-                        }
-                    />
-                </Link>
-            </TableHead>
-        );
-    }
-
     return (
         <Table>
             <TableHeader>
                 <TableRow>
                     <TableHead>Finding</TableHead>
-                    {sortHead('severity', 'Severity')}
+                    <SortHead
+                        href={findingListHref(projectId, {
+                            ...query,
+                            sort: 'severity',
+                            page: 1,
+                        })}
+                        label="Severity"
+                        isActive={checkSort(query) === 'severity'}
+                    />
                     <TableHead>Area</TableHead>
-                    {sortHead('pages', 'Pages', 'text-right')}
+                    <SortHead
+                        href={findingListHref(projectId, {
+                            ...query,
+                            sort: 'pages',
+                            page: 1,
+                        })}
+                        label="Pages"
+                        isActive={checkSort(query) === 'pages'}
+                        className="text-right"
+                    />
                     <TableHead className="text-right">Intended</TableHead>
                 </TableRow>
             </TableHeader>
@@ -109,7 +99,7 @@ export default function CheckTable({
                                 />
                             </TableCell>
                             <TableCell className="text-muted-foreground">
-                                {areaNames[checkOf(check).area]}
+                                {areaNames[checkOf(check)?.area]}
                             </TableCell>
                             <TableCell className="text-right">
                                 {isSiteCheck(check)
@@ -126,5 +116,3 @@ export default function CheckTable({
         </Table>
     );
 }
-
-type Sort = (typeof checkSorts)[number];

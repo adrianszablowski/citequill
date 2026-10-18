@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { auditChanges } from '@/features/audit/changes';
+import {
+    type AuditEntry,
+    auditChanges,
+    comparedPair,
+} from '@/features/audit/changes';
 
 function findings(...fingerprints: string[]) {
     return fingerprints.map((fingerprint) => ({ fingerprint }));
@@ -32,5 +36,64 @@ describe('auditChanges', () => {
 
     it('finds nothing changed between two audits with no findings', () => {
         expect(auditChanges([], [])).toEqual({ fixed: 0, added: 0 });
+    });
+});
+
+function older(
+    status: string,
+    audit: Partial<NonNullable<AuditEntry['audit']>> | null = {},
+): AuditEntry {
+    return {
+        run: { status },
+        audit: audit && {
+            id: 'previous',
+            created_at: '2026-10-03T10:00:00Z',
+            score: 80,
+            checks_scored: 40,
+            ...audit,
+        },
+    };
+}
+
+describe('comparedPair', () => {
+    const latest = { score: 87, checks_scored: 40 };
+
+    it('compares with the last earlier audit that ended when both stand on the same checks', () => {
+        expect(comparedPair(latest, [older('finished')])).toEqual({
+            previousId: 'previous',
+            since: '2026-10-03T10:00:00Z',
+            difference: 7,
+        });
+    });
+
+    it('passes over an earlier run still running and one that never got its audit row', () => {
+        expect(
+            comparedPair(latest, [
+                older('running', { id: 'running' }),
+                older('failed', null),
+                older('failed', { id: 'stopped', score: 90 }),
+            ]),
+        ).toMatchObject({ previousId: 'stopped', difference: -3 });
+    });
+
+    it('compares nothing when the check counts differ', () => {
+        expect(
+            comparedPair(latest, [older('finished', { checks_scored: 41 })]),
+        ).toBeNull();
+    });
+
+    it('compares nothing when either audit has no score', () => {
+        expect(
+            comparedPair({ ...latest, score: null }, [older('finished')]),
+        ).toBeNull();
+
+        expect(
+            comparedPair(latest, [older('finished', { score: null })]),
+        ).toBeNull();
+    });
+
+    it('compares nothing for the first audit of a project', () => {
+        expect(comparedPair(latest, [])).toBeNull();
+        expect(comparedPair(latest, [older('running')])).toBeNull();
     });
 });

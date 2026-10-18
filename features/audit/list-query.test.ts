@@ -4,6 +4,7 @@ import {
     checkSort,
     findingListHref,
     hasFindingFilters,
+    imageSort,
     keptFindingParams,
     sitePageSort,
 } from '@/features/audit/list-query';
@@ -55,6 +56,31 @@ describe('findingListHref', () => {
             }),
         ).toBe('/projects/p1/audit?view=page&page=2&q=blog');
     });
+
+    it('carries an image subject with a query string back to the same subject', () => {
+        const subject = 'https://cdn.acme.com/logo.png?w=200&h=100#top';
+
+        const href = findingListHref('p1', {
+            ...findingListQuery.parse({}),
+            view: 'image',
+            subject,
+        });
+
+        const search = new URL(href, 'https://citequill.test').searchParams;
+
+        expect(
+            findingListQuery.parse(Object.fromEntries(search)),
+        ).toMatchObject({ view: 'image', subject });
+    });
+
+    it('leaves the subject out of the URL when no image is open', () => {
+        expect(
+            findingListHref('p1', {
+                ...findingListQuery.parse({ view: 'image' }),
+                subject: undefined,
+            }),
+        ).toBe('/projects/p1/audit?view=image');
+    });
 });
 
 describe('keptFindingParams', () => {
@@ -89,6 +115,34 @@ describe('hasFindingFilters', () => {
         ).toBe(true);
 
         expect(hasFindingFilters(findingListQuery.parse({}))).toBe(false);
+    });
+
+    it('counts only the language on the images', () => {
+        expect(
+            hasFindingFilters(
+                findingListQuery.parse({ view: 'image', severity: '3' }),
+            ),
+        ).toBe(false);
+
+        expect(
+            hasFindingFilters(
+                findingListQuery.parse({ view: 'image', locale: 'pl' }),
+            ),
+        ).toBe(true);
+    });
+});
+
+describe('imageSort', () => {
+    it('sorts the images by their pages unless the URL names the subject', () => {
+        expect(imageSort(findingListQuery.parse({}))).toBe('pages');
+
+        expect(imageSort(findingListQuery.parse({ sort: 'severity' }))).toBe(
+            'pages',
+        );
+
+        expect(imageSort(findingListQuery.parse({ sort: 'subject' }))).toBe(
+            'subject',
+        );
     });
 });
 
