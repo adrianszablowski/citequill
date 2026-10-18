@@ -3,6 +3,13 @@ import { BlockList, isIP } from 'node:net';
 
 export const userAgent = 'CitequillBot/1.0 (+https://citequill.com/bot)';
 
+export const phoneUserAgent = `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 ${userAgent}`;
+
+export const phoneHeaders = {
+    'user-agent': phoneUserAgent,
+    'sec-ch-ua-mobile': '?1',
+};
+
 export const botSecretHeader = 'citequill-bot-secret';
 
 export const timeoutMs = 15_000;
@@ -138,6 +145,21 @@ export function isHtml(headers: Headers) {
     return type === '' || /^(text\/html|application\/xhtml\+xml)/i.test(type);
 }
 
+export function tlsErrorOf(error: unknown) {
+    const { code, cause } = (error ?? {}) as {
+        code?: unknown;
+        cause?: { code?: unknown };
+    };
+
+    return (
+        [cause?.code, code].find(
+            (candidate): candidate is string =>
+                typeof candidate === 'string' &&
+                (tlsCodes.has(candidate) || /^ERR_(TLS|SSL)_/.test(candidate)),
+        ) ?? null
+    );
+}
+
 export const defaultDeps: FetchDeps = {
     fetch,
     lookup: async (hostname) =>
@@ -145,6 +167,17 @@ export const defaultDeps: FetchDeps = {
             (entry) => entry.address,
         ),
 };
+
+const tlsCodes = new Set([
+    'CERT_HAS_EXPIRED',
+    'CERT_NOT_YET_VALID',
+    'DEPTH_ZERO_SELF_SIGNED_CERT',
+    'SELF_SIGNED_CERT_IN_CHAIN',
+    'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+    'UNABLE_TO_GET_ISSUER_CERT',
+    'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+    'CERT_UNTRUSTED',
+]);
 
 const blocked = new BlockList();
 

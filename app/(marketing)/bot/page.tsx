@@ -1,7 +1,12 @@
 import type { Metadata } from 'next';
 
+import { variantPaths } from '@/features/audit/sample';
 import BotContact from '@/features/crawl/components/bot-contact';
-import { botSecretHeader, userAgent } from '@/features/crawl/fetch';
+import {
+    botSecretHeader,
+    phoneHeaders,
+    userAgent,
+} from '@/features/crawl/fetch';
 
 export const metadata: Metadata = {
     title: 'CitequillBot',
@@ -85,6 +90,17 @@ export default function BotPage() {
                 <p>
                     A <code>CitequillBot</code> group in your robots.txt always
                     applies, in an audit of your site too.
+                </p>
+                <p>
+                    In an audit of your site, CitequillBot asks for the home
+                    page of each language and up to {variantPaths} other pages
+                    twice more: once as itself, and once with the user agent of
+                    a phone browser with its own name appended and the header{' '}
+                    <code>
+                        sec-ch-ua-mobile: {phoneHeaders['sec-ch-ua-mobile']}
+                    </code>
+                    . A site that serves a phone template is checked as a phone
+                    sees it.
                 </p>
                 <p>
                     When your server answers 429 or 503, the audit waits and

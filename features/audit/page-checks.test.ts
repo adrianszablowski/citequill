@@ -18,6 +18,7 @@ const context: PageCheckContext = {
     isDisallowed: () => false,
     locales,
     hosts,
+    homes: ['https://acme.com/'],
     previousRedirects: new Map(),
     now: Date.parse('2026-10-17T12:00:00Z'),
 };
@@ -75,7 +76,7 @@ function documentOf(
     body = `<main>${words}</main>`,
     lang = ' lang="en"',
 ) {
-    return `<!doctype html><html${lang}><head><meta charset="utf-8"><title>Pricing</title><meta name="description" content="${description}">${openGraph}${head}</head><body><nav><a href="/">Home</a></nav><h1>Pricing</h1>${body}</body></html>`;
+    return `<!doctype html><html${lang}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Pricing</title><meta name="description" content="${description}">${openGraph}${head}</head><body><nav><a href="/">Home</a></nav><h1>Pricing</h1>${body}</body></html>`;
 }
 
 function html(head: string, body?: string) {
@@ -528,7 +529,7 @@ describe('checkPage', () => {
         });
     });
 
-    it('runs the on-page, image and link checks on an indexable page only', () => {
+    it('runs the on-page, image, link and viewport checks on an indexable page only', () => {
         const bare = `<html lang="en"><head><link rel="canonical" href="${url}"></head><body><main>${words}</main><img src="/a.png"></body></html>`;
 
         expect(checks(fetched(bare))).toEqual([
@@ -540,10 +541,184 @@ describe('checkPage', () => {
             'img-no-dimensions',
             'img-alt-missing',
             'page-no-outlinks',
+            'viewport-missing',
         ]);
 
         expect(
             checks(fetched(bare, { headers: { 'x-robots-tag': 'noindex' } })),
         ).toEqual([]);
+    });
+});
+
+describe('checkPage, for HTTPS', () => {
+    const fetchFailed = (code: string) =>
+        Object.assign(new TypeError('fetch failed'), {
+            cause: Object.assign(new Error('certificate has expired'), {
+                code,
+            }),
+        });
+
+    it('reports a request that fails on the certificate or the TLS version as tls-invalid with its code and the message of its cause, never page-5xx', () => {
+        expect(check(fetchFailed('CERT_HAS_EXPIRED'))).toEqual([
+            {
+                check: 'tls-invalid',
+                url,
+                detail: {
+                    code: 'CERT_HAS_EXPIRED',
+                    error: 'certificate has expired',
+                },
+            },
+        ]);
+
+        expect(
+            check(
+                Object.assign(new Error('unsupported protocol'), {
+                    code: 'ERR_SSL_UNSUPPORTED_PROTOCOL',
+                }),
+            ),
+        ).toEqual([
+            {
+                check: 'tls-invalid',
+                url,
+                detail: {
+                    code: 'ERR_SSL_UNSUPPORTED_PROTOCOL',
+                    error: 'unsupported protocol',
+                },
+            },
+        ]);
+
+        expect(checks(fetchFailed('ERR_SSL_UNSUPPORTED_PROTOCOL'))).toEqual([
+            'tls-invalid',
+        ]);
+
+        expect(checks(fetchFailed('ECONNREFUSED'))).toEqual(['page-5xx']);
+    });
+
+    it('reports an http page that answers 200 as served over HTTP, on its own and indexable or not', () => {
+        const page = 'http://acme.com/pricing';
+
+        const read: Read = {
+            entry: { ...entry(), url: page },
+            outcome: fetched(html('').replaceAll('https:', 'http:'), {
+                hops: [{ url: page, status: 200 }],
+                headers: { 'x-robots-tag': 'noindex' },
+            }),
+        };
+
+        const observed = observeRead(read, {
+            projectId: 'project',
+            auditId: 'audit',
+            locales,
+            hosts,
+            domain: 'acme.com',
+            pageIds: new Map(),
+        });
+
+        expect(checkPage(read, observed, context)).toContainEqual({
+            check: 'https-missing',
+            url: page,
+            detail: { reason: 'served' },
+        });
+    });
+
+    it('reports a redirect from https to http at any hop, on the first http hop', () => {
+        const hops = [
+            { url, status: 301 },
+            { url: 'https://www.acme.com/pricing', status: 301 },
+            { url: 'http://www.acme.com/pricing', status: 301 },
+            { url: 'https://www.acme.com/pricing/', status: 200 },
+        ];
+
+        expect(check(fetched('', { hops }))).toContainEqual({
+            check: 'https-to-http',
+            url,
+            subject: 'http://www.acme.com/pricing',
+            detail: { hops },
+        });
+
+        expect(
+            checks(
+                fetched('', {
+                    hops: [
+                        { url: 'http://acme.com/pricing', status: 301 },
+                        { url, status: 200 },
+                    ],
+                }),
+            ),
+        ).not.toContain('https-to-http');
+    });
+
+    it('reports a 200 whose Content-Type is not HTML while its body is, and leaves the page unparsed', () => {
+        expect(
+            check(
+                fetched(`\uFEFF \n<!DOCTYPE html>${html('')}`, {
+                    headers: { 'content-type': 'text/plain' },
+                }),
+            ),
+        ).toEqual([
+            {
+                check: 'content-type-wrong',
+                url,
+                detail: { contentType: 'text/plain' },
+            },
+        ]);
+
+        expect(
+            checks(
+                fetched('%PDF-1.7', {
+                    headers: { 'content-type': 'application/pdf' },
+                }),
+            ),
+        ).toEqual([]);
+
+        const missing = fetched(html(''));
+
+        missing.headers.delete('content-type');
+
+        expect(checks(missing)).toEqual([]);
+    });
+
+    it('reads the security headers on a home page only', () => {
+        const home = 'https://acme.com/';
+
+        const read = (headers: Record<string, string>): Read => ({
+            entry: { ...entry(), url: home },
+            outcome: fetched(html(''), {
+                hops: [{ url: home, status: 200 }],
+                headers,
+            }),
+        });
+
+        const homeChecks = (headers: Record<string, string>) =>
+            checkPage(
+                read(headers),
+                observeRead(read(headers), {
+                    projectId: 'project',
+                    auditId: 'audit',
+                    locales,
+                    hosts,
+                    domain: 'acme.com',
+                    pageIds: new Map(),
+                }),
+                context,
+            ).filter((finding) => finding.check === 'security-headers');
+
+        expect(homeChecks({})).toEqual([
+            {
+                check: 'security-headers',
+                url: home,
+                detail: {
+                    missing: [
+                        'strict-transport-security',
+                        'content-security-policy',
+                        'x-content-type-options',
+                        'x-frame-options',
+                        'referrer-policy',
+                    ],
+                },
+            },
+        ]);
+
+        expect(checks(fetched(html('')))).not.toContain('security-headers');
     });
 });

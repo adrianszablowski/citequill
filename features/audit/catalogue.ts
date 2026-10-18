@@ -186,12 +186,15 @@ const rows = {
         ['mixed-passive', '2'],
         ['form-on-http', '2'],
         ['content-type-wrong', '2'],
+        ['protocol-relative', 'hint'],
+        ['security-headers', 'hint'],
     ],
     mobile: [
         ['viewport-missing', '3'],
         ['viewport-misconfigured', '2'],
         ['mobile-content-differs', '2', 'sample'],
         ['interstitial', '2', 'rendered'],
+        ['mobile-layout', 'hint', 'rendered'],
     ],
     performance: [
         ['html-slow', '2'],

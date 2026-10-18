@@ -9,18 +9,25 @@ import {
 import { readAuditPage } from '@/features/audit/page';
 import {
     domainRoot,
+    isHttpUrl,
     isUnderDomain,
     type QueueEntry,
     withoutSlash,
 } from '@/features/audit/queue';
 import { gateShare } from '@/features/audit/score';
 import { type Fetched, isHtml } from '@/features/crawl/fetch';
+import type { Json } from '@/lib/types/database';
 
 export type LinkedHosts = Record<string, string>;
 
 export interface Variant {
     url: string;
     variant: 'www' | 'slash' | 'case';
+}
+
+export interface HttpTwin {
+    url: string;
+    variant: 'http';
 }
 
 export const linkedHostCap = 500;
@@ -81,7 +88,7 @@ export function judgeMissingPath(
     return fetched.status === 200 ? { ...probe, check: 'soft-404' } : null;
 }
 
-export function hostVariants(url: string): Variant[] {
+export function hostVariants(url: string): (Variant | HttpTwin)[] {
     const original = new URL(url);
     const { hostname, pathname } = original;
 
@@ -89,7 +96,7 @@ export function hostVariants(url: string): Variant[] {
         ? hostname.slice(4)
         : `www.${hostname}`;
 
-    const variants: Variant[] = [
+    const variants: (Variant | HttpTwin)[] = [
         { url: withUrl(original, { hostname: twin }), variant: 'www' },
         {
             url: withUrl(original, {
@@ -103,6 +110,14 @@ export function hostVariants(url: string): Variant[] {
             url: withUrl(original, { pathname: upperFirstLetter(pathname) }),
             variant: 'case',
         },
+        ...(original.protocol === 'https:'
+            ? [
+                  {
+                      url: withUrl(original, { protocol: 'http:' }),
+                      variant: 'http' as const,
+                  },
+              ]
+            : []),
     ];
 
     return variants.filter((variant) => variant.url !== original.href);
@@ -133,6 +148,22 @@ export function judgeVariant(
               subject: variantUrl,
               detail: { variant, status: fetched.status },
           };
+}
+
+export function judgeHttpTwin(url: string, fetched: Fetched): Finding | null {
+    return fetched.status === 200 && isHttpUrl(fetched.url)
+        ? {
+              check: 'https-missing',
+              url,
+              subject: fetched.hops[0].url,
+              detail: {
+                  reason: 'no-redirect',
+                  status: fetched.status,
+                  finalUrl: fetched.url,
+                  hops: fetched.hops as unknown as Json,
+              },
+          }
+        : null;
 }
 
 export function stagingHosts(linked: LinkedHosts, domain: string) {
@@ -239,7 +270,10 @@ const stagingLabel = /^(?:staging|stage|dev|test|uat|preprod|sandbox)$/i;
 
 const escapeOrNonLetter = /^((?:%[\da-f]{2}|[^\p{L}%])*)(\p{L})/iu;
 
-function withUrl(url: URL, parts: Partial<Pick<URL, 'hostname' | 'pathname'>>) {
+function withUrl(
+    url: URL,
+    parts: Partial<Pick<URL, 'hostname' | 'pathname' | 'protocol'>>,
+) {
     const next = new URL(url);
 
     Object.assign(next, parts);

@@ -4,6 +4,7 @@ import {
     addToQueue,
     batchSize,
     homePages,
+    isHttpUrl,
     isInternalHost,
     isInternalUrl,
     isSiteUrl,
@@ -76,6 +77,15 @@ describe('isSiteUrl', () => {
         expect(isSiteUrl('https://acme.de/b', hosts)).toBe(true);
         expect(isSiteUrl('https://blog.acme.com/c', hosts)).toBe(false);
         expect(isSiteUrl('https://other.com/d', hosts)).toBe(false);
+    });
+});
+
+describe('isHttpUrl', () => {
+    it('holds a URL over http, in any case, and never one over https or another scheme', () => {
+        expect(isHttpUrl('http://acme.com/a')).toBe(true);
+        expect(isHttpUrl('HTTP://acme.com/a')).toBe(true);
+        expect(isHttpUrl('https://acme.com/a')).toBe(false);
+        expect(isHttpUrl('ftp://acme.com/a')).toBe(false);
     });
 });
 

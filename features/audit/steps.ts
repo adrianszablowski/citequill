@@ -7,6 +7,7 @@ import {
     siteClient,
 } from '@/features/audit/client';
 import { type Finding, findingRows } from '@/features/audit/finding';
+import { judgeMobile } from '@/features/audit/mobile-checks';
 import { observeRead, type Read } from '@/features/audit/observe';
 import { checkPage } from '@/features/audit/page-checks';
 import {
@@ -20,6 +21,7 @@ import {
 import {
     contentPaths,
     hostVariants,
+    judgeHttpTwin,
     judgeMissingPath,
     judgeStaging,
     judgeVariant,
@@ -72,7 +74,7 @@ import { rowsPerWrite, writeSitePages } from '@/features/audit/site-pages';
 import { sitemapChecks } from '@/features/audit/sitemap-checks';
 import { readSitemaps } from '@/features/audit/sitemaps';
 import { writeScore } from '@/features/audit/write-score';
-import type { Fetched } from '@/features/crawl/fetch';
+import { type Fetched, phoneHeaders } from '@/features/crawl/fetch';
 import { pagePath } from '@/features/pages/draft';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -296,6 +298,7 @@ export async function readPages(
         isDisallowed: googlebotBlocks(files),
         locales: site.locales,
         hosts: site.access.hosts,
+        homes: site.homes,
         previousRedirects: new Map(
             previous.flatMap(({ url, redirect_to }) =>
                 redirect_to ? [[url, redirect_to] as const] : [],
@@ -596,7 +599,16 @@ export async function probeSite(
             .from('audit_findings')
             .delete()
             .eq('audit_id', auditId)
-            .eq('check', 'host-variants'),
+            .in('check', ['host-variants', 'mobile-content-differs']),
+    );
+
+    await done(
+        supabase
+            .from('audit_findings')
+            .delete()
+            .eq('audit_id', auditId)
+            .eq('check', 'https-missing')
+            .contains('detail', { reason: 'no-redirect' }),
     );
 
     await done(
@@ -629,9 +641,40 @@ export async function probeSite(
                 url: variant.url,
                 method: 'GET' as const,
                 judge: (fetched: Fetched) =>
-                    judgeVariant(url, variant, fetched),
+                    variant.variant === 'http'
+                        ? judgeHttpTwin(url, fetched)
+                        : judgeVariant(url, variant, fetched),
             })),
         ),
+        ...sample.flatMap((url) => {
+            let desktop: Fetched | undefined;
+
+            return [
+                {
+                    url,
+                    method: 'GET' as const,
+                    judge: (fetched: Fetched) => {
+                        desktop = fetched;
+
+                        return null;
+                    },
+                },
+                {
+                    url,
+                    method: 'GET' as const,
+                    headers: phoneHeaders,
+                    judge: (phone: Fetched) =>
+                        desktop
+                            ? judgeMobile(
+                                  url,
+                                  desktop,
+                                  phone,
+                                  site.access.hosts,
+                              )
+                            : null,
+                },
+            ];
+        }),
         ...stagingHosts(
             (audit.linked_hosts ?? {}) as LinkedHosts,
             site.domain,
@@ -656,7 +699,10 @@ export async function probeSite(
             break;
         }
 
-        const fetched = await client.read(probe.url, { method: probe.method });
+        const fetched = await client.read(probe.url, {
+            method: probe.method,
+            headers: probe.headers,
+        });
 
         if (fetched === null) {
             break;
@@ -864,6 +910,7 @@ type Site = Awaited<ReturnType<typeof loadSite>>;
 interface Probe {
     url: string;
     method: 'GET' | 'HEAD';
+    headers?: Record<string, string>;
     judge: (fetched: Fetched) => Finding | null;
 }
 

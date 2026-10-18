@@ -4,6 +4,7 @@ import {
     contentPathPrefixes,
     contentPaths,
     hostVariants,
+    judgeHttpTwin,
     judgeMissingPath,
     judgeStaging,
     judgeVariant,
@@ -199,38 +200,47 @@ describe('judgeMissingPath', () => {
 });
 
 describe('hostVariants', () => {
-    it('gives the twin host, the slash toggled and the last segment capitalised', () => {
+    it('gives the twin host, the slash toggled, the last segment capitalised and the http twin', () => {
         expect(hostVariants('https://acme.com/blog/post?x=1')).toEqual([
             { url: 'https://www.acme.com/blog/post?x=1', variant: 'www' },
             { url: 'https://acme.com/blog/post/?x=1', variant: 'slash' },
             { url: 'https://acme.com/blog/Post?x=1', variant: 'case' },
+            { url: 'http://acme.com/blog/post?x=1', variant: 'http' },
         ]);
 
         expect(hostVariants('https://www.acme.com/about/')).toEqual([
             { url: 'https://acme.com/about/', variant: 'www' },
             { url: 'https://www.acme.com/about', variant: 'slash' },
             { url: 'https://www.acme.com/About/', variant: 'case' },
+            { url: 'http://www.acme.com/about/', variant: 'http' },
         ]);
+    });
+
+    it('gives an http URL no http twin', () => {
+        expect(
+            hostVariants('http://acme.com/about').map(({ variant }) => variant),
+        ).toEqual(['www', 'slash', 'case']);
     });
 
     it('skips a variant equal to the original: the slash and case of a root, a segment with no letter or one already capitalised', () => {
         expect(hostVariants('https://acme.com/')).toEqual([
             { url: 'https://www.acme.com/', variant: 'www' },
+            { url: 'http://acme.com/', variant: 'http' },
         ]);
 
         expect(
             hostVariants('https://acme.com/2026').map(({ variant }) => variant),
-        ).toEqual(['www', 'slash']);
+        ).toEqual(['www', 'slash', 'http']);
 
         expect(
             hostVariants('https://acme.com/About').map(
                 ({ variant }) => variant,
             ),
-        ).toEqual(['www', 'slash']);
+        ).toEqual(['www', 'slash', 'http']);
     });
 
     it('capitalises the first plain letter after digits and percent escapes, never a hex digit of an escape', () => {
-        expect(hostVariants('https://acme.com/12-%c3%b3w-ab').at(-1)).toEqual({
+        expect(hostVariants('https://acme.com/12-%c3%b3w-ab').at(2)).toEqual({
             url: 'https://acme.com/12-%c3%b3W-ab',
             variant: 'case',
         });
@@ -289,6 +299,57 @@ describe('judgeVariant', () => {
             [{ url: variant.url, status: 404 }],
         ]) {
             expect(judgeVariant(page, variant, answer(hops))).toBeNull();
+        }
+    });
+});
+
+describe('judgeHttpTwin', () => {
+    const page = 'https://acme.com/a';
+    const twin = 'http://acme.com/a';
+
+    it('reports an http twin that ends on 200 over http, a canonical to https notwithstanding, on the page', () => {
+        const hops = [
+            { url: twin, status: 301 },
+            { url: 'http://www.acme.com/a', status: 200 },
+        ];
+
+        expect(judgeHttpTwin(page, answer(hops))).toEqual({
+            check: 'https-missing',
+            url: page,
+            subject: twin,
+            detail: {
+                reason: 'no-redirect',
+                status: 200,
+                finalUrl: 'http://www.acme.com/a',
+                hops,
+            },
+        });
+
+        expect(
+            judgeHttpTwin(
+                page,
+                answer([{ url: twin, status: 200 }], {
+                    body: `<head><link rel="canonical" href="${page}"></head>`,
+                    headers: { link: `<${page}>; rel="canonical"` },
+                }),
+            ),
+        ).toMatchObject({ check: 'https-missing', subject: twin });
+    });
+
+    it('finds nothing in a twin that redirects to https, or answers 4xx or 5xx', () => {
+        for (const hops of [
+            [
+                { url: twin, status: 301 },
+                { url: page, status: 200 },
+            ],
+            [{ url: twin, status: 404 }],
+            [{ url: twin, status: 503 }],
+            [
+                { url: twin, status: 301 },
+                { url: 'https://acme.com/gone', status: 404 },
+            ],
+        ]) {
+            expect(judgeHttpTwin(page, answer(hops))).toBeNull();
         }
     });
 });

@@ -74,6 +74,7 @@ export const probeChecks = [
     'redirect-to-home',
     'host-variants',
     'staging-indexable',
+    'mobile-content-differs',
 ] as const satisfies readonly CheckId[];
 
 export const resourceChecks = [
@@ -330,6 +331,8 @@ const pageScopes = {
 
         return answered.filter((page) => sample.has(page.url));
     },
+    homes: (pages: ScoredPage[], homes: string[]) =>
+        pages.filter((page) => homes.includes(page.url) && isAnswered(page)),
     'images-or-sample': (pages: ScoredPage[], homes: string[]) => {
         const sampled = new Set(pageScopes.sampled(pages, homes));
 
@@ -458,6 +461,18 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'link-count': 'indexable',
     'anchor-generic': 'indexable',
     'anchor-empty': 'indexable',
+    'https-missing': 'read',
+    'https-to-http': 'redirected',
+    'tls-invalid': 'read',
+    'mixed-active': 'answered',
+    'mixed-passive': 'answered',
+    'form-on-http': 'answered',
+    'content-type-wrong': 'answered',
+    'protocol-relative': 'answered',
+    'security-headers': 'homes',
+    'viewport-missing': 'indexable',
+    'viewport-misconfigured': 'indexable',
+    'mobile-content-differs': 'sampled',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

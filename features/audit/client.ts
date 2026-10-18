@@ -15,6 +15,7 @@ import {
     type FetchDeps,
     type FetchOptions,
     fetchPublic,
+    tlsErrorOf,
 } from '@/features/crawl/fetch';
 
 export interface SiteRequests {
@@ -84,7 +85,10 @@ export function siteClient({
 
     async function read(
         url: string,
-        { method = 'GET' }: Pick<FetchOptions, 'method'> = {},
+        {
+            method = 'GET',
+            headers,
+        }: Pick<FetchOptions, 'method' | 'headers'> = {},
     ): Promise<Fetched | Error | null> {
         for (let attempt = 1; ; attempt += 1) {
             const slot = takeSlot(pace, interval, Date.now());
@@ -99,6 +103,7 @@ export function siteClient({
             try {
                 const fetched = await fetchPublic(url, pacedDeps(), {
                     method,
+                    headers,
                     botSecret: { value: botSecret, hosts },
                 });
 
@@ -106,7 +111,9 @@ export function siteClient({
                     return fetched;
                 }
             } catch (error) {
-                pace = afterAnswer(pace, null, null, interval, Date.now());
+                if (tlsErrorOf(error) === null) {
+                    pace = afterAnswer(pace, null, null, interval, Date.now());
+                }
 
                 return error instanceof Error
                     ? error

@@ -9,6 +9,7 @@ import {
     checksRun,
     crossPageChecks,
     gateCap,
+    gates,
     hasMark,
     isSelfCanonical,
     isSiteCheck,
@@ -368,6 +369,25 @@ describe('scoreAudit', () => {
         ]);
     });
 
+    const gatesOnTwin = (sitePageId: string) => {
+        const twin = {
+            ...finding('https-missing', sitePageId, {
+                subject: 'http://acme.com/',
+            }),
+            detail: { reason: 'no-redirect' },
+        };
+
+        return gates(['https-missing'], pages(30), [twin], new Set(), [home]);
+    };
+
+    it('caps the score for https-missing from the http twin of the home page', () => {
+        expect(gatesOnTwin('page-0')).toBe(true);
+    });
+
+    it('caps nothing for https-missing from the http twin of one page of 30 read', () => {
+        expect(gatesOnTwin('page-1')).toBe(false);
+    });
+
     it('caps nothing for a recommendation, however common its failure', () => {
         const result = score(
             ['html-over-2mb'],
@@ -490,6 +510,31 @@ describe('appliesTo', () => {
         expect(
             appliesTo('page-5xx', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-0', 'page-1']);
+    });
+
+    it('applies security-headers to the home pages that answered, a noindex home included, and tls-invalid to every URL read', () => {
+        const de = 'https://acme.de/';
+
+        const sitePages = [
+            page(0, { is_indexable: false }),
+            page(1),
+            page(2, {
+                url: de,
+                status_code: 301,
+                redirect_to: 'https://acme.de/en',
+            }),
+            page(3, { status_code: null, is_indexable: false }),
+        ];
+
+        expect(
+            appliesTo('security-headers', sitePages, [home, de]).map(
+                ({ id }) => id,
+            ),
+        ).toEqual(['page-0']);
+
+        expect(
+            appliesTo('tls-invalid', sitePages, [home]).map(({ id }) => id),
+        ).toEqual(['page-0', 'page-1', 'page-2', 'page-3']);
     });
 
     it('applies the external link checks to the indexable pages with an external link', () => {
@@ -665,8 +710,20 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 108 checks, the links and the two image hints that need a request included', () => {
-        expect(shippedChecks).toHaveLength(108);
+    it('ships 120 checks, the HTTPS and viewport checks and the phone comparison included', () => {
+        expect(shippedChecks).toHaveLength(120);
+    });
+
+    it('scores the probed half of https-missing with its Read half, so a stopped audit keeps the check and skips the phone comparison', () => {
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        expect(stopped).toContain('https-missing');
+        expect(stopped).toContain('tls-invalid');
+        expect(stopped).not.toContain('mobile-content-differs');
     });
 
     it('leaves the resource and cross-page link checks out of a stopped audit, and keeps the Read half of og-image-bad', () => {

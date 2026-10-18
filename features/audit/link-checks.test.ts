@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-    anchorFindingsPerPage,
-    linkChecks,
-    linkCountLimit,
-} from '@/features/audit/link-checks';
+import { findingsPerPage } from '@/features/audit/finding';
+import { linkChecks, linkCountLimit } from '@/features/audit/link-checks';
 import { readAuditPage } from '@/features/audit/page';
 import { siteHosts } from '@/features/audit/queue';
 
@@ -123,9 +120,9 @@ describe('linkChecks', () => {
         expect(checks(links(linkCountLimit))).toEqual([]);
     });
 
-    it(`reports each distinct href and selector once, ${anchorFindingsPerPage} per check and page at most, with the total in the detail`, () => {
+    it(`reports each distinct href and selector once, ${findingsPerPage} per check and page at most, with the total in the detail`, () => {
         const generic = Array.from(
-            { length: anchorFindingsPerPage + 5 },
+            { length: findingsPerPage + 5 },
             (_, i) => `<a href="/p${i}" class="more">more</a>`,
         ).join('');
 
@@ -133,7 +130,7 @@ describe('linkChecks', () => {
             `${menu}${generic}<a href="/p0" class="more">more</a><a href="/p0" class="other">more</a>`,
         );
 
-        expect(found).toHaveLength(anchorFindingsPerPage);
+        expect(found).toHaveLength(findingsPerPage);
 
         expect(found[0]).toEqual({
             check: 'anchor-generic',
@@ -141,7 +138,7 @@ describe('linkChecks', () => {
             subject: '/p0',
             selector: 'a.more',
             snippet: '<a href="/p0" class="more">more</a>',
-            detail: { total: anchorFindingsPerPage + 6 },
+            detail: { total: findingsPerPage + 6 },
         });
     });
 });

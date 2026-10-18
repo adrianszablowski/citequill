@@ -61,6 +61,27 @@ describe('catalogue', () => {
         expect(checkOf('link-rendered-only').needs).toBe('rendered');
     });
 
+    it('holds the 9 rows of the HTTPS table, hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'https'),
+        ).toHaveLength(9);
+
+        expect(checkOf('protocol-relative').severity).toBe('hint');
+        expect(checkOf('security-headers').severity).toBe('hint');
+        expect(checkOf('mixed-active').isGate).toBe(true);
+    });
+
+    it('holds the 5 rows of the Mobile table, hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'mobile'),
+        ).toHaveLength(5);
+
+        expect(checkOf('mobile-layout')).toMatchObject({
+            severity: 'hint',
+            needs: 'rendered',
+        });
+    });
+
     it('weighs the seven areas to 100', () => {
         expect(
             Object.values(areaWeights).reduce<number>(

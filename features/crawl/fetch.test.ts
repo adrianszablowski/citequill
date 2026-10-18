@@ -9,12 +9,79 @@ import {
     isPublicAddress,
     maxBytes,
     maxHops,
+    phoneHeaders,
+    phoneUserAgent,
+    tlsErrorOf,
     userAgent,
 } from '@/features/crawl/fetch';
 
 describe('userAgent', () => {
     it('names CitequillBot and points at the bot page', () => {
         expect(userAgent).toBe('CitequillBot/1.0 (+https://citequill.com/bot)');
+    });
+
+    it('names CitequillBot in the phone fetch too, after the user agent of Chrome on Android, and asks for the mobile page', () => {
+        expect(phoneUserAgent).toMatch(
+            /^Mozilla\/5\.0 \(Linux; Android 10; K\)/,
+        );
+
+        expect(phoneUserAgent).toContain(' Mobile Safari/537.36 ');
+        expect(phoneUserAgent.endsWith(` ${userAgent}`)).toBe(true);
+
+        expect(phoneHeaders).toEqual({
+            'user-agent': phoneUserAgent,
+            'sec-ch-ua-mobile': '?1',
+        });
+    });
+});
+
+describe('tlsErrorOf', () => {
+    const fetchFailed = (code: string) =>
+        Object.assign(new TypeError('fetch failed'), {
+            cause: Object.assign(new Error('certificate problem'), { code }),
+        });
+
+    it("reads the certificate and TLS version codes of Node's fetch from the cause", () => {
+        for (const code of [
+            'CERT_HAS_EXPIRED',
+            'ERR_TLS_CERT_ALTNAME_INVALID',
+            'DEPTH_ZERO_SELF_SIGNED_CERT',
+            'SELF_SIGNED_CERT_IN_CHAIN',
+            'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+            'UNABLE_TO_GET_ISSUER_CERT',
+            'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+            'CERT_UNTRUSTED',
+            'CERT_NOT_YET_VALID',
+            'ERR_SSL_UNSUPPORTED_PROTOCOL',
+            'ERR_TLS_HANDSHAKE_TIMEOUT',
+            'ERR_SSL_WRONG_VERSION_NUMBER',
+        ]) {
+            expect(tlsErrorOf(fetchFailed(code)), code).toBe(code);
+        }
+    });
+
+    it('reads the code of the error itself when there is no cause', () => {
+        expect(
+            tlsErrorOf(
+                Object.assign(new Error('expired'), {
+                    code: 'CERT_HAS_EXPIRED',
+                }),
+            ),
+        ).toBe('CERT_HAS_EXPIRED');
+    });
+
+    it('gives null for a time-out, a refused connection, a guard error or no error', () => {
+        for (const error of [
+            fetchFailed('ECONNREFUSED'),
+            fetchFailed('ENOTFOUND'),
+            new DOMException('The operation timed out.', 'TimeoutError'),
+            new Error('acme.com points at a private address.'),
+            Object.assign(new TypeError('fetch failed'), { cause: 'text' }),
+            null,
+            undefined,
+        ]) {
+            expect(tlsErrorOf(error)).toBeNull();
+        }
     });
 });
 

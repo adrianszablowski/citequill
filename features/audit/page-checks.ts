@@ -1,7 +1,9 @@
 import type { Finding } from '@/features/audit/finding';
 import { heuristicChecks } from '@/features/audit/heuristic-checks';
+import { httpsChecks } from '@/features/audit/https-checks';
 import { imageChecks } from '@/features/audit/image-checks';
 import { linkChecks } from '@/features/audit/link-checks';
+import { viewportChecks } from '@/features/audit/mobile-checks';
 import {
     canonicalOf,
     googlebotDirectives,
@@ -11,7 +13,13 @@ import {
 } from '@/features/audit/observe';
 import { onPageChecks } from '@/features/audit/on-page-checks';
 import { type CanonicalTag, thinPageWords } from '@/features/audit/page';
-import { type Fetched, maxBytes, maxHops } from '@/features/crawl/fetch';
+import { isHttpUrl } from '@/features/audit/queue';
+import {
+    type Fetched,
+    maxBytes,
+    maxHops,
+    tlsErrorOf,
+} from '@/features/crawl/fetch';
 import { absolute } from '@/features/crawl/html';
 import {
     isSameLanguage,
@@ -25,6 +33,7 @@ export interface PageCheckContext {
     isDisallowed: (url: string) => boolean;
     locales: Locale[];
     hosts: string[];
+    homes: string[];
     previousRedirects: ReadonlyMap<string, string>;
     now: number;
 }
@@ -46,7 +55,23 @@ export function checkPage(
     }
 
     if (outcome instanceof Error) {
-        return [{ check: 'page-5xx', url, detail: { error: outcome.message } }];
+        const code = tlsErrorOf(outcome);
+
+        return [
+            code === null
+                ? { check: 'page-5xx', url, detail: { error: outcome.message } }
+                : {
+                      check: 'tls-invalid',
+                      url,
+                      detail: {
+                          code,
+                          error:
+                              (outcome.cause instanceof Error &&
+                                  outcome.cause.message) ||
+                              outcome.message,
+                      },
+                  },
+        ];
     }
 
     const status = outcome.hops[0].status;
@@ -85,8 +110,16 @@ function redirectFindings(url: string, { hops }: Fetched): Finding[] {
         detail: { hops: hops as unknown as Json },
     };
 
+    const downgrade = isHttpUrl(hops[0].url)
+        ? undefined
+        : hops.find((hop) => isHttpUrl(hop.url));
+
+    const downgrades: Finding[] = downgrade
+        ? [{ ...redirect, check: 'https-to-http', subject: downgrade.url }]
+        : [];
+
     if (new Set(hops.map((hop) => hop.url)).size < hops.length) {
-        return [{ ...redirect, check: 'redirect-loop' }];
+        return [{ ...redirect, check: 'redirect-loop' }, ...downgrades];
     }
 
     const isStillRedirecting = hops.length > maxHops && isRedirect(last.status);
@@ -102,7 +135,7 @@ function redirectFindings(url: string, { hops }: Fetched): Finding[] {
             : []),
     ];
 
-    return checks.map((check) => ({ ...redirect, check }));
+    return [...checks.map((check) => ({ ...redirect, check })), ...downgrades];
 }
 
 function temporaryFindings(
@@ -197,6 +230,8 @@ function answerFindings(
         findings.push({ check: 'canonical-missing', url });
     }
 
+    findings.push(...httpsChecks(url, fetched, page, context));
+
     return page
         ? [
               ...findings,
@@ -208,6 +243,7 @@ function answerFindings(
                         ...onPageChecks(url, page, fetched, now),
                         ...imageChecks(url, page.images),
                         ...linkChecks(url, page, context),
+                        ...viewportChecks(url, page),
                     ]
                   : []),
           ]
@@ -270,7 +306,7 @@ function canonicalFindings(
 
     if (
         target &&
-        ((url.startsWith('https:') && target.startsWith('http:')) ||
+        ((!isHttpUrl(url) && isHttpUrl(target)) ||
             (pageLocale && targetLocale && pageLocale !== targetLocale))
     ) {
         findings.push({

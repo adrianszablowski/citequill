@@ -7,7 +7,12 @@ import {
     siteClient,
 } from '@/features/audit/client';
 import { attemptsPerUrl, firstPace } from '@/features/audit/pacing';
-import { botSecretHeader, type FetchDeps } from '@/features/crawl/fetch';
+import {
+    botSecretHeader,
+    type FetchDeps,
+    phoneHeaders,
+    phoneUserAgent,
+} from '@/features/crawl/fetch';
 
 function client(answers: (() => Response)[], deadline = Date.now() + 60_000) {
     const calls: string[] = [];
@@ -83,6 +88,42 @@ describe('siteClient', () => {
 
         expect(await site.read('https://acme.com/')).toBeInstanceOf(Error);
         expect(site.pace().streak).toBe(1);
+    });
+
+    it('returns a certificate failure as the error without counting it in the streak', async () => {
+        const expired = () => {
+            throw Object.assign(new TypeError('fetch failed'), {
+                cause: Object.assign(new Error('certificate has expired'), {
+                    code: 'CERT_HAS_EXPIRED',
+                }),
+            });
+        };
+
+        const serverError = () => new Response('', { status: 500 });
+        const { site } = client([serverError, expired]);
+
+        await site.read('https://acme.com/a');
+
+        expect(site.pace().streak).toBe(1);
+
+        const failed = await site.read('https://acme.com/b');
+
+        expect(failed).toBeInstanceOf(TypeError);
+        expect((failed as Error).message).toBe('fetch failed');
+        expect(site.pace().streak).toBe(1);
+        expect(site.counts.requests).toBe(2);
+    });
+
+    it('sends the headers it is given over the defaults, the bot secret still on the site', async () => {
+        const { site, sent } = client([ok]);
+
+        await site.read('https://acme.com/', { headers: phoneHeaders });
+
+        const headers = new Headers(sent[0].headers);
+
+        expect(headers.get('user-agent')).toBe(phoneUserAgent);
+        expect(headers.get('sec-ch-ua-mobile')).toBe('?1');
+        expect(headers.get(botSecretHeader)).toBe('s3cret');
     });
 
     it('leaves a URL unread when its turn comes after the step budget', async () => {

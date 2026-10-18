@@ -13,7 +13,7 @@ import {
     probeSite,
     readPages,
 } from '@/features/audit/steps';
-import type { Fetched } from '@/features/crawl/fetch';
+import { type Fetched, phoneHeaders } from '@/features/crawl/fetch';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type FakeQuery, fakeSupabase } from '@/lib/supabase/fake';
@@ -125,7 +125,10 @@ function database({
 function answering(
     read: (
         url: string,
-        options?: { method?: 'GET' | 'HEAD' },
+        options?: {
+            method?: 'GET' | 'HEAD';
+            headers?: Record<string, string>;
+        },
     ) => Promise<Fetched | Error | null>,
     pace = firstPace,
 ) {
@@ -672,7 +675,13 @@ describe('probeSite', () => {
             [
                 ['delete'],
                 ['eq', 'audit_id', 'audit'],
-                ['eq', 'check', 'host-variants'],
+                ['in', 'check', ['host-variants', 'mobile-content-differs']],
+            ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'https-missing'],
+                ['contains', 'detail', { reason: 'no-redirect' }],
             ],
             [
                 ['delete'],
@@ -709,7 +718,7 @@ describe('probeSite', () => {
         expect(markProgress).toHaveBeenCalledWith('run');
     });
 
-    it('sends GET to the missing paths, the host variants and the staging host, and adds its requests to the counts', async () => {
+    it('sends GET to the missing paths, the host variants with the http twin, the desktop and phone fetch of the sample and the staging host, and adds its requests to the counts', async () => {
         const fake = probedSite();
         const client = answerProbes();
 
@@ -722,18 +731,25 @@ describe('probeSite', () => {
         const methods = client.read.mock.calls.map(([url, options]) => [
             url.replace(/[a-z0-9]{24}$/, '<random>'),
             options?.method,
+            options?.headers === phoneHeaders ? 'phone' : options?.headers,
         ]);
 
         expect(methods).toEqual([
-            ['https://acme.com/<random>', 'GET'],
-            ['https://www.acme.com/<random>', 'GET'],
-            ['https://acme.de/<random>', 'GET'],
-            ['https://www.acme.de/<random>', 'GET'],
-            ['https://www.acme.com/', 'GET'],
-            ['https://www.acme.com/pricing', 'GET'],
-            ['https://acme.com/pricing/', 'GET'],
-            ['https://acme.com/Pricing', 'GET'],
-            [staging, 'GET'],
+            ['https://acme.com/<random>', 'GET', undefined],
+            ['https://www.acme.com/<random>', 'GET', undefined],
+            ['https://acme.de/<random>', 'GET', undefined],
+            ['https://www.acme.de/<random>', 'GET', undefined],
+            ['https://www.acme.com/', 'GET', undefined],
+            ['http://acme.com/', 'GET', undefined],
+            ['https://www.acme.com/pricing', 'GET', undefined],
+            ['https://acme.com/pricing/', 'GET', undefined],
+            ['https://acme.com/Pricing', 'GET', undefined],
+            ['http://acme.com/pricing', 'GET', undefined],
+            [home, 'GET', undefined],
+            [home, 'GET', 'phone'],
+            [pricing, 'GET', undefined],
+            [pricing, 'GET', 'phone'],
+            [staging, 'GET', undefined],
         ]);
 
         expect(call(fake, 'audits', 'update')[0].calls[0][1]).toEqual({
@@ -741,6 +757,48 @@ describe('probeSite', () => {
             host_429_count: 2,
             host_5xx_count: 4,
         });
+    });
+
+    it('reports an http twin served over http and a phone page that differs, and judges no phone fetch whose desktop fetch failed', async () => {
+        const fake = probedSite();
+
+        const page = (title: string) =>
+            `<html><head><title>${title}</title></head><body><h1>${title}</h1></body></html>`;
+
+        answering(async (url, options) => {
+            if (url === 'http://acme.com/pricing') {
+                return answered([{ url, status: 200 }], page('Pricing'));
+            }
+
+            if (url === home) {
+                return options?.headers
+                    ? answered([{ url, status: 200 }], page('Phone'))
+                    : new Error('reset');
+            }
+
+            if (url === pricing) {
+                return answered(
+                    [{ url, status: 200 }],
+                    page(options?.headers ? 'Phone' : 'Pricing'),
+                );
+            }
+
+            return notFound(url);
+        });
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => [
+                row.check,
+                row.site_page_id,
+                row.subject,
+            ]),
+        ).toEqual([
+            ['robots-googlebot-blocked', null, 'content-paths'],
+            ['https-missing', 'id of pricing', 'http://acme.com/pricing'],
+            ['mobile-content-differs', 'id of pricing', pricing],
+        ]);
     });
 
     it('stops probing when the step budget runs out and keeps what it found', async () => {

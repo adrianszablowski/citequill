@@ -1,13 +1,11 @@
 import { isGenericAnchor } from '@/features/audit/anchors';
-import type { Finding } from '@/features/audit/finding';
+import { type Finding, findingsPerPage } from '@/features/audit/finding';
 import type { Anchor, AuditPage } from '@/features/audit/page';
 import { isSiteUrl, withoutSlash } from '@/features/audit/queue';
 
 export interface LinkContext {
     hosts: string[];
 }
-
-export const anchorFindingsPerPage = 20;
 
 export const linkCountLimit = 3_000;
 
@@ -99,16 +97,14 @@ function anchorFindings(
         distinct.set(`${anchor.href}\n${anchor.selector}`, anchor);
     }
 
-    return [...distinct.values()]
-        .slice(0, anchorFindingsPerPage)
-        .map((anchor) => ({
-            check,
-            url,
-            subject: anchor.href,
-            selector: anchor.selector,
-            snippet: anchor.snippet,
-            detail: { total: distinct.size },
-        }));
+    return [...distinct.values()].slice(0, findingsPerPage).map((anchor) => ({
+        check,
+        url,
+        subject: anchor.href,
+        selector: anchor.selector,
+        snippet: anchor.snippet,
+        detail: { total: distinct.size },
+    }));
 }
 
 function linkCountFindings(url: string, anchors: Anchor[]): Finding[] {

@@ -154,12 +154,16 @@ describe('readAuditPage', () => {
         expect(page.h1s).toEqual(['Plans for teams', 'Again']);
 
         expect(
-            page.headings.map(({ level, selector }) => [level, selector]),
+            page.headings.map(({ level, selector, text }) => [
+                level,
+                selector,
+                text,
+            ]),
         ).toEqual([
-            [2, 'h2'],
-            [1, 'h1'],
-            [3, 'h3#faq'],
-            [1, 'h1'],
+            [2, 'h2', 'Menu'],
+            [1, 'h1', 'Plans for teams'],
+            [3, 'h3#faq', 'FAQ'],
+            [1, 'h1', 'Again'],
         ]);
     });
 
@@ -249,6 +253,89 @@ describe('readAuditPage', () => {
             'https://cdn.com/b.css',
             'https://acme.com/app.js',
         ]);
+    });
+
+    it('reads every resource attribute with its raw text and its absolute URL, srcset candidates one by one', () => {
+        const page = readAuditPage(
+            `<html><head><script src=" //cdn.com/a.js "></script><link rel="stylesheet" href="http://acme.com/b.css"></head><body>
+<iframe src="https://maps.com/x"></iframe>
+<picture><source srcset="/a.webp 1x, http://acme.com/a2.webp 2x"><img src="/a.png" srcset="/a-400.png 400w,/a-800.png 800w" alt=""></picture>
+<video src="/v.mp4" poster="//cdn.com/p.jpg"><source src="/v.webm"></video><audio src="/s.mp3"></audio>
+<svg><script src="/in-svg.js"></script></svg></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(
+            page.resources.map(({ kind, raw, url }) => [kind, raw, url]),
+        ).toEqual([
+            ['script', '//cdn.com/a.js', 'https://cdn.com/a.js'],
+            ['stylesheet', 'http://acme.com/b.css', 'http://acme.com/b.css'],
+            ['iframe', 'https://maps.com/x', 'https://maps.com/x'],
+            ['image', '/a.webp', 'https://acme.com/a.webp'],
+            ['image', 'http://acme.com/a2.webp', 'http://acme.com/a2.webp'],
+            ['image', '/a.png', 'https://acme.com/a.png'],
+            ['image', '/a-400.png', 'https://acme.com/a-400.png'],
+            ['image', '/a-800.png', 'https://acme.com/a-800.png'],
+            ['media', '/v.mp4', 'https://acme.com/v.mp4'],
+            ['image', '//cdn.com/p.jpg', 'https://cdn.com/p.jpg'],
+            ['media', '/v.webm', 'https://acme.com/v.webm'],
+            ['media', '/s.mp3', 'https://acme.com/s.mp3'],
+        ]);
+
+        expect(page.resources[0]).toMatchObject({
+            selector: 'script',
+            snippet: '<script src=" //cdn.com/a.js "></script>',
+        });
+    });
+
+    it('reads every form with its absolute action and whether it asks for a password, and a password field outside any form', () => {
+        const page = readAuditPage(
+            '<html><body><form class="login" action="http://acme.com/login"><input type="Password"></form><form id="search"><input name="q"></form><input type="password"></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(
+            page.forms.map(({ selector, action, hasPassword }) => [
+                selector,
+                action,
+                hasPassword,
+            ]),
+        ).toEqual([
+            ['form.login', 'http://acme.com/login', true],
+            ['form#search', null, false],
+        ]);
+
+        expect(page.hasLonePassword).toBe(true);
+
+        expect(
+            readAuditPage(
+                '<html><body><form><input type="password"></form></body></html>',
+                'https://acme.com/',
+            ).hasLonePassword,
+        ).toBe(false);
+    });
+
+    it('reads the content of the first viewport meta in any case, or null when there is none', () => {
+        expect(
+            readAuditPage(
+                '<html><head><meta name="Viewport" content=" width=device-width "><meta name="viewport" content="width=600"></head></html>',
+                'https://acme.com/',
+            ).viewport,
+        ).toBe('width=device-width');
+
+        expect(
+            readAuditPage(
+                '<html><head><meta name="viewport"></head></html>',
+                'https://acme.com/',
+            ).viewport,
+        ).toBe('');
+
+        expect(
+            readAuditPage(
+                '<html><head><meta name="description" content="width=1"></head></html>',
+                'https://acme.com/',
+            ).viewport,
+        ).toBeNull();
     });
 
     it('keeps the raw links whose fragment is a page number', () => {

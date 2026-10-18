@@ -39,6 +39,7 @@ export interface DescriptionTag {
 
 export interface Heading extends PageElement {
     level: number;
+    text: string;
 }
 
 export interface Plugin extends PageElement {
@@ -57,6 +58,17 @@ export interface Anchor extends PageElement {
     name: string;
     hasImage: boolean;
     rel: string[];
+}
+
+export interface ResourceRef extends PageElement {
+    kind: 'script' | 'stylesheet' | 'iframe' | 'image' | 'media';
+    raw: string;
+    url: string | null;
+}
+
+export interface PageForm extends PageElement {
+    action: string | null;
+    hasPassword: boolean;
 }
 
 export interface AuditPage {
@@ -84,7 +96,11 @@ export interface AuditPage {
     alternates: Alternate[];
     anchors: Anchor[];
     links: string[];
+    resources: ResourceRef[];
     assets: string[];
+    forms: PageForm[];
+    hasLonePassword: boolean;
+    viewport: string | null;
     hiddenBlocks: HiddenBlock[];
     fragmentLinks: string[];
     mainText: string;
@@ -153,12 +169,21 @@ export function readAuditPage(html: string, url: string): AuditPage {
             content && keys.includes(key) ? [content] : [],
         );
 
-    const assets = $('link[rel~="stylesheet" i][href], script[src]')
-        .toArray()
-        .map((element) =>
-            absolute($(element).attr('href') ?? $(element).attr('src'), base),
-        )
-        .filter((href) => href !== null);
+    const resources = inDocument(resourceSelector).flatMap((tag) =>
+        resourceAttributes
+            .filter(({ selector }) => $(tag).is(selector))
+            .flatMap(({ kind, attribute }) =>
+                (attribute === 'srcset'
+                    ? srcsetUrls(tag.attribs.srcset)
+                    : [tag.attribs[attribute].trim()]
+                ).map((raw) => ({
+                    ...located(tag),
+                    kind,
+                    raw,
+                    url: absolute(raw, base),
+                })),
+            ),
+    );
 
     const canonicals = $('link[rel="canonical"]')
         .toArray()
@@ -199,6 +224,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         headings: inDocument('h1, h2, h3, h4, h5, h6').map((tag) => ({
             ...located(tag),
             level: Number(tag.name.slice(1)),
+            text: $(tag).text().replace(/\s+/g, ' ').trim(),
         })),
         hasDoctype: $.root()
             .contents()
@@ -253,7 +279,26 @@ export function readAuditPage(html: string, url: string): AuditPage {
         alternates: alternatesOf($, base),
         anchors,
         links: [...new Set(anchors.flatMap((anchor) => anchor.url ?? []))],
-        assets: [...new Set(assets)],
+        resources,
+        assets: [
+            ...new Set(
+                resources.flatMap(({ kind, url }) =>
+                    url && (kind === 'script' || kind === 'stylesheet')
+                        ? [url]
+                        : [],
+                ),
+            ),
+        ],
+        forms: inDocument('form').map((tag) => ({
+            ...located(tag),
+            action: absolute(tag.attribs.action, base),
+            hasPassword: $(tag).find(password).length > 0,
+        })),
+        hasLonePassword: inDocument(password).some(
+            (input) => $(input).closest('form').length === 0,
+        ),
+        viewport:
+            metas.find(({ keys }) => keys[0] === 'viewport')?.content ?? null,
         hiddenBlocks: hiddenBlocksOf($, body),
         fragmentLinks: anchors.flatMap(({ href }) =>
             href !== null && pageFragment.test(href) ? [href] : [],
@@ -276,6 +321,33 @@ export function readAuditPage(html: string, url: string): AuditPage {
         wordCount: mainText ? mainText.split(' ').length : 0,
     };
 }
+
+const resourceAttributes = [
+    { selector: 'script[src]', kind: 'script', attribute: 'src' },
+    {
+        selector: 'link[rel~="stylesheet" i][href]',
+        kind: 'stylesheet',
+        attribute: 'href',
+    },
+    { selector: 'iframe[src]', kind: 'iframe', attribute: 'src' },
+    { selector: 'img[src]', kind: 'image', attribute: 'src' },
+    { selector: 'img[srcset]', kind: 'image', attribute: 'srcset' },
+    { selector: 'source[srcset]', kind: 'image', attribute: 'srcset' },
+    { selector: 'source[src]', kind: 'media', attribute: 'src' },
+    { selector: 'video[src]', kind: 'media', attribute: 'src' },
+    { selector: 'audio[src]', kind: 'media', attribute: 'src' },
+    { selector: 'video[poster]', kind: 'image', attribute: 'poster' },
+] as const satisfies readonly {
+    selector: string;
+    kind: ResourceRef['kind'];
+    attribute: string;
+}[];
+
+const resourceSelector = resourceAttributes
+    .map(({ selector }) => selector)
+    .join(', ') as cheerio.SelectorType;
+
+const password = 'input[type="password" i]';
 
 const pluginTypes = [
     'application/x-shockwave-flash',
@@ -302,6 +374,13 @@ function documentElements($: cheerio.CheerioAPI) {
                     $(tag).parents('html').length > 0 &&
                     $(tag).parents('svg').length === 0,
             );
+}
+
+function srcsetUrls(srcset: string) {
+    return srcset
+        .split(',')
+        .map((candidate) => candidate.trim().split(/\s+/)[0])
+        .filter(Boolean);
 }
 
 function locatedOf($: cheerio.CheerioAPI) {

@@ -25,6 +25,8 @@ export interface Tag {
 
 export const snippetLength = 200;
 
+export const findingsPerPage = 20;
+
 export function findingRows(
     findings: Finding[],
     { projectId, auditId, pageIds }: FindingContext,

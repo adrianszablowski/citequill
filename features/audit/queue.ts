@@ -53,6 +53,10 @@ export function isSiteUrl(url: string, hosts: string[]) {
     return hosts.includes(new URL(url).hostname);
 }
 
+export function isHttpUrl(url: string) {
+    return new URL(url).protocol === 'http:';
+}
+
 export function withoutSlash(url: string) {
     return new URL(url).href.replace(/\/+$/, '');
 }

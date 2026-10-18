@@ -77,6 +77,9 @@ const links = {
     links: `${google}/search/docs/crawling-indexing/links-crawlable`,
     outboundLinks: `${google}/search/docs/crawling-indexing/qualify-outbound-links`,
     coreWebVitals: `${google}/search/docs/appearance/core-web-vitals`,
+    pageExperience: `${google}/search/docs/appearance/page-experience`,
+    httpsSignal: `${google}/search/blog/2014/08/https-as-ranking-signal`,
+    mobileFirst: `${google}/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing`,
     protocol: 'https://www.sitemaps.org/protocol.html',
 };
 
@@ -728,5 +731,77 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Google calls empty link text bad, and reads the alt of the image as the anchor text of a link that is an image.',
         link: links.links,
         fix: 'Give the link text, or an alt to the image inside it, that names the page it opens. An icon link takes an aria-label.',
+    },
+    'https-missing': {
+        name: 'A page is served over HTTP',
+        says: 'Google uses HTTPS as a lightweight ranking signal and encourages every site owner to switch from HTTP to HTTPS.',
+        link: links.httpsSignal,
+        fix: 'Redirect every http address to its https address with a 301, on every host of the site, and link to the https addresses.',
+    },
+    'https-to-http': {
+        name: 'A redirect leads from HTTPS to HTTP',
+        says: 'Google says a redirect from HTTPS to HTTP makes it prefer the HTTP page as canonical very strongly.',
+        link: links.canonicalHowTo,
+        fix: 'Change the redirect rules so every hop stays on https. A rule that sends the URL to http:// before another sends it back is the usual cause.',
+    },
+    'tls-invalid': {
+        name: 'The certificate or the TLS version is refused',
+        says: 'Google says a bad TLS certificate makes it prefer the HTTP page as canonical very strongly, and asks for a certificate that matches the full site URL.',
+        link: links.canonicalHowTo,
+        fix: 'Renew the certificate, or get one that covers this host, www and the bare domain both if you serve both, and turn on TLS 1.2 or 1.3. The finding names the error the audit got.',
+    },
+    'mixed-active': {
+        name: 'A script, stylesheet or frame loads over HTTP',
+        says: 'Google may prefer the HTTP page as canonical when the HTTPS page has insecure dependencies other than images.',
+        link: links.canonicalHowTo,
+        fix: 'Load the file over https, or with an address relative to the page when it is on your own host. Browsers block it over HTTP, so the page can break.',
+    },
+    'mixed-passive': {
+        name: 'An image, a media file or a link uses HTTP on an HTTPS page',
+        says: 'Google’s HTTPS tips advise relative URLs for the resources that reside on your own secure domain.',
+        link: links.httpsSignal,
+        fix: 'Change the address to https, or to one relative to the page for a file on your own host. Point links to your own pages at their https addresses.',
+    },
+    'form-on-http': {
+        name: 'A form sends its data over HTTP',
+        says: 'Google’s page experience guide asks whether your pages are served in a secure fashion.',
+        link: links.pageExperience,
+        fix: 'Serve the page over https, and point the form’s action at an https address or leave the action out.',
+    },
+    'content-type-wrong': {
+        name: 'An HTML page is sent as another file type',
+        says: 'Google reads the file type from the Content-Type header of the answer, and only in some cases from the file extension.',
+        link: links.fileTypes,
+        fix: 'Send the page with Content-Type: text/html; charset=utf-8. A server or CDN rule that matches the address, such as one for .txt or .json files, is the usual cause.',
+    },
+    'protocol-relative': {
+        name: 'A resource address starts with //',
+        says: 'Google’s HTTPS tips of 2014 advise relative URLs for resources on your own secure domain and protocol-relative URLs for other domains.',
+        link: links.httpsSignal,
+        fix: 'Nothing breaks on an https page. Write https:// in full when you next change the template, so the file never loads over HTTP from an http copy of the page.',
+    },
+    'security-headers': {
+        name: 'The home page lacks security headers',
+        says: 'Google names HSTS as one way to make sure it prefers your HTTPS pages as canonical.',
+        link: links.canonicalHowTo,
+        fix: 'Set the headers the finding lists at your server or CDN, for the whole site. Strict-Transport-Security, with a max-age of a year, is the one that touches HTTPS.',
+    },
+    'viewport-missing': {
+        name: 'A page has no viewport meta tag',
+        says: 'Google indexes the version of a page that a phone gets, and recommends responsive design.',
+        link: links.mobileFirst,
+        fix: 'Add <meta name="viewport" content="width=device-width, initial-scale=1"> to the head, so a phone lays the page out at its own width.',
+    },
+    'viewport-misconfigured': {
+        name: 'The viewport meta tag fixes the width or stops zoom',
+        says: 'Google’s page experience guide asks whether your content displays well on mobile devices.',
+        link: links.pageExperience,
+        fix: 'Set the viewport to width=device-width, initial-scale=1, and remove user-scalable=no or user-scalable=0 so readers can zoom.',
+    },
+    'mobile-content-differs': {
+        name: 'A phone gets a different page from a desktop',
+        says: 'Google indexes the version of a page that a phone gets, and asks for the same content, headings, robots meta tags, title and meta description on mobile and desktop.',
+        link: links.mobileFirst,
+        fix: 'Give phones the same text, headings, links and tags as desktops. Put a long section into a tab or an accordion on a phone and keep it in the HTML. The finding lists what differed.',
     },
 };
