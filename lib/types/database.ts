@@ -246,6 +246,7 @@ export type Database = {
                     id: string;
                     is_gated: boolean;
                     is_partial: boolean;
+                    linked_hosts: Json | null;
                     pages_indexable: number;
                     pages_read: number;
                     pages_rendered: number;
@@ -277,6 +278,7 @@ export type Database = {
                     id?: string;
                     is_gated?: boolean;
                     is_partial?: boolean;
+                    linked_hosts?: Json | null;
                     pages_indexable?: number;
                     pages_read?: number;
                     pages_rendered?: number;
@@ -308,6 +310,7 @@ export type Database = {
                     id?: string;
                     is_gated?: boolean;
                     is_partial?: boolean;
+                    linked_hosts?: Json | null;
                     pages_indexable?: number;
                     pages_read?: number;
                     pages_rendered?: number;

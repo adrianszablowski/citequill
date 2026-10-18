@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { siteClient } from '@/features/audit/client';
-import { firstPace } from '@/features/audit/pacing';
+import { firstPace, stoppedAnswering } from '@/features/audit/pacing';
 import type { QueueEntry } from '@/features/audit/queue';
+import { type RobotsFile, robotsFile } from '@/features/audit/robots';
 import {
     checkSite,
     closeAudit,
     discoverSite,
+    probeSite,
     readPages,
 } from '@/features/audit/steps';
 import type { Fetched } from '@/features/crawl/fetch';
@@ -33,6 +35,8 @@ interface Setup {
     queue?: QueueEntry[];
     isPartial?: boolean;
     sitePages?: object[];
+    linkedHosts?: object | null;
+    robotsRules?: RobotsFile[];
     audits?: object[];
 }
 
@@ -41,6 +45,8 @@ function database({
     queue = [],
     isPartial = false,
     sitePages = [],
+    linkedHosts = null,
+    robotsRules = [],
     audits = [
         { id: 'audit', runs: { status: 'running' } },
         { id: 'stopped', runs: { status: 'failed' } },
@@ -76,10 +82,11 @@ function database({
                 ? { data: audits }
                 : {
                       data: {
-                          robots_rules: [],
-                          request_count: 0,
-                          host_429_count: 0,
-                          host_5xx_count: 0,
+                          robots_rules: robotsRules,
+                          linked_hosts: linkedHosts,
+                          request_count: 3,
+                          host_429_count: 1,
+                          host_5xx_count: 2,
                       },
                   };
         },
@@ -106,11 +113,17 @@ function database({
     return fake;
 }
 
-function answering(read: (url: string) => Promise<Fetched | Error | null>) {
+function answering(
+    read: (
+        url: string,
+        options?: { method?: 'GET' | 'HEAD' },
+    ) => Promise<Fetched | Error | null>,
+    pace = firstPace,
+) {
     const client = {
         read: vi.fn(read),
         counts: { requests: 0, tooMany: 0, serverErrors: 0 },
-        pace: () => firstPace,
+        pace: () => pace,
     };
 
     vi.mocked(siteClient).mockReturnValue(client);
@@ -127,6 +140,20 @@ function notFound(url: string): Fetched {
         body: '',
         isTruncated: false,
         hops: [{ url, status: 404 }],
+    };
+}
+
+function answered(hops: { url: string; status: number }[], body = ''): Fetched {
+    const last = hops.at(-1)!;
+
+    return {
+        ok: last.status < 400,
+        status: last.status,
+        url: last.url,
+        headers: new Headers(),
+        body,
+        isTruncated: false,
+        hops,
     };
 }
 
@@ -297,6 +324,242 @@ describe('readPages', () => {
         ]);
 
         expect(markProgress).toHaveBeenCalledWith('run');
+    });
+});
+
+describe('readPages, for the probes', () => {
+    it('adds the first linked URL of each foreign host to the hosts the audit already holds', async () => {
+        const url = 'https://acme.com/about';
+
+        const fake = database({
+            queue: [
+                {
+                    url,
+                    depth: 1,
+                    state: 'queued',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                },
+            ],
+            linkedHosts: { 'old.com': 'https://old.com/' },
+        });
+
+        answering(async () =>
+            answered(
+                [{ url, status: 200 }],
+                '<a href="https://staging.acme.com/pricing">a</a><a href="https://staging.acme.com/other">b</a><a href="/team">c</a><a href="https://www.acme.com/x">d</a>',
+            ),
+        );
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        expect(call(fake, 'audits', 'select')[0].calls[0][1]).toContain(
+            'linked_hosts',
+        );
+
+        expect(call(fake, 'audits', 'update')[0].calls[0][1]).toMatchObject({
+            linked_hosts: {
+                'old.com': 'https://old.com/',
+                'staging.acme.com': 'https://staging.acme.com/pricing',
+            },
+        });
+    });
+});
+
+describe('probeSite', () => {
+    const token = /^[a-z0-9]{24}$/;
+    const home = 'https://acme.com/';
+    const pricing = 'https://acme.com/pricing';
+    const staging = 'https://staging.acme.com/pricing';
+
+    function probedSite() {
+        return database({
+            sitePages: [
+                { id: 'id of home', url: home },
+                { id: 'id of pricing', url: pricing },
+            ],
+            linkedHosts: {
+                'staging.acme.com': staging,
+                'cdn.other.com': 'https://cdn.other.com/a.js',
+            },
+            robotsRules: [
+                robotsFile('https://acme.com/robots.txt', {
+                    ok: true,
+                    status: 200,
+                    hops: [],
+                    body: 'User-agent: *\nDisallow: /shop/',
+                }),
+            ],
+            queue: [
+                {
+                    url: home,
+                    depth: 0,
+                    state: 'read',
+                    in_sitemap: false,
+                    inbound_links: 0,
+                },
+                {
+                    url: 'https://acme.com/shop/1',
+                    depth: 1,
+                    state: 'blocked',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                },
+            ],
+        });
+    }
+
+    function answerProbes() {
+        return answering(async (url) => {
+            const { hostname, pathname } = new URL(url);
+            const isRandom = token.test(pathname.split('/').at(-1)!);
+
+            if (isRandom && hostname === 'acme.com') {
+                return answered([{ url, status: 200 }]);
+            }
+
+            if (isRandom && hostname === 'www.acme.com') {
+                return answered([
+                    { url, status: 301 },
+                    { url: home, status: 200 },
+                ]);
+            }
+
+            if (url === 'https://www.acme.com/pricing' || url === staging) {
+                return answered([{ url, status: 200 }], '<h1>Pricing</h1>');
+            }
+
+            return notFound(url);
+        });
+    }
+
+    it('deletes its own findings first, then writes what the probes and the queue show', async () => {
+        const fake = probedSite();
+
+        answerProbes();
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(
+            call(fake, 'audit_findings', 'delete').map(({ calls }) => calls),
+        ).toEqual([
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                [
+                    'in',
+                    'check',
+                    ['soft-404', 'redirect-to-home', 'staging-indexable'],
+                ],
+                ['is', 'site_page_id', null],
+            ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'host-variants'],
+            ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'robots-googlebot-blocked'],
+                ['contains', 'detail', { reason: 'content-paths' }],
+            ],
+        ]);
+
+        expect(call(fake, 'site_pages', 'select')[0].calls).toEqual([
+            ['select', 'id, url'],
+            ['eq', 'last_audit_id', 'audit'],
+            ['eq', 'is_indexable', true],
+            ['eq', 'status_code', 200],
+            ['is', 'redirect_to', null],
+            ['order', 'url'],
+            ['range', 0, 999],
+        ]);
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => [
+                row.check,
+                row.site_page_id,
+                row.subject,
+            ]),
+        ).toEqual([
+            ['robots-googlebot-blocked', null, 'content-paths'],
+            ['soft-404', null, 'https://acme.com'],
+            ['redirect-to-home', null, 'https://www.acme.com'],
+            ['host-variants', 'id of pricing', 'https://www.acme.com/pricing'],
+            ['staging-indexable', null, 'staging.acme.com'],
+        ]);
+
+        expect(markProgress).toHaveBeenCalledWith('run');
+    });
+
+    it('sends GET to the missing paths, the host variants and the staging host, and adds its requests to the counts', async () => {
+        const fake = probedSite();
+        const client = answerProbes();
+
+        client.counts.requests = 10;
+        client.counts.tooMany = 1;
+        client.counts.serverErrors = 2;
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        const methods = client.read.mock.calls.map(([url, options]) => [
+            url.replace(/[a-z0-9]{24}$/, '<random>'),
+            options?.method,
+        ]);
+
+        expect(methods).toEqual([
+            ['https://acme.com/<random>', 'GET'],
+            ['https://www.acme.com/<random>', 'GET'],
+            ['https://acme.de/<random>', 'GET'],
+            ['https://www.acme.de/<random>', 'GET'],
+            ['https://www.acme.com/', 'GET'],
+            ['https://www.acme.com/pricing', 'GET'],
+            ['https://acme.com/pricing/', 'GET'],
+            ['https://acme.com/Pricing', 'GET'],
+            [staging, 'GET'],
+        ]);
+
+        expect(call(fake, 'audits', 'update')[0].calls[0][1]).toEqual({
+            request_count: 13,
+            host_429_count: 2,
+            host_5xx_count: 4,
+        });
+    });
+
+    it('stops probing when the step budget runs out and keeps what it found', async () => {
+        const fake = probedSite();
+        const client = answering(async () => null);
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(client.read).toHaveBeenCalledTimes(1);
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => row.check),
+        ).toEqual(['robots-googlebot-blocked']);
+    });
+
+    it('fails the audit after its writes when the site stopped answering', async () => {
+        const fake = probedSite();
+
+        answering(async (url) => notFound(url), { ...firstPace, streak: 20 });
+
+        await expect(
+            probeSite('project', 'run', 'audit', firstPace),
+        ).rejects.toThrow(stoppedAnswering);
+
+        expect(fake.writes()).toContain('update audits');
+        expect(markProgress).toHaveBeenCalledWith('run');
+    });
+
+    it('leaves an audit whose run has ended as it is, so a stopped audit sends no probe', async () => {
+        const fake = database({ runStatus: 'failed' });
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(fake.writes()).toEqual([]);
+        expect(siteClient).not.toHaveBeenCalled();
     });
 });
 

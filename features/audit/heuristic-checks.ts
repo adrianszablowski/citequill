@@ -8,6 +8,7 @@ import {
     isUtilityUrl,
     pagination,
     saysNoResults,
+    saysNotFound,
     trackingParameter,
 } from '@/features/audit/url-patterns';
 import { absolute } from '@/features/crawl/html';
@@ -34,6 +35,7 @@ export function heuristicChecks(
     };
 
     return [
+        ...notFoundFindings(url, page),
         ...paginationFindings(url, row, page, directives, isInternal),
         ...spamFindings(url, page),
         ...(isIndexable
@@ -99,6 +101,15 @@ function indexableFindings(
     }
 
     return findings;
+}
+
+function notFoundFindings(url: string, page: AuditPage): Finding[] {
+    const phrase =
+        saysNotFound(page.title ?? '') ?? saysNotFound(page.h1s[0] ?? '');
+
+    return phrase !== null && page.wordCount < notFoundWords
+        ? [{ check: 'soft-404', url, detail: { reason: 'phrase', phrase } }]
+        : [];
 }
 
 function paginationFindings(
@@ -167,3 +178,5 @@ function spamFindings(url: string, page: AuditPage): Finding[] {
 }
 
 const emptyFacetWords = 100;
+
+const notFoundWords = 100;

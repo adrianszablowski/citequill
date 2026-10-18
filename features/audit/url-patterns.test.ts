@@ -6,6 +6,7 @@ import {
     isUtilityUrl,
     pagination,
     saysNoResults,
+    saysNotFound,
     trackingParameter,
 } from '@/features/audit/url-patterns';
 
@@ -152,5 +153,23 @@ describe('saysNoResults', () => {
         expect(saysNoResults('10 results')).toBe(false);
         expect(saysNoResults('120 results for shoes')).toBe(false);
         expect(saysNoResults('Results of the survey')).toBe(false);
+    });
+});
+
+describe('saysNotFound', () => {
+    it('names the error phrase a text says, in English or Polish, in any case', () => {
+        expect(saysNotFound('Page Not Found | Acme')).toBe('page not found');
+        expect(saysNotFound('Not found')).toBe('not found');
+        expect(saysNotFound('Error 404')).toBe('404');
+        expect(saysNotFound('Błąd 404 – Acme')).toBe('błąd 404');
+        expect(saysNotFound('Strona nie istnieje')).toBe('strona nie istnieje');
+        expect(saysNotFound('Nie znaleziono')).toBe('nie znaleziono');
+    });
+
+    it('reads only a whole phrase, so a longer number or word is not one', () => {
+        expect(saysNotFound('Order 4040')).toBeNull();
+        expect(saysNotFound('Room 404b')).toBeNull();
+        expect(saysNotFound('Founders not foundational')).toBeNull();
+        expect(saysNotFound('Pricing')).toBeNull();
     });
 });

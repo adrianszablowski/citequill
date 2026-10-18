@@ -87,6 +87,10 @@ export function saysNoResults(text: string) {
     return noResults.test(text);
 }
 
+export function saysNotFound(text: string) {
+    return notFound.exec(text)?.[0].toLowerCase() ?? null;
+}
+
 const searchSegments = new Set(['search', 'szukaj', 'wyszukiwarka']);
 
 const searchParameters = new Set(['s', 'q', 'query', 'search', 'szukaj']);
@@ -147,10 +151,25 @@ const noResultsPhrases = [
     'nie znaleziono produktów',
 ];
 
-const noResults = new RegExp(
-    `(?<![\\p{L}\\p{N}])(?:${noResultsPhrases.join('|')})(?![\\p{L}\\p{N}])`,
-    'iu',
-);
+const noResults = wholePhrase(noResultsPhrases);
+
+const notFoundPhrases = [
+    'page not found',
+    'not found',
+    '404',
+    'nie znaleziono',
+    'strona nie istnieje',
+    'błąd 404',
+];
+
+const notFound = wholePhrase(notFoundPhrases);
+
+function wholePhrase(phrases: string[]) {
+    return new RegExp(
+        `(?<![\\p{L}\\p{N}])(?:${phrases.join('|')})(?![\\p{L}\\p{N}])`,
+        'iu',
+    );
+}
 
 function segmentsOf(url: URL) {
     return url.pathname

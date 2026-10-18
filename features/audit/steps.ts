@@ -1,7 +1,7 @@
 import { FatalError } from 'workflow';
 
 import { type SiteClient, siteClient } from '@/features/audit/client';
-import { findingRows } from '@/features/audit/finding';
+import { type Finding, findingRows } from '@/features/audit/finding';
 import { observeRead, type Read } from '@/features/audit/observe';
 import { checkPage } from '@/features/audit/page-checks';
 import {
@@ -12,6 +12,18 @@ import {
     stepBudgetMs,
     stoppedAnswering,
 } from '@/features/audit/pacing';
+import {
+    contentPaths,
+    hostVariants,
+    judgeMissingPath,
+    judgeStaging,
+    judgeVariant,
+    type LinkedHosts,
+    linkedHosts,
+    randomPathTargets,
+    randomPathToken,
+    stagingHosts,
+} from '@/features/audit/probes';
 import {
     addToQueue,
     homePages,
@@ -29,12 +41,14 @@ import {
     robotsFile,
 } from '@/features/audit/robots';
 import { robotsChecks } from '@/features/audit/robots-checks';
+import { variantSample } from '@/features/audit/sample';
 import { crossPageChecks, scoredPageColumns } from '@/features/audit/score';
 import { siteChecks, siteHalves } from '@/features/audit/site-checks';
 import { rowsPerWrite, writeSitePages } from '@/features/audit/site-pages';
 import { sitemapChecks } from '@/features/audit/sitemap-checks';
 import { readSitemaps } from '@/features/audit/sitemaps';
 import { writeScore } from '@/features/audit/write-score';
+import type { Fetched } from '@/features/crawl/fetch';
 import { pagePath } from '@/features/pages/draft';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -174,7 +188,7 @@ export async function readPages(
             supabase
                 .from('audits')
                 .select(
-                    'robots_rules, request_count, host_429_count, host_5xx_count',
+                    'robots_rules, linked_hosts, request_count, host_429_count, host_5xx_count',
                 )
                 .eq('id', auditId)
                 .single(),
@@ -293,6 +307,11 @@ export async function readPages(
                 pages_read: [...next.values()].filter(
                     (entry) => entry.state === 'read',
                 ).length,
+                linked_hosts: linkedHosts(
+                    (audit.linked_hosts ?? {}) as LinkedHosts,
+                    observed.flatMap(({ page }) => page?.links ?? []),
+                    site.access.hosts,
+                ),
                 request_count: audit.request_count + client.counts.requests,
                 host_429_count: audit.host_429_count + client.counts.tooMany,
                 host_5xx_count:
@@ -312,6 +331,168 @@ export async function readPages(
         hasWork: [...next.values()].some((entry) => entry.state === 'queued'),
         pace: client.pace(),
     };
+}
+
+export async function probeSite(
+    projectId: string,
+    runId: string,
+    auditId: string,
+    pace: Pace,
+) {
+    'use step';
+
+    const supabase = createAdminClient();
+
+    const run = await one(
+        supabase.from('runs').select('status').eq('id', runId).single(),
+    );
+
+    if (run.status !== 'running') {
+        return;
+    }
+
+    const [site, audit, queue, pages] = await Promise.all([
+        loadSite(projectId),
+        one(
+            supabase
+                .from('audits')
+                .select(
+                    'robots_rules, linked_hosts, request_count, host_429_count, host_5xx_count',
+                )
+                .eq('id', auditId)
+                .single(),
+        ),
+        loadQueue(auditId),
+        all((from, to) =>
+            supabase
+                .from('site_pages')
+                .select('id, url')
+                .eq('last_audit_id', auditId)
+                .eq('is_indexable', true)
+                .eq('status_code', 200)
+                .is('redirect_to', null)
+                .order('url')
+                .range(from, to),
+        ),
+    ]);
+
+    const client = siteClient({
+        ...site.access,
+        pace,
+        deadline: Date.now() + stepBudgetMs,
+    });
+
+    await done(
+        supabase
+            .from('audit_findings')
+            .delete()
+            .eq('audit_id', auditId)
+            .in('check', ['soft-404', 'redirect-to-home', 'staging-indexable'])
+            .is('site_page_id', null),
+    );
+
+    await done(
+        supabase
+            .from('audit_findings')
+            .delete()
+            .eq('audit_id', auditId)
+            .eq('check', 'host-variants'),
+    );
+
+    await done(
+        supabase
+            .from('audit_findings')
+            .delete()
+            .eq('audit_id', auditId)
+            .eq('check', 'robots-googlebot-blocked')
+            .contains('detail', { reason: 'content-paths' }),
+    );
+
+    const sample = variantSample(
+        pages.map((page) => page.url),
+        site.homes,
+    );
+
+    const probes: Probe[] = [
+        ...randomPathTargets(
+            site.access.hosts,
+            site.homes,
+            randomPathToken(),
+        ).map(({ base, url }) => ({
+            url,
+            method: 'GET' as const,
+            judge: (fetched: Fetched) =>
+                judgeMissingPath(fetched, base, site.homes, site.access.hosts),
+        })),
+        ...sample.flatMap((url) =>
+            hostVariants(url).map((variant) => ({
+                url: variant.url,
+                method: 'GET' as const,
+                judge: (fetched: Fetched) =>
+                    judgeVariant(url, variant, fetched),
+            })),
+        ),
+        ...stagingHosts(
+            (audit.linked_hosts ?? {}) as LinkedHosts,
+            site.domain,
+        ).map(([host, url]) => ({
+            url,
+            method: 'GET' as const,
+            judge: (fetched: Fetched) => judgeStaging(host, url, fetched),
+        })),
+    ];
+
+    const findings = [
+        contentPaths(
+            queue.values(),
+            googlebotBlocks(
+                (audit.robots_rules ?? []) as unknown as RobotsFile[],
+            ),
+        ),
+    ];
+
+    for (const probe of probes) {
+        if (hasStopped(client.pace())) {
+            break;
+        }
+
+        const fetched = await client.read(probe.url, { method: probe.method });
+
+        if (fetched === null) {
+            break;
+        }
+
+        findings.push(fetched instanceof Error ? null : probe.judge(fetched));
+    }
+
+    await writeFindings(
+        findingRows(
+            findings.filter((finding) => finding !== null),
+            {
+                projectId,
+                auditId,
+                pageIds: new Map(pages.map((page) => [page.url, page.id])),
+            },
+        ),
+    );
+
+    await done(
+        supabase
+            .from('audits')
+            .update({
+                request_count: audit.request_count + client.counts.requests,
+                host_429_count: audit.host_429_count + client.counts.tooMany,
+                host_5xx_count:
+                    audit.host_5xx_count + client.counts.serverErrors,
+            })
+            .eq('id', auditId),
+    );
+
+    await markProgress(runId);
+
+    if (hasStopped(client.pace())) {
+        throw new FatalError(stoppedAnswering);
+    }
 }
 
 export async function checkSite(
@@ -475,6 +656,12 @@ export async function closeAudit(
 
 type Site = Awaited<ReturnType<typeof loadSite>>;
 
+interface Probe {
+    url: string;
+    method: 'GET' | 'HEAD';
+    judge: (fetched: Fetched) => Finding | null;
+}
+
 async function loadSite(projectId: string) {
     const supabase = createAdminClient();
 
@@ -498,6 +685,7 @@ async function loadSite(projectId: string) {
     const baseUrls = siteBaseUrls(project.domain, locales);
 
     return {
+        domain: project.domain,
         locales,
         obeyRobots: project.obey_robots,
         access: {

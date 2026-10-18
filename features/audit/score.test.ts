@@ -13,6 +13,7 @@ import {
     isSelfCanonical,
     isSiteCheck,
     type Mark,
+    probeChecks,
     scoreAudit,
     type ScoredFinding,
     type ScoredPage,
@@ -320,6 +321,51 @@ describe('scoreAudit', () => {
         expect(marked.score).toBe(100);
     });
 
+    it('caps the score for a finding of a page-scoped gate check with no page, which counts no failing page, and a mark on its subject lifts it', () => {
+        const base = 'https://acme.com';
+        const missing = finding('soft-404', null, { subject: base });
+        const result = score(['soft-404'], pages(20), [missing]);
+
+        expect(result.is_gated).toBe(true);
+        expect(result.score).toBe(gateCap);
+
+        expect(result.results).toEqual([
+            {
+                check: 'soft-404',
+                pages_checked: 20,
+                pages_failed: 0,
+                pages_intended: 0,
+            },
+        ]);
+
+        expect(appliesTo('soft-404', pages(2), [home])).toHaveLength(2);
+
+        const marked = score(
+            ['soft-404'],
+            pages(20),
+            [missing],
+            [{ check: 'soft-404', url: base, selector: null }],
+        );
+
+        expect(marked.is_gated).toBe(false);
+        expect(marked.intended).toEqual([missing.id]);
+    });
+
+    it('checks host-variants on the probed sample alone, so its share counts the pages that were probed', () => {
+        const result = score(['host-variants'], pages(100), [
+            finding('host-variants', 'page-1', { severity: '2' }),
+        ]);
+
+        expect(result.results).toEqual([
+            {
+                check: 'host-variants',
+                pages_checked: 11,
+                pages_failed: 1,
+                pages_intended: 0,
+            },
+        ]);
+    });
+
     it('caps nothing for a recommendation, however common its failure', () => {
         const result = score(
             ['html-over-2mb'],
@@ -357,7 +403,31 @@ describe('checksRun', () => {
 
         expect(complete).toEqual(expect.arrayContaining([...crossPageChecks]));
         expect(complete).not.toContain('noindex-blocked');
-        expect(complete).not.toContain('soft-404');
+        expect(complete).not.toContain('shell');
+    });
+
+    it('leaves out the probe checks when an audit was stopped, and keeps soft-404, whose phrase half runs in Read', () => {
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        expect(probeChecks.some((check) => stopped.includes(check))).toBe(
+            false,
+        );
+
+        expect(stopped).toContain('soft-404');
+
+        const complete = checksRun({
+            hasCrossPageChecks: true,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        expect(complete).toEqual(
+            expect.arrayContaining([...probeChecks, 'soft-404']),
+        );
     });
 
     it('leaves out the robots and sitemap checks when the audit stopped before Discover wrote the robots rules', () => {
@@ -376,15 +446,23 @@ describe('checksRun', () => {
 describe('appliesTo', () => {
     it('applies the pages-not-in-sitemap check to no page when the site lists none', () => {
         expect(
-            appliesTo('page-not-in-sitemap', [page(1, { in_sitemap: false })]),
+            appliesTo(
+                'page-not-in-sitemap',
+                [page(1, { in_sitemap: false })],
+                [home],
+            ),
         ).toEqual([]);
 
         expect(
-            appliesTo('page-not-in-sitemap', [
-                page(1, { in_sitemap: false }),
-                page(2, { canonical_url: 'https://acme.com/p1' }),
-                page(3, { canonical_url: 'https://acme.com/p3' }),
-            ]).map(({ id }) => id),
+            appliesTo(
+                'page-not-in-sitemap',
+                [
+                    page(1, { in_sitemap: false }),
+                    page(2, { canonical_url: 'https://acme.com/p1' }),
+                    page(3, { canonical_url: 'https://acme.com/p3' }),
+                ],
+                [home],
+            ).map(({ id }) => id),
         ).toEqual(['page-1', 'page-3']);
     });
 
@@ -404,13 +482,12 @@ describe('appliesTo', () => {
         ];
 
         expect(
-            appliesTo('redirect-chain', sitePages).map(({ id }) => id),
+            appliesTo('redirect-chain', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-1']);
 
-        expect(appliesTo('page-5xx', sitePages).map(({ id }) => id)).toEqual([
-            'page-0',
-            'page-1',
-        ]);
+        expect(
+            appliesTo('page-5xx', sitePages, [home]).map(({ id }) => id),
+        ).toEqual(['page-0', 'page-1']);
     });
 });
 
@@ -423,15 +500,15 @@ describe('the on-page checks', () => {
         ];
 
         expect(
-            appliesTo('img-alt-missing', sitePages).map(({ id }) => id),
+            appliesTo('img-alt-missing', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-0']);
 
-        expect(appliesTo('svg-no-role', sitePages).map(({ id }) => id)).toEqual(
-            ['page-0'],
-        );
+        expect(
+            appliesTo('svg-no-role', sitePages, [home]).map(({ id }) => id),
+        ).toEqual(['page-0']);
 
         expect(
-            appliesTo('title-missing', sitePages).map(({ id }) => id),
+            appliesTo('title-missing', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-0', 'page-1']);
     });
 
@@ -555,8 +632,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 88 checks, the heuristics of indexability included', () => {
-        expect(shippedChecks).toHaveLength(88);
+    it('ships 92 checks, the probes of indexability included', () => {
+        expect(shippedChecks).toHaveLength(92);
     });
 
     it('compares pages for near-duplicate, so a stopped audit skips it, and scores the two-half checks from their Read half', () => {

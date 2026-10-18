@@ -86,10 +86,10 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         fix: 'Make /robots.txt answer 200 with your rules, or 404 when you have none. Check the server or CDN rule that answers it with an error.',
     },
     'robots-googlebot-blocked': {
-        name: 'robots.txt blocks Google from the home page',
-        says: 'Google does not index a page Googlebot cannot reach.',
+        name: 'robots.txt blocks Google from the home page or many linked pages',
+        says: 'robots.txt tells Google’s crawler which URLs of the site it may fetch, and a page it blocks can appear in Google’s results only as a URL with no description.',
         link: links.robotsIntro,
-        fix: 'Remove the Disallow rule that matches your home page from the Googlebot or * group of robots.txt.',
+        fix: 'Remove the Disallow rules that match your home page, or the paths the finding names, from the Googlebot or * group of robots.txt. Keep a rule only for pages Google need not crawl.',
     },
     'robots-assets-blocked': {
         name: 'robots.txt blocks a stylesheet or script a page needs',
@@ -156,6 +156,18 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Google stops showing a page in its results after its unavailable_after date.',
         link: links.robotsMeta,
         fix: 'Remove the unavailable_after rule if the page should stay in Google, or take the page down if its time is over.',
+    },
+    'soft-404': {
+        name: 'A missing page answers as if it existed',
+        says: 'Google reports a soft 404 for a page that answers 200 while its content is an error message or an empty page, and it does not index a URL that answers 4xx.',
+        link: links.statusCodes,
+        fix: 'Make the server answer 404 or 410 for a URL that does not exist, with the error page as its body.',
+    },
+    'staging-indexable': {
+        name: 'A staging host can be indexed',
+        says: 'Google says robots.txt is not a way to keep a page out of its results, and names a noindex rule or a password for that.',
+        link: links.robotsIntro,
+        fix: 'Put the staging host behind a password, or give its pages a noindex meta tag or X-Robots-Tag header, and remove the links to it from the live site.',
     },
     'html-over-2mb': {
         name: 'The HTML is over 2 MB',
@@ -235,6 +247,12 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         link: links.redirects,
         fix: 'Replace the meta refresh with a 301 redirect on the server when your host lets you.',
     },
+    'redirect-to-home': {
+        name: 'A missing page redirects to the home page',
+        says: 'Google reads a redirect as a move of the page to its target, and a permanent one as a sign that the target should be canonical.',
+        link: links.redirects,
+        fix: 'Make a URL that does not exist answer 404 or 410, and redirect a removed page only to the page that replaces it.',
+    },
     'redirect-slash-or-case': {
         name: 'A redirect only fixes a slash or letter case',
         says: 'Google follows these redirects, and each one is a hop your links could avoid.',
@@ -270,6 +288,12 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'A canonical should point to a page in the same language, and an HTTP canonical can make Google prefer the HTTP version.',
         link: links.canonicalHowTo,
         fix: 'Point each language version’s canonical at itself, over https, and connect the languages with hreflang.',
+    },
+    'host-variants': {
+        name: 'Another address of a page answers without naming the canonical',
+        says: 'When a page can be reached in several ways, such as on several host names, Google asks you to pick one URL as canonical and point the others at it.',
+        link: links.canonicalHowTo,
+        fix: 'Redirect the other host, the other trailing slash form and other letter cases to the URL you link to with a 301, or give the page at those addresses a canonical that names the URL you link to.',
     },
     'canonical-to-error': {
         name: 'The canonical points to a page that cannot be indexed',

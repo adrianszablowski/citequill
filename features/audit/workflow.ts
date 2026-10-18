@@ -2,6 +2,7 @@ import {
     checkSite,
     closeAudit,
     discoverSite,
+    probeSite,
     readPages,
     type Reading,
 } from '@/features/audit/steps';
@@ -24,6 +25,7 @@ export async function auditSite(
             reading = await readPages(projectId, runId, auditId, reading.pace);
         }
 
+        await probeSite(projectId, runId, auditId, reading.pace);
         await checkSite(projectId, runId, auditId);
         await closeAudit(projectId, runId, auditId);
     } catch (error) {

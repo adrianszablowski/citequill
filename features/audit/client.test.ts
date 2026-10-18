@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { siteClient } from '@/features/audit/client';
 import { attemptsPerUrl, firstPace } from '@/features/audit/pacing';
-import type { FetchDeps } from '@/features/crawl/fetch';
+import { botSecretHeader, type FetchDeps } from '@/features/crawl/fetch';
 
 function client(answers: (() => Response)[], deadline = Date.now() + 60_000) {
     const calls: string[] = [];
+    const sent: RequestInit[] = [];
 
     const deps: FetchDeps = {
-        fetch: async (input) => {
+        fetch: async (input, init = {}) => {
             calls.push(String(input));
+            sent.push(init);
 
             const answer = answers.shift();
 
@@ -24,6 +26,7 @@ function client(answers: (() => Response)[], deadline = Date.now() + 60_000) {
 
     return {
         calls,
+        sent,
         site: siteClient({
             botSecret: 's3cret',
             hosts: ['acme.com'],
@@ -82,5 +85,30 @@ describe('siteClient', () => {
 
         expect(await site.read('https://acme.com/')).toBeNull();
         expect(calls).toEqual([]);
+    });
+
+    it('sends GET by default and HEAD when asked, with no body read', async () => {
+        const { site, sent } = client([ok, ok]);
+
+        expect(await site.read('https://acme.com/')).toMatchObject({
+            body: '<h1>Acme</h1>',
+        });
+
+        expect(
+            await site.read('https://acme.com/', { method: 'HEAD' }),
+        ).toMatchObject({ status: 200, body: '' });
+
+        expect(sent.map(({ method }) => method)).toEqual(['GET', 'HEAD']);
+    });
+
+    it("sends the bot secret to the site's own hosts and never to a foreign one", async () => {
+        const { site, sent } = client([ok, ok]);
+
+        await site.read('https://acme.com/');
+        await site.read('https://staging.acme.com/');
+
+        expect(
+            sent.map((init) => new Headers(init.headers).get(botSecretHeader)),
+        ).toEqual(['s3cret', null]);
     });
 });

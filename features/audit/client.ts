@@ -12,6 +12,7 @@ import {
     defaultDeps,
     type Fetched,
     type FetchDeps,
+    type FetchOptions,
     fetchPublic,
 } from '@/features/crawl/fetch';
 
@@ -74,7 +75,10 @@ export function siteClient({
         };
     }
 
-    async function read(url: string): Promise<Fetched | Error | null> {
+    async function read(
+        url: string,
+        { method = 'GET' }: Pick<FetchOptions, 'method'> = {},
+    ): Promise<Fetched | Error | null> {
         for (let attempt = 1; ; attempt += 1) {
             const slot = takeSlot(pace, interval, Date.now());
 
@@ -87,6 +91,7 @@ export function siteClient({
 
             try {
                 const fetched = await fetchPublic(url, pacedDeps(), {
+                    method,
                     botSecret: { value: botSecret, hosts },
                 });
 

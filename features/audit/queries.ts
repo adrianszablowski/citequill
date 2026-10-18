@@ -239,7 +239,7 @@ export async function getFindings(auditId: string, query: FindingListQuery) {
     if (locale) {
         request = request
             .eq('site_pages.locale', locale)
-            .not('site_pages', 'is', null);
+            .or('site_page_id.is.null,site_pages.not.is.null');
     }
 
     return paged(await request);

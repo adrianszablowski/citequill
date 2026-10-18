@@ -81,6 +81,55 @@ describe('heuristicChecks', () => {
         expect(checks('/login', { isIndexable: false })).toEqual([]);
     });
 
+    it('reports a short page whose title or first H1 says it was not found, indexable or not', () => {
+        expect(
+            check('/missing', {
+                head: '<title>Page not found – Acme</title>',
+                body: `<main>${words(20)}</main>`,
+            }),
+        ).toEqual([
+            {
+                check: 'soft-404',
+                url: 'https://acme.com/missing',
+                detail: { reason: 'phrase', phrase: 'page not found' },
+            },
+        ]);
+
+        expect(
+            check('/brak', {
+                body: `<main><h1>Strona nie istnieje</h1>${words(20)}</main>`,
+                isIndexable: false,
+            }),
+        ).toMatchObject([
+            {
+                check: 'soft-404',
+                detail: { reason: 'phrase', phrase: 'strona nie istnieje' },
+            },
+        ]);
+    });
+
+    it('leaves a page that says not found alone when it has 100 words or more, or says it only in a later H1', () => {
+        expect(
+            checks('/guide', {
+                head: '<title>404 errors explained</title>',
+                body: `<main>${words(99)}</main>`,
+            }),
+        ).toEqual(['soft-404']);
+
+        expect(
+            checks('/guide', {
+                head: '<title>404 errors explained</title>',
+                body: `<main>${words(100)}</main>`,
+            }),
+        ).toEqual([]);
+
+        expect(
+            checks('/faq', {
+                body: `<main><h1>FAQ</h1><h1>Not found?</h1>${words(20)}</main>`,
+            }),
+        ).toEqual([]);
+    });
+
     it('reports a later page of a series with noindex, or a canonical to the series or its first page', () => {
         expect(
             check('/blog/page/3', {

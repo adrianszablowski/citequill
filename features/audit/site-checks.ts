@@ -67,7 +67,7 @@ export function siteChecks(rows: SiteRow[], context: SiteContext) {
             collapsed(row.description),
         ),
         ...boilerplateFindings(rows, context),
-        ...appliesTo('page-not-in-sitemap', rows)
+        ...appliesTo('page-not-in-sitemap', rows, context.homes)
             .filter((row) => !row.in_sitemap)
             .map((row): Finding => ({
                 check: 'page-not-in-sitemap',

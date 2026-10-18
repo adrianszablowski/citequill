@@ -5,6 +5,7 @@ import {
     isScored,
     scoredChecks,
 } from '@/features/audit/catalogue';
+import { variantSample } from '@/features/audit/sample';
 import type { Tables, TablesInsert } from '@/lib/types/database';
 
 export type ScoredPage = Pick<
@@ -64,11 +65,17 @@ export const crossPageChecks = [
     'description-duplicate',
 ] as const satisfies readonly CheckId[];
 
+export const probeChecks = [
+    'redirect-to-home',
+    'host-variants',
+    'staging-indexable',
+] as const satisfies readonly CheckId[];
+
 export function scoreAudit({ checks, pages, findings, marks, homes }: Audited) {
     const ran = new Set<string>(checks);
     const counted = findings.filter((finding) => ran.has(finding.check));
     const intended = intendedFindings(counted, marks, pages);
-    const results = checkResults(checks, pages, counted, intended);
+    const results = checkResults(checks, pages, counted, intended, homes);
     const isGated = gates(checks, pages, counted, intended, homes);
     const score = auditScore(results);
 
@@ -95,7 +102,7 @@ export function checksRun({
     obeyRobots: boolean;
 }) {
     const skipped = new Set<CheckId>([
-        ...(hasCrossPageChecks ? [] : crossPageChecks),
+        ...(hasCrossPageChecks ? [] : [...crossPageChecks, ...probeChecks]),
         ...(obeyRobots ? ['noindex-blocked' as const] : []),
     ]);
 
@@ -114,10 +121,14 @@ export function hasMark(marks: Mark[], mark: Mark) {
     );
 }
 
-export function appliesTo(check: CheckId, pages: ScoredPage[]) {
+export function appliesTo(
+    check: CheckId,
+    pages: ScoredPage[],
+    homes: string[],
+) {
     const scope = scopes[check];
 
-    return scope && scope !== 'site' ? pageScopes[scope](pages) : [];
+    return scope && scope !== 'site' ? pageScopes[scope](pages, homes) : [];
 }
 
 export function intendedFindings(
@@ -152,12 +163,15 @@ export function checkResults(
     pages: ScoredPage[],
     findings: ScoredFinding[],
     intended: ReadonlySet<string>,
+    homes: string[],
 ): CheckResult[] {
     return checks.flatMap((check) => {
-        const failing = failingPages(check, pages, findings);
+        const failing = failingPages(check, pages, findings, homes);
 
         const pagesChecked =
-            scopes[check] === 'site' ? 1 : appliesTo(check, pages).length;
+            scopes[check] === 'site'
+                ? 1
+                : appliesTo(check, pages, homes).length;
 
         return pagesChecked > 0
             ? [
@@ -217,12 +231,18 @@ export function gates(
     return checks
         .filter((check) => checkOf(check).isGate)
         .some((check) => {
-            if (scopes[check] === 'site') {
-                return open.some((finding) => finding.check === check);
+            if (
+                open.some(
+                    (finding) =>
+                        finding.check === check &&
+                        finding.site_page_id === null,
+                )
+            ) {
+                return true;
             }
 
-            const failing = failingPages(check, pages, open);
-            const applies = appliesTo(check, pages);
+            const failing = failingPages(check, pages, open, homes);
+            const applies = appliesTo(check, pages, homes);
             const failed = applies.filter((page) => failing.has(page.id));
 
             if (failed.some((page) => homes.includes(page.url))) {
@@ -282,6 +302,20 @@ const pageScopes = {
     listed: (pages: ScoredPage[]) => pages.filter((page) => page.in_sitemap),
     images: (pages: ScoredPage[]) =>
         pages.filter((page) => page.is_indexable && page.image_count > 0),
+    sampled: (pages: ScoredPage[], homes: string[]) => {
+        const answered = pages.filter(
+            (page) => page.is_indexable && isAnswered(page),
+        );
+
+        const sample = new Set(
+            variantSample(
+                answered.map((page) => page.url),
+                homes,
+            ),
+        );
+
+        return answered.filter((page) => sample.has(page.url));
+    },
     'self-canonical': (pages: ScoredPage[]) =>
         pages.some((page) => page.in_sitemap)
             ? pages.filter(isSelfCanonical)
@@ -304,6 +338,10 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'sitemap-lastmod': 'site',
     'sitemap-priority': 'site',
     'sitemap-extensions': 'site',
+    'redirect-to-home': 'site',
+    'staging-indexable': 'site',
+    'soft-404': 'answered',
+    'host-variants': 'sampled',
     'noindex-blocked': 'answered',
     'noindex-content': 'answered',
     'robots-conflict': 'answered',
@@ -393,8 +431,12 @@ function failingPages(
     check: CheckId,
     pages: ScoredPage[],
     findings: ScoredFinding[],
+    homes: string[],
 ) {
-    const inScope = new Set(appliesTo(check, pages).map((page) => page.id));
+    const inScope = new Set(
+        appliesTo(check, pages, homes).map((page) => page.id),
+    );
+
     const failing = new Map<string, string[]>();
 
     for (const finding of findings) {

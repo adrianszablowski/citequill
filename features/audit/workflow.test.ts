@@ -9,6 +9,7 @@ vi.mock('@/features/audit/steps', () => {
     return {
         discoverSite: vi.fn(),
         readPages: vi.fn(),
+        probeSite: vi.fn(async () => {}),
         checkSite: vi.fn(async () => {}),
         closeAudit: vi.fn(async () => {}),
     };
@@ -29,7 +30,7 @@ beforeEach(() => {
 });
 
 describe('auditSite', () => {
-    it('reads while a step reports work left, hands each step the pace of the last, then checks the site and closes', async () => {
+    it('reads while a step reports work left, hands each step the pace of the last, then probes, checks the site and closes', async () => {
         const paces = [1, 2, 3].map((streak) => ({ ...firstPace, streak }));
 
         mocked.readPages
@@ -55,8 +56,19 @@ describe('auditSite', () => {
             'audit',
         );
 
-        expect(mocked.checkSite.mock.invocationCallOrder[0]).toBeGreaterThan(
+        expect(mocked.probeSite).toHaveBeenCalledWith(
+            'project',
+            'run',
+            'audit',
+            paces[2],
+        );
+
+        expect(mocked.probeSite.mock.invocationCallOrder[0]).toBeGreaterThan(
             mocked.readPages.mock.invocationCallOrder[2],
+        );
+
+        expect(mocked.checkSite.mock.invocationCallOrder[0]).toBeGreaterThan(
+            mocked.probeSite.mock.invocationCallOrder[0],
         );
 
         expect(mocked.closeAudit.mock.invocationCallOrder[0]).toBeGreaterThan(
@@ -78,6 +90,7 @@ describe('auditSite', () => {
             'The site stopped answering.',
         );
 
+        expect(mocked.probeSite).not.toHaveBeenCalled();
         expect(mocked.checkSite).not.toHaveBeenCalled();
         expect(mocked.closeAudit).not.toHaveBeenCalled();
     });
