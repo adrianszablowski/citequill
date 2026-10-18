@@ -4,7 +4,12 @@ import {
     addToQueue,
     batchSize,
     homePages,
+    isInternalHost,
+    isInternalUrl,
+    isSiteUrl,
+    isUnderDomain,
     linkDepth,
+    linkedFromCap,
     linkTarget,
     nextBatch,
     type Queue,
@@ -13,9 +18,14 @@ import {
     siteBaseUrls,
     siteHosts,
     siteOrigins,
+    withoutSlash,
 } from '@/features/audit/queue';
 
 const hosts = siteHosts('acme.com', ['https://acme.com', 'https://acme.de']);
+
+const home = 'https://acme.com/';
+
+const deep = 'https://acme.com/deep';
 
 describe('siteHosts', () => {
     it('holds every locale host with its www twin', () => {
@@ -25,6 +35,55 @@ describe('siteHosts', () => {
             'acme.de',
             'www.acme.de',
         ]);
+    });
+});
+
+describe('isInternalHost', () => {
+    it("holds the site's own hosts and every host under the project's domain, and nothing else", () => {
+        expect(isInternalHost('acme.de', hosts, 'acme.com')).toBe(true);
+
+        expect(isInternalHost('cdn.acme.com', hosts, 'www.acme.com')).toBe(
+            true,
+        );
+
+        expect(isInternalHost('img.shop.acme.com', hosts, 'acme.com')).toBe(
+            true,
+        );
+
+        expect(isInternalHost('notacme.com', hosts, 'acme.com')).toBe(false);
+        expect(isInternalHost('cdn.other.com', hosts, 'acme.com')).toBe(false);
+    });
+
+    it("asks the same of a URL's host", () => {
+        expect(
+            isInternalUrl('https://cdn.acme.com/a.png', hosts, 'acme.com'),
+        ).toBe(true);
+
+        expect(
+            isInternalUrl('https://other.com/a.png', hosts, 'acme.com'),
+        ).toBe(false);
+    });
+
+    it("reads the project's domain without its www", () => {
+        expect(isUnderDomain('www.acme.com', 'acme.com')).toBe(true);
+        expect(isUnderDomain('acme.com', 'www.acme.com')).toBe(false);
+    });
+});
+
+describe('isSiteUrl', () => {
+    it("holds a URL on one of the site's own hosts, and never one under the domain", () => {
+        expect(isSiteUrl('https://www.acme.com/a', hosts)).toBe(true);
+        expect(isSiteUrl('https://acme.de/b', hosts)).toBe(true);
+        expect(isSiteUrl('https://blog.acme.com/c', hosts)).toBe(false);
+        expect(isSiteUrl('https://other.com/d', hosts)).toBe(false);
+    });
+});
+
+describe('withoutSlash', () => {
+    it('strips the trailing slashes of a URL it normalises first', () => {
+        expect(withoutSlash('https://acme.com/')).toBe('https://acme.com');
+        expect(withoutSlash('https://ACME.com/a//')).toBe('https://acme.com/a');
+        expect(withoutSlash('https://acme.com/a')).toBe('https://acme.com/a');
     });
 });
 
@@ -101,9 +160,9 @@ describe('addToQueue', () => {
         ]).queue;
 
         const { queue, touched } = addToQueue(seeded, [
-            { url: 'https://acme.com/a', depth: 1, inbound: 1 },
-            { url: 'https://acme.com/a', depth: 2, inbound: 1 },
-            { url: 'https://acme.com/b', depth: 1, inbound: 1 },
+            { url: 'https://acme.com/a', depth: 1, inbound: 1, from: home },
+            { url: 'https://acme.com/a', depth: 2, inbound: 1, from: deep },
+            { url: 'https://acme.com/b', depth: 1, inbound: 1, from: home },
         ]);
 
         expect(queue.get('https://acme.com/a')).toEqual({
@@ -112,9 +171,32 @@ describe('addToQueue', () => {
             state: 'queued',
             in_sitemap: true,
             inbound_links: 2,
+            linked_from: [home, deep],
         });
 
         expect(touched).toEqual(['https://acme.com/a', 'https://acme.com/b']);
+    });
+
+    it(`keeps the first ${linkedFromCap} pages linking to a URL, each once, and counts them all`, () => {
+        const pages = Array.from(
+            { length: linkedFromCap + 2 },
+            (_, i) => `https://acme.com/p${i}`,
+        );
+
+        const { queue } = addToQueue(new Map(), [
+            ...pages.map((from) => ({
+                url: 'https://acme.com/t',
+                depth: 1,
+                inbound: 1,
+                from,
+            })),
+            { url: 'https://acme.com/t', depth: 1, inbound: 1, from: pages[0] },
+        ]);
+
+        expect(queue.get('https://acme.com/t')).toMatchObject({
+            inbound_links: linkedFromCap + 3,
+            linked_from: pages.slice(0, linkedFromCap),
+        });
     });
 
     it('reads at most 50 URLs with a query string per path', () => {
@@ -151,6 +233,7 @@ describe('addToQueue', () => {
                     state: 'queued' as const,
                     in_sitemap: false,
                     inbound_links: 0,
+                    linked_from: [],
                 },
             ]),
         );

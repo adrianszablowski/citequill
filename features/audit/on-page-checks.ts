@@ -1,4 +1,5 @@
 import type { Finding } from '@/features/audit/finding';
+import { canonicalOf } from '@/features/audit/observe';
 import type { AuditPage } from '@/features/audit/page';
 import { titleWidth, titleWidthLimit } from '@/features/audit/title-width';
 import type { Fetched } from '@/features/crawl/fetch';
@@ -38,6 +39,7 @@ export function onPageChecks(
         ...staleFindings(url, page, headers, now),
         ...urlFindings(url),
         ...openGraphFindings(url, page),
+        ...ogUrlFindings(url, page, canonicalOf(page.canonical, headers, url)),
     ];
 }
 
@@ -284,6 +286,23 @@ function openGraphFindings(url: string, { openGraph }: AuditPage): Finding[] {
 
     return missing.length > 0
         ? [{ check: 'og-missing', url, detail: { missing } }]
+        : [];
+}
+
+function ogUrlFindings(
+    url: string,
+    { ogUrl }: AuditPage,
+    canonical: string | null,
+): Finding[] {
+    return ogUrl !== null && canonical !== null && ogUrl !== canonical
+        ? [
+              {
+                  check: 'og-image-bad',
+                  url,
+                  subject: ogUrl,
+                  detail: { reason: 'url', canonical },
+              },
+          ]
         : [];
 }
 

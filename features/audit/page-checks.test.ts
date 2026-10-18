@@ -33,6 +33,7 @@ function entry(inSitemap = false): QueueEntry {
         state: 'queued',
         in_sitemap: inSitemap,
         inbound_links: 0,
+        linked_from: [],
     };
 }
 
@@ -63,7 +64,10 @@ const description =
     'Two plans for a team of any size, billed monthly or yearly, with every feature included.';
 
 const openGraph = ['title', 'description', 'image', 'url', 'type']
-    .map((tag) => `<meta property="og:${tag}" content="Pricing">`)
+    .map(
+        (tag) =>
+            `<meta property="og:${tag}" content="${tag === 'url' ? url : 'Pricing'}">`,
+    )
     .join('');
 
 function documentOf(
@@ -71,7 +75,7 @@ function documentOf(
     body = `<main>${words}</main>`,
     lang = ' lang="en"',
 ) {
-    return `<!doctype html><html${lang}><head><meta charset="utf-8"><title>Pricing</title><meta name="description" content="${description}">${openGraph}${head}</head><body><h1>Pricing</h1>${body}</body></html>`;
+    return `<!doctype html><html${lang}><head><meta charset="utf-8"><title>Pricing</title><meta name="description" content="${description}">${openGraph}${head}</head><body><nav><a href="/">Home</a></nav><h1>Pricing</h1>${body}</body></html>`;
 }
 
 function html(head: string, body?: string) {
@@ -96,6 +100,7 @@ function check(
         auditId: 'audit',
         locales,
         hosts,
+        domain: 'acme.com',
         pageIds,
     });
 
@@ -453,14 +458,17 @@ describe('checkPage', () => {
             documentOf(`<link rel="canonical" href="${target}">`);
 
         expect(checks(fetched(pointing('https://acme.com/de/preise')))).toEqual(
-            ['canonical-language'],
+            ['canonical-language', 'og-image-bad'],
         );
 
         expect(checks(fetched(pointing('http://acme.com/pricing')))).toEqual([
             'canonical-language',
+            'og-image-bad',
         ]);
 
-        expect(checks(fetched(pointing('https://acme.com/plans')))).toEqual([]);
+        expect(checks(fetched(pointing('https://acme.com/plans')))).toEqual([
+            'og-image-bad',
+        ]);
     });
 
     it('reports a meta refresh that moves the reader on, and not one that reloads', () => {
@@ -520,7 +528,7 @@ describe('checkPage', () => {
         });
     });
 
-    it('runs the on-page and image checks on an indexable page only', () => {
+    it('runs the on-page, image and link checks on an indexable page only', () => {
         const bare = `<html lang="en"><head><link rel="canonical" href="${url}"></head><body><main>${words}</main><img src="/a.png"></body></html>`;
 
         expect(checks(fetched(bare))).toEqual([
@@ -531,6 +539,7 @@ describe('checkPage', () => {
             'og-missing',
             'img-no-dimensions',
             'img-alt-missing',
+            'page-no-outlinks',
         ]);
 
         expect(

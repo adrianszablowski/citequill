@@ -260,6 +260,59 @@ describe('readAuditPage', () => {
         expect(page.fragmentLinks).toEqual(['#page=2', '/blog#strona=3']);
     });
 
+    it('reads every anchor of the document outside an inline svg, with its raw href, its text and its name', () => {
+        const page = readAuditPage(
+            '<html><body><a href=" /plans#top " class="cta" rel="NoFollow  noopener" target="_blank">  Our\n plans </a><a><img src="/a.png" alt=" Team "></a><a href="mailto:hi@acme.com" title="Mail"></a><svg><a href="/inside">x</a></svg></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.anchors).toMatchObject([
+            {
+                selector: 'a.cta',
+                href: ' /plans#top ',
+                url: 'https://acme.com/plans',
+                text: 'Our plans',
+                name: '',
+                hasImage: false,
+                rel: ['nofollow', 'noopener'],
+            },
+            {
+                selector: 'a',
+                href: null,
+                url: null,
+                text: '',
+                name: 'Team',
+                hasImage: true,
+                rel: [],
+            },
+            {
+                selector: 'a',
+                href: 'mailto:hi@acme.com',
+                url: null,
+                text: '',
+                name: 'Mail',
+                hasImage: false,
+                rel: [],
+            },
+        ]);
+
+        expect(page.links).toEqual(['https://acme.com/plans']);
+    });
+
+    it('reads the og:image URLs and the og:url as absolute URLs', () => {
+        const page = readAuditPage(
+            '<html><head><meta property="og:image" content="/a.png"><meta property="og:image" content="https://cdn.acme.com/b.png"><meta property="og:image" content="/a.png"><meta property="og:url" content="/pricing#x"></head></html>',
+            'https://acme.com/pricing',
+        );
+
+        expect(page.ogImages).toEqual([
+            'https://acme.com/a.png',
+            'https://cdn.acme.com/b.png',
+        ]);
+
+        expect(page.ogUrl).toBe('https://acme.com/pricing');
+    });
+
     it('reads the outermost blocks off screen or at zero size or opacity, of 50 words or more with no link, button or form control inside, and no block with display:none', () => {
         const words = (count: number) =>
             Array.from({ length: count }, (_, i) => `word${i}`).join(' ');

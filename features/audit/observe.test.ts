@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    canonicalOf,
     googlebotDirectives,
     headerCanonical,
     isIndexable,
@@ -18,11 +19,19 @@ const context: ReadContext = {
     auditId: 'audit',
     locales: [{ locale: 'en', base_url: 'https://acme.com', is_default: true }],
     hosts: siteHosts('acme.com', ['https://acme.com']),
+    domain: 'acme.com',
     pageIds: new Map([['https://acme.com/blog/post', 'page-1']]),
 };
 
 function entry(url: string, depth: number | null = 1): QueueEntry {
-    return { url, depth, state: 'queued', in_sitemap: true, inbound_links: 0 };
+    return {
+        url,
+        depth,
+        state: 'queued',
+        in_sitemap: true,
+        inbound_links: 0,
+        linked_from: [],
+    };
 }
 
 function page(
@@ -70,9 +79,35 @@ describe('observeRead', () => {
         });
 
         expect(candidates).toEqual([
-            { url: 'https://acme.com/b', depth: 2, inbound: 1 },
-            { url: 'https://www.acme.com/c', depth: 2, inbound: 1 },
+            { url: 'https://acme.com/b', depth: 2, inbound: 1, from: url },
+            { url: 'https://www.acme.com/c', depth: 2, inbound: 1, from: url },
         ]);
+    });
+
+    it("counts the page's distinct external links and lists what the resources step checks, with the page as the one linking", () => {
+        const url = 'https://acme.com/a';
+
+        const { row, resources } = observe({
+            entry: entry(url),
+            outcome: {
+                ...page(url, []),
+                body: '<html><head><meta property="og:image" content="/og.png"><link rel="stylesheet" href="https://fonts.example.net/a.css"><script src="/app.js"></script></head><body><img src="/hero.png" alt="Hero"><img src="https://cdn.acme.com/b.png" alt="B"><img src="https://other.com/c.png" alt="C"><a href="https://other.com/x">x</a><a href="https://other.com/x#top">x</a><a href="https://blog.acme.com/y">y</a><a href="/b">b</a></body></html>',
+            },
+        });
+
+        expect(row.external_link_count).toBe(2);
+
+        expect(resources).toEqual(
+            [
+                ['og_image', 'https://acme.com/og.png'],
+                ['image', 'https://acme.com/hero.png'],
+                ['image', 'https://cdn.acme.com/b.png'],
+                ['asset', 'https://fonts.example.net/a.css'],
+                ['asset', 'https://acme.com/app.js'],
+                ['external', 'https://other.com/x'],
+                ['external', 'https://blog.acme.com/y'],
+            ].map(([kind, resource]) => ({ url: resource, kind, from: url })),
+        );
     });
 
     it('queues the page a redirect lands on at the depth of the URL that redirected, and none of its links', () => {
@@ -262,6 +297,24 @@ describe('observePage', () => {
             status_code: null,
             is_indexable: false,
         });
+    });
+});
+
+describe('canonicalOf', () => {
+    it('takes the HTML canonical, else the one the Link header names', () => {
+        const headers = new Headers({ link: '</b>; rel="canonical"' });
+
+        expect(
+            canonicalOf('https://acme.com/a', headers, 'https://acme.com/x'),
+        ).toBe('https://acme.com/a');
+
+        expect(canonicalOf(null, headers, 'https://acme.com/x')).toBe(
+            'https://acme.com/b',
+        );
+
+        expect(
+            canonicalOf(null, new Headers(), 'https://acme.com/x'),
+        ).toBeNull();
     });
 });
 

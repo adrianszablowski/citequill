@@ -9,6 +9,7 @@ export interface Candidate {
     depth: number | null;
     inSitemap?: boolean;
     inbound?: number;
+    from?: string;
 }
 
 export const queueCap = 5_000;
@@ -16,6 +17,8 @@ export const queueCap = 5_000;
 export const queryUrlsPerPath = 50;
 
 export const batchSize = 50;
+
+export const linkedFromCap = 5;
 
 export function siteHosts(domain: string, baseUrls: string[]) {
     const hosts = [domain, ...baseUrls.map((url) => new URL(url).hostname)];
@@ -28,6 +31,38 @@ export function siteHosts(domain: string, baseUrls: string[]) {
             ]),
         ),
     ];
+}
+
+export function domainRoot(domain: string) {
+    return domain.toLowerCase().replace(/^www\./, '');
+}
+
+export function isUnderDomain(host: string, domain: string) {
+    return host.endsWith(`.${domainRoot(domain)}`);
+}
+
+export function isInternalHost(host: string, hosts: string[], domain: string) {
+    return hosts.includes(host) || isUnderDomain(host, domain);
+}
+
+export function isInternalUrl(url: string, hosts: string[], domain: string) {
+    return isInternalHost(new URL(url).hostname, hosts, domain);
+}
+
+export function isSiteUrl(url: string, hosts: string[]) {
+    return hosts.includes(new URL(url).hostname);
+}
+
+export function withoutSlash(url: string) {
+    return new URL(url).href.replace(/\/+$/, '');
+}
+
+export function withLinkingPage(linkedFrom: string[], from?: string) {
+    return from === undefined ||
+        linkedFrom.includes(from) ||
+        linkedFrom.length >= linkedFromCap
+        ? linkedFrom
+        : [...linkedFrom, from];
 }
 
 export function siteBaseUrls(domain: string, locales: { base_url: string }[]) {
@@ -50,7 +85,7 @@ export function linkTarget(href: string, hosts: string[]) {
     try {
         const url = new URL(href);
 
-        if (!schemes.includes(url.protocol) || !hosts.includes(url.hostname)) {
+        if (!schemes.includes(url.protocol) || !isSiteUrl(href, hosts)) {
             return null;
         }
 
@@ -72,7 +107,13 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
     const queried = queryCounts([...next.keys()]);
     let isCapped = false;
 
-    for (const { url, depth, inSitemap = false, inbound = 0 } of candidates) {
+    for (const {
+        url,
+        depth,
+        inSitemap = false,
+        inbound = 0,
+        from,
+    } of candidates) {
         const known = next.get(url);
 
         if (known) {
@@ -84,12 +125,14 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
                         : known.depth,
                 in_sitemap: known.in_sitemap || inSitemap,
                 inbound_links: known.inbound_links + inbound,
+                linked_from: withLinkingPage(known.linked_from, from),
             };
 
             if (
                 updated.depth !== known.depth ||
                 updated.in_sitemap !== known.in_sitemap ||
-                updated.inbound_links !== known.inbound_links
+                updated.inbound_links !== known.inbound_links ||
+                updated.linked_from !== known.linked_from
             ) {
                 next.set(url, updated);
                 touched.add(url);
@@ -122,6 +165,7 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
             state: 'queued',
             in_sitemap: inSitemap,
             inbound_links: inbound,
+            linked_from: withLinkingPage([], from),
         });
 
         touched.add(url);

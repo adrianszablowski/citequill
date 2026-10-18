@@ -17,7 +17,12 @@ import type { Tables } from '@/lib/types/database';
 export type SiteRow = ScoredPage &
     Pick<
         Tables<'site_pages'>,
-        'body_hash' | 'body_simhash' | 'title' | 'description'
+        | 'body_hash'
+        | 'body_simhash'
+        | 'title'
+        | 'description'
+        | 'click_depth'
+        | 'inbound_links'
     >;
 
 export interface SiteContext {
@@ -25,11 +30,14 @@ export interface SiteContext {
     hosts: string[];
     isDisallowed: (url: string) => boolean;
     isHttpsSite: boolean;
+    linkedFrom: ReadonlyMap<string, string[]>;
 }
 
 export const duplicatesListed = 10;
 
 export const noindexSiteShare = 0.95;
+
+export const deepClicks = 4;
 
 export const siteHalves = [
     ['param-duplicates', 'variants'],
@@ -76,7 +84,65 @@ export function siteChecks(rows: SiteRow[], context: SiteContext) {
         ...rows
             .filter((row) => row.in_sitemap)
             .flatMap((row) => listedFindings(row, context)),
+        ...rows.flatMap((row) => reachFindings(row, context)),
+        ...rows.flatMap((row) => linkedFindings(row, context)),
     ];
+}
+
+function reachFindings(row: SiteRow, { homes }: SiteContext): Finding[] {
+    if (!row.is_indexable || homes.includes(row.url)) {
+        return [];
+    }
+
+    const detail = { inbound: row.inbound_links, depth: row.click_depth };
+
+    if (row.inbound_links === 0) {
+        return row.in_sitemap && row.click_depth === null
+            ? [{ check: 'orphan', url: row.url, detail }]
+            : [];
+    }
+
+    return row.inbound_links === 1 || (row.click_depth ?? 0) >= deepClicks
+        ? [{ check: 'link-depth', url: row.url, detail }]
+        : [];
+}
+
+function linkedFindings(row: SiteRow, { linkedFrom }: SiteContext): Finding[] {
+    const verdict = linkedVerdict(row);
+
+    if (!verdict) {
+        return [];
+    }
+
+    return (linkedFrom.get(row.url) ?? []).map((page) => ({
+        check: verdict.check,
+        url: page,
+        subject: row.url,
+        detail: { ...verdict.detail, linkCount: row.inbound_links },
+    }));
+}
+
+function linkedVerdict(row: SiteRow) {
+    if ((row.status_code ?? 0) >= 400) {
+        return {
+            check: 'link-broken-internal' as const,
+            detail: { status: row.status_code },
+        };
+    }
+
+    if (row.redirect_to) {
+        return {
+            check: 'link-to-redirect' as const,
+            detail: { reason: 'redirect', target: row.redirect_to },
+        };
+    }
+
+    return row.canonical_url && row.canonical_url !== row.url
+        ? {
+              check: 'link-to-redirect' as const,
+              detail: { reason: 'canonical', target: row.canonical_url },
+          }
+        : null;
 }
 
 function noindexFindings(rows: SiteRow[], { homes }: SiteContext): Finding[] {

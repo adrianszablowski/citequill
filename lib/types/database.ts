@@ -167,6 +167,7 @@ export type Database = {
                     depth: number | null;
                     in_sitemap: boolean;
                     inbound_links: number;
+                    linked_from: string[];
                     state: Database['public']['Enums']['audit_queue_state'];
                     url: string;
                 };
@@ -175,6 +176,7 @@ export type Database = {
                     depth?: number | null;
                     in_sitemap?: boolean;
                     inbound_links?: number;
+                    linked_from?: string[];
                     state?: Database['public']['Enums']['audit_queue_state'];
                     url: string;
                 };
@@ -183,6 +185,7 @@ export type Database = {
                     depth?: number | null;
                     in_sitemap?: boolean;
                     inbound_links?: number;
+                    linked_from?: string[];
                     state?: Database['public']['Enums']['audit_queue_state'];
                     url?: string;
                 };
@@ -228,6 +231,50 @@ export type Database = {
                         columns: ['site_page_id'];
                         isOneToOne: false;
                         referencedRelation: 'site_pages';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            audit_resources: {
+                Row: {
+                    audit_id: string;
+                    content_length: number | null;
+                    error: string | null;
+                    kind: Database['public']['Enums']['audit_resource_kind'];
+                    link_count: number;
+                    linked_from: string[];
+                    state: Database['public']['Enums']['audit_resource_state'];
+                    status_code: number | null;
+                    url: string;
+                };
+                Insert: {
+                    audit_id: string;
+                    content_length?: number | null;
+                    error?: string | null;
+                    kind: Database['public']['Enums']['audit_resource_kind'];
+                    link_count?: number;
+                    linked_from?: string[];
+                    state?: Database['public']['Enums']['audit_resource_state'];
+                    status_code?: number | null;
+                    url: string;
+                };
+                Update: {
+                    audit_id?: string;
+                    content_length?: number | null;
+                    error?: string | null;
+                    kind?: Database['public']['Enums']['audit_resource_kind'];
+                    link_count?: number;
+                    linked_from?: string[];
+                    state?: Database['public']['Enums']['audit_resource_state'];
+                    status_code?: number | null;
+                    url?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'audit_resources_audit_id_fkey';
+                        columns: ['audit_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'audits';
                         referencedColumns: ['id'];
                     },
                 ];
@@ -728,6 +775,7 @@ export type Database = {
                     canonical_url: string | null;
                     click_depth: number | null;
                     description: string | null;
+                    external_link_count: number;
                     final_url: string | null;
                     first_seen_at: string;
                     hreflang: Json | null;
@@ -755,6 +803,7 @@ export type Database = {
                     canonical_url?: string | null;
                     click_depth?: number | null;
                     description?: string | null;
+                    external_link_count?: number;
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
@@ -782,6 +831,7 @@ export type Database = {
                     canonical_url?: string | null;
                     click_depth?: number | null;
                     description?: string | null;
+                    external_link_count?: number;
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
@@ -945,6 +995,8 @@ export type Database = {
         };
         Enums: {
             audit_queue_state: 'queued' | 'read' | 'blocked';
+            audit_resource_kind: 'image' | 'og_image' | 'asset' | 'external';
+            audit_resource_state: 'queued' | 'checked';
             page_status: 'draft' | 'published' | 'unpublished';
             run_status: 'running' | 'finished' | 'failed';
             run_trigger: 'crawl' | 'weekly' | 'manual' | 'audit';
@@ -1079,6 +1131,8 @@ export const Constants = {
     public: {
         Enums: {
             audit_queue_state: ['queued', 'read', 'blocked'],
+            audit_resource_kind: ['image', 'og_image', 'asset', 'external'],
+            audit_resource_state: ['queued', 'checked'],
             page_status: ['draft', 'published', 'unpublished'],
             run_status: ['running', 'finished', 'failed'],
             run_trigger: ['crawl', 'weekly', 'manual', 'audit'],

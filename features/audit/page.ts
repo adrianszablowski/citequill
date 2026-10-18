@@ -50,6 +50,15 @@ export interface HiddenBlock extends PageElement {
     text: string;
 }
 
+export interface Anchor extends PageElement {
+    href: string | null;
+    url: string | null;
+    text: string;
+    name: string;
+    hasImage: boolean;
+    rel: string[];
+}
+
 export interface AuditPage {
     title: string | null;
     titles: TitleTag[];
@@ -60,6 +69,8 @@ export interface AuditPage {
     hasMetaCharset: boolean;
     misplaced: PageElement[];
     openGraph: string[];
+    ogImages: string[];
+    ogUrl: string | null;
     modifiedTime: string | null;
     plugins: Plugin[];
     visibleText: string;
@@ -71,6 +82,7 @@ export interface AuditPage {
     robotsMeta: string[];
     refresh: string | null;
     alternates: Alternate[];
+    anchors: Anchor[];
     links: string[];
     assets: string[];
     hiddenBlocks: HiddenBlock[];
@@ -109,13 +121,37 @@ export function readAuditPage(html: string, url: string): AuditPage {
 
     body.find('script, style, template, noscript').remove();
 
-    const hrefs = $('a[href]')
-        .toArray()
-        .map((element) => $(element).attr('href') ?? '');
+    const anchors = inDocument('a').map((tag): Anchor => {
+        const href = tag.attribs.href ?? null;
 
-    const links = hrefs
-        .map((href) => absolute(href, base))
-        .filter((href) => href !== null);
+        return {
+            ...located(tag),
+            href,
+            url: absolute(href, base),
+            text: $(tag).text().replace(/\s+/g, ' ').trim(),
+            name:
+                [
+                    tag.attribs['aria-label'],
+                    tag.attribs.title,
+                    ...$(tag)
+                        .find('img[alt]')
+                        .toArray()
+                        .map((image) => image.attribs.alt),
+                ]
+                    .map((value) => value?.trim())
+                    .find(Boolean) ?? '',
+            hasImage: $(tag).find('img').length > 0,
+            rel: (tag.attribs.rel ?? '')
+                .toLowerCase()
+                .split(/\s+/)
+                .filter(Boolean),
+        };
+    });
+
+    const ogContents = (key: string) =>
+        metas.flatMap(({ keys, content }) =>
+            content && keys.includes(key) ? [content] : [],
+        );
 
     const assets = $('link[rel~="stylesheet" i][href], script[src]')
         .toArray()
@@ -192,6 +228,14 @@ export function readAuditPage(html: string, url: string): AuditPage {
                 ),
             ),
         ],
+        ogImages: [
+            ...new Set(
+                ogContents('og:image').flatMap(
+                    (content) => absolute(content, base) ?? [],
+                ),
+            ),
+        ],
+        ogUrl: absolute(ogContents('og:url')[0], base),
         modifiedTime:
             metas.find(({ keys }) => keys.includes('article:modified_time'))
                 ?.content || null,
@@ -207,10 +251,13 @@ export function readAuditPage(html: string, url: string): AuditPage {
         robotsMeta: robotsMetaOf($),
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
         alternates: alternatesOf($, base),
-        links: [...new Set(links)],
+        anchors,
+        links: [...new Set(anchors.flatMap((anchor) => anchor.url ?? []))],
         assets: [...new Set(assets)],
         hiddenBlocks: hiddenBlocksOf($, body),
-        fragmentLinks: hrefs.filter((href) => pageFragment.test(href)),
+        fragmentLinks: anchors.flatMap(({ href }) =>
+            href !== null && pageFragment.test(href) ? [href] : [],
+        ),
     };
 
     const mainText = cheerio

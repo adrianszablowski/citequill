@@ -1,6 +1,7 @@
 import type { Finding } from '@/features/audit/finding';
 import { repeatedWord } from '@/features/audit/on-page-checks';
 import type { AuditPage } from '@/features/audit/page';
+import { isSiteUrl } from '@/features/audit/queue';
 import { isSelfCanonical } from '@/features/audit/score';
 import {
     facetPath,
@@ -31,7 +32,7 @@ export function heuristicChecks(
     const isInternal = (href: string) => {
         const target = absolute(href, new URL(url));
 
-        return target !== null && hosts.includes(new URL(target).hostname);
+        return target !== null && isSiteUrl(target, hosts);
     };
 
     return [

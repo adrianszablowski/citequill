@@ -1,6 +1,11 @@
 import { FatalError } from 'workflow';
 
-import { type SiteClient, siteClient } from '@/features/audit/client';
+import {
+    type ForeignClient,
+    foreignClient,
+    type SiteClient,
+    siteClient,
+} from '@/features/audit/client';
 import { type Finding, findingRows } from '@/features/audit/finding';
 import { observeRead, type Read } from '@/features/audit/observe';
 import { checkPage } from '@/features/audit/page-checks';
@@ -26,6 +31,7 @@ import {
 } from '@/features/audit/probes';
 import {
     addToQueue,
+    batchSize,
     homePages,
     linkTarget,
     nextBatch,
@@ -40,9 +46,27 @@ import {
     type RobotsFile,
     robotsFile,
 } from '@/features/audit/robots';
+import {
+    addResources,
+    answerOf,
+    askResource,
+    type Frontier,
+    isForeignResource,
+    isSampledAsset,
+    judgeResource,
+    refusals,
+    refusedAnswer,
+    refusedHosts,
+    type Resource,
+    type ResourceAnswer,
+} from '@/features/audit/resources';
 import { robotsChecks } from '@/features/audit/robots-checks';
 import { variantSample } from '@/features/audit/sample';
-import { crossPageChecks, scoredPageColumns } from '@/features/audit/score';
+import {
+    crossPageChecks,
+    resourceChecks,
+    scoredPageColumns,
+} from '@/features/audit/score';
 import { siteChecks, siteHalves } from '@/features/audit/site-checks';
 import { rowsPerWrite, writeSitePages } from '@/features/audit/site-pages';
 import { sitemapChecks } from '@/features/audit/sitemap-checks';
@@ -210,11 +234,9 @@ export async function readPages(
         deadline: Date.now() + stepBudgetMs,
     });
 
-    const reads = await readBatch(
-        client,
-        batch,
-        blockedBy(files, site.obeyRobots),
-    );
+    const reads = (
+        await readBatch(client, batch, blockedBy(files, site.obeyRobots))
+    ).sort((a, b) => batch.indexOf(a.entry) - batch.indexOf(b.entry));
 
     const pageIds = await loadPageIds(projectId, site.locales);
 
@@ -224,6 +246,7 @@ export async function readPages(
             auditId,
             locales: site.locales,
             hosts: site.access.hosts,
+            domain: site.domain,
             pageIds,
         }),
     );
@@ -231,6 +254,11 @@ export async function readPages(
     const added = addToQueue(
         queue,
         observed.flatMap((page) => page.candidates),
+    );
+
+    const resources = addResources(
+        await loadResources(auditId),
+        observed.flatMap((page) => page.resources),
     );
 
     const next = new Map(added.queue);
@@ -295,6 +323,11 @@ export async function readPages(
         ),
     );
 
+    await writeResources(
+        auditId,
+        resources.touched.map((url) => resources.frontier.get(url)!),
+    );
+
     await writeQueue(
         auditId,
         [...touched].map((url) => next.get(url)!),
@@ -329,6 +362,173 @@ export async function readPages(
 
     return {
         hasWork: [...next.values()].some((entry) => entry.state === 'queued'),
+        pace: client.pace(),
+    };
+}
+
+export async function checkResources(
+    projectId: string,
+    runId: string,
+    auditId: string,
+    pace: Pace,
+): Promise<Reading> {
+    'use step';
+
+    const supabase = createAdminClient();
+
+    const run = await one(
+        supabase.from('runs').select('status').eq('id', runId).single(),
+    );
+
+    if (run.status !== 'running') {
+        return { hasWork: false, pace };
+    }
+
+    const [site, audit, batch, refused, pages] = await Promise.all([
+        loadSite(projectId),
+        one(
+            supabase
+                .from('audits')
+                .select('request_count, host_429_count, host_5xx_count')
+                .eq('id', auditId)
+                .single(),
+        ),
+        one(
+            supabase
+                .from('audit_resources')
+                .select(resourceColumns)
+                .eq('audit_id', auditId)
+                .eq('state', 'queued')
+                // Postgres orders an enum by its declaration order, image,
+                // og_image, asset, external in the migration: images first.
+                .order('kind')
+                .order('url')
+                .limit(batchSize),
+        ),
+        all((from, to) =>
+            supabase
+                .from('audit_resources')
+                .select('url, kind, status_code')
+                .eq('audit_id', auditId)
+                .eq('state', 'checked')
+                .in('status_code', [...refusals])
+                .order('url')
+                .range(from, to),
+        ),
+        all((from, to) =>
+            supabase
+                .from('site_pages')
+                .select('id, url, is_indexable, status_code, redirect_to')
+                .eq('last_audit_id', auditId)
+                .order('url')
+                .range(from, to),
+        ),
+    ]);
+
+    if (batch.length === 0) {
+        return { hasWork: false, pace };
+    }
+
+    const deadline = Date.now() + stepBudgetMs;
+    const client = siteClient({ ...site.access, pace, deadline });
+    const foreign = foreignClient({ deadline });
+
+    const isForeign = (row: Pick<Resource, 'url' | 'kind'>) =>
+        isForeignResource(row, site.access.hosts, site.domain);
+
+    const sample = new Set(
+        variantSample(
+            pages
+                .filter(
+                    (page) =>
+                        page.is_indexable &&
+                        page.status_code === 200 &&
+                        page.redirect_to === null,
+                )
+                .map((page) => page.url),
+            site.homes,
+        ),
+    );
+
+    const answers = await checkBatch(batch, {
+        client,
+        foreign,
+        isForeign,
+        refused: refusedHosts(refused, isForeign),
+        sample,
+    });
+
+    const checked = answers.map(({ row }) => row.url);
+    const pageIds = new Map(pages.map((page) => [page.url, page.id]));
+
+    if (checked.length > 0) {
+        await done(
+            supabase
+                .from('audit_findings')
+                .delete()
+                .eq('audit_id', auditId)
+                .in('check', resourceChecks)
+                .in('subject', checked),
+        );
+
+        await done(
+            supabase
+                .from('audit_findings')
+                .delete()
+                .eq('audit_id', auditId)
+                .eq('check', 'og-image-bad')
+                .contains('detail', { reason: 'image' })
+                .in('subject', checked),
+        );
+    }
+
+    await writeFindings(
+        findingRows(
+            answers
+                .flatMap(({ row, answer }) =>
+                    answer
+                        ? judgeResource(row, answer, isForeign(row), sample)
+                        : [],
+                )
+                .filter((finding) => pageIds.has(finding.url!)),
+            { projectId, auditId, pageIds },
+        ),
+    );
+
+    await writeResources(
+        auditId,
+        answers.map(({ row, answer }) => ({
+            ...row,
+            state: 'checked',
+            status_code: answer?.status ?? null,
+            content_length: answer?.contentLength ?? null,
+            error: answer?.error ?? null,
+        })),
+    );
+
+    await done(
+        supabase
+            .from('audits')
+            .update({
+                request_count:
+                    audit.request_count +
+                    client.counts.requests +
+                    foreign.counts.requests,
+                host_429_count: audit.host_429_count + client.counts.tooMany,
+                host_5xx_count:
+                    audit.host_5xx_count + client.counts.serverErrors,
+            })
+            .eq('id', auditId),
+    );
+
+    await markProgress(runId);
+
+    if (hasStopped(client.pace())) {
+        throw new FatalError(stoppedAnswering);
+    }
+
+    return {
+        hasWork: batch.length === batchSize || answers.length < batch.length,
         pace: client.pace(),
     };
 }
@@ -512,6 +712,18 @@ export async function checkSite(
         return;
     }
 
+    const queue = await loadQueue(auditId);
+
+    await writeSitePages(
+        [...queue.values()]
+            .filter((entry) => entry.state !== 'queued')
+            .map((entry) => ({
+                project_id: projectId,
+                url: entry.url,
+                inbound_links: entry.inbound_links,
+            })),
+    );
+
     const [site, audit, rows] = await Promise.all([
         loadSite(projectId),
         one(
@@ -525,7 +737,7 @@ export async function checkSite(
             supabase
                 .from('site_pages')
                 .select(
-                    `${scoredPageColumns}, body_hash, body_simhash, title, description` as const,
+                    `${scoredPageColumns}, body_hash, body_simhash, title, description, click_depth, inbound_links` as const,
                 )
                 .eq('last_audit_id', auditId)
                 .order('id')
@@ -540,6 +752,9 @@ export async function checkSite(
         hosts: site.access.hosts,
         isDisallowed: googlebotBlocks(files),
         isHttpsSite: site.homes.some((home) => home.startsWith('https:')),
+        linkedFrom: new Map(
+            [...queue.values()].map((entry) => [entry.url, entry.linked_from]),
+        ),
     });
 
     await done(
@@ -594,16 +809,6 @@ export async function closeAudit(
     }
 
     const queue = await loadQueue(auditId);
-
-    await writeSitePages(
-        [...queue.values()]
-            .filter((entry) => entry.state !== 'queued')
-            .map((entry) => ({
-                project_id: projectId,
-                url: entry.url,
-                inbound_links: entry.inbound_links,
-            })),
-    );
 
     const { count, error } = await supabase
         .from('site_pages')
@@ -703,7 +908,7 @@ async function loadQueue(auditId: string) {
     const entries: QueueEntry[] = await all((from, to) =>
         supabase
             .from('audit_queue')
-            .select('url, depth, state, in_sitemap, inbound_links')
+            .select('url, depth, state, in_sitemap, inbound_links, linked_from')
             .eq('audit_id', auditId)
             .order('url')
             .range(from, to),
@@ -725,6 +930,37 @@ async function writeQueue(auditId: string, entries: QueueEntry[]) {
                 { onConflict: 'audit_id,url' },
             ),
     );
+}
+
+const resourceColumns =
+    'url, kind, linked_from, link_count, state, status_code, content_length, error';
+
+async function loadResources(auditId: string): Promise<Frontier> {
+    const rows: Resource[] = await all((from, to) =>
+        createAdminClient()
+            .from('audit_resources')
+            .select(resourceColumns)
+            .eq('audit_id', auditId)
+            .order('url')
+            .range(from, to),
+    );
+
+    return new Map(rows.map((row) => [row.url, row]));
+}
+
+async function writeResources(auditId: string, rows: Resource[]) {
+    for (let start = 0; start < rows.length; start += rowsPerWrite) {
+        await done(
+            createAdminClient()
+                .from('audit_resources')
+                .upsert(
+                    rows
+                        .slice(start, start + rowsPerWrite)
+                        .map((row) => ({ audit_id: auditId, ...row })),
+                    { onConflict: 'audit_id,url' },
+                ),
+        );
+    }
 }
 
 async function writeFindings(rows: TablesInsert<'audit_findings'>[]) {
@@ -756,15 +992,17 @@ async function sweepAudits(projectId: string, auditId: string) {
         .map((audit) => audit.id)
         .filter((id) => id !== auditId && id !== previous?.id);
 
-    await done(
-        supabase
-            .from('audit_queue')
-            .delete()
-            .in(
-                'audit_id',
-                audits.map((audit) => audit.id),
-            ),
-    );
+    for (const frontier of ['audit_queue', 'audit_resources'] as const) {
+        await done(
+            supabase
+                .from(frontier)
+                .delete()
+                .in(
+                    'audit_id',
+                    audits.map((audit) => audit.id),
+                ),
+        );
+    }
 
     if (older.length === 0) {
         return;
@@ -808,6 +1046,92 @@ async function loadPageIds(projectId: string, locales: Site['locales']) {
                 : [];
         }),
     );
+}
+
+interface ResourceCheck {
+    client: SiteClient;
+    foreign: ForeignClient;
+    isForeign: (row: Resource) => boolean;
+    refused: Map<string, number>;
+    sample: ReadonlySet<string>;
+}
+
+async function checkBatch(
+    batch: Resource[],
+    { client, foreign, isForeign, refused, sample }: ResourceCheck,
+) {
+    const pending = [...batch];
+    const busy = new Set<string>();
+    const answers: { row: Resource; answer: ResourceAnswer | null }[] = [];
+
+    const hostOf = (row: Resource) =>
+        isForeign(row) ? new URL(row.url).hostname : null;
+
+    const take = () => {
+        const index = pending.findIndex((row) => {
+            const host = hostOf(row);
+
+            return host === null || !busy.has(host);
+        });
+
+        return index === -1 ? undefined : pending.splice(index, 1)[0];
+    };
+
+    await Promise.all(
+        Array.from({ length: requestsInFlight }, async () => {
+            for (
+                let row = take();
+                row && !hasStopped(client.pace());
+                row = take()
+            ) {
+                const host = hostOf(row);
+                const refusal = host === null ? undefined : refused.get(host);
+
+                if (!isSampledAsset(row, sample)) {
+                    answers.push({ row, answer: null });
+
+                    continue;
+                }
+
+                if (refusal !== undefined) {
+                    answers.push({ row, answer: refusedAnswer(refusal) });
+
+                    continue;
+                }
+
+                if (host !== null) {
+                    busy.add(host);
+                }
+
+                const outcome = await askResource(
+                    host === null ? client.read : foreign.read,
+                    row.url,
+                );
+
+                if (host !== null) {
+                    busy.delete(host);
+                }
+
+                if (outcome === null) {
+                    return;
+                }
+
+                const answer = answerOf(outcome);
+
+                if (
+                    host !== null &&
+                    answer.status !== null &&
+                    refusals.has(answer.status)
+                ) {
+                    refused.set(host, answer.status);
+                }
+
+                answers.push({ row, answer });
+            }
+        }),
+    );
+
+    return answers;
 }
 
 async function readBatch(

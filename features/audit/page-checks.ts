@@ -1,7 +1,9 @@
 import type { Finding } from '@/features/audit/finding';
 import { heuristicChecks } from '@/features/audit/heuristic-checks';
 import { imageChecks } from '@/features/audit/image-checks';
+import { linkChecks } from '@/features/audit/link-checks';
 import {
+    canonicalOf,
     googlebotDirectives,
     headerCanonical,
     type observeRead,
@@ -205,6 +207,7 @@ function answerFindings(
                   ? [
                         ...onPageChecks(url, page, fetched, now),
                         ...imageChecks(url, page.images),
+                        ...linkChecks(url, page, context),
                     ]
                   : []),
           ]
@@ -246,7 +249,7 @@ function canonicalFindings(
         ),
     );
 
-    const target = page.canonical ?? fromHeader;
+    const target = canonicalOf(page.canonical, fetched.headers, url);
 
     if (
         targets.size > 1 ||

@@ -1,4 +1,5 @@
 import {
+    checkResources,
     checkSite,
     closeAudit,
     discoverSite,
@@ -25,7 +26,18 @@ export async function auditSite(
             reading = await readPages(projectId, runId, auditId, reading.pace);
         }
 
-        await probeSite(projectId, runId, auditId, reading.pace);
+        let checking: Reading = { hasWork: true, pace: reading.pace };
+
+        while (checking.hasWork) {
+            checking = await checkResources(
+                projectId,
+                runId,
+                auditId,
+                checking.pace,
+            );
+        }
+
+        await probeSite(projectId, runId, auditId, checking.pace);
         await checkSite(projectId, runId, auditId);
         await closeAudit(projectId, runId, auditId);
     } catch (error) {

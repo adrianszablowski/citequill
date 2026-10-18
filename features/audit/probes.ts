@@ -2,12 +2,17 @@ import { randomBytes } from 'node:crypto';
 
 import type { Finding } from '@/features/audit/finding';
 import {
+    canonicalOf,
     googlebotDirectives,
-    headerCanonical,
     isIndexable,
 } from '@/features/audit/observe';
 import { readAuditPage } from '@/features/audit/page';
-import type { QueueEntry } from '@/features/audit/queue';
+import {
+    domainRoot,
+    isUnderDomain,
+    type QueueEntry,
+    withoutSlash,
+} from '@/features/audit/queue';
 import { gateShare } from '@/features/audit/score';
 import { type Fetched, isHtml } from '@/features/crawl/fetch';
 
@@ -112,10 +117,13 @@ export function judgeVariant(
         return null;
     }
 
-    const canonical =
-        (isHtml(fetched.headers)
+    const canonical = canonicalOf(
+        isHtml(fetched.headers)
             ? readAuditPage(fetched.body, variantUrl).canonical
-            : null) ?? headerCanonical(fetched.headers.get('link'), variantUrl);
+            : null,
+        fetched.headers,
+        variantUrl,
+    );
 
     return canonical === url
         ? null
@@ -128,11 +136,11 @@ export function judgeVariant(
 }
 
 export function stagingHosts(linked: LinkedHosts, domain: string) {
-    const root = domain.toLowerCase().replace(/^www\./, '');
+    const root = domainRoot(domain);
 
     return Object.entries(linked).filter(
         ([host]) =>
-            host.endsWith(`.${root}`) &&
+            isUnderDomain(host, domain) &&
             host
                 .slice(0, -root.length - 1)
                 .split('.')
@@ -230,10 +238,6 @@ const tokenAlphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const stagingLabel = /^(?:staging|stage|dev|test|uat|preprod|sandbox)$/i;
 
 const escapeOrNonLetter = /^((?:%[\da-f]{2}|[^\p{L}%])*)(\p{L})/iu;
-
-function withoutSlash(url: string) {
-    return new URL(url).href.replace(/\/+$/, '');
-}
 
 function withUrl(url: URL, parts: Partial<Pick<URL, 'hostname' | 'pathname'>>) {
     const next = new URL(url);

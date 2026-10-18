@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
     afterAnswer,
     attemptsPerUrl,
+    firstPace as unpaced,
     isRateLimit,
     type Pace,
     requestIntervalMs,
@@ -23,6 +24,12 @@ export interface SiteRequests {
 }
 
 export type SiteClient = ReturnType<typeof siteClient>;
+
+export type ForeignClient = ReturnType<typeof foreignClient>;
+
+export const foreignIntervalMs = 500;
+
+export const foreignAttempts = 2;
 
 export interface ClientOptions {
     botSecret: string;
@@ -109,4 +116,67 @@ export function siteClient({
     }
 
     return { read, counts, pace: () => pace };
+}
+
+export function foreignClient({
+    interval = foreignIntervalMs,
+    deadline,
+    deps = defaultDeps,
+}: Pick<ClientOptions, 'interval' | 'deadline' | 'deps'>) {
+    const paces = new Map<string, Pace>();
+    const counts = { requests: 0 };
+
+    function slotOf(host: string) {
+        return takeSlot(paces.get(host) ?? unpaced, interval, Date.now());
+    }
+
+    function pacedDeps(): FetchDeps {
+        let isFirstHop = true;
+
+        return {
+            ...deps,
+            fetch: async (input, init) => {
+                if (!isFirstHop) {
+                    const { hostname } = new URL(String(input));
+
+                    paces.set(hostname, slotOf(hostname).pace);
+                }
+
+                isFirstHop = false;
+                counts.requests += 1;
+
+                return deps.fetch(input, init);
+            },
+        };
+    }
+
+    async function read(
+        url: string,
+        { method = 'GET' }: Pick<FetchOptions, 'method'> = {},
+    ): Promise<Fetched | Error | null> {
+        const host = new URL(url).hostname;
+
+        for (let attempt = 1; ; attempt += 1) {
+            const slot = slotOf(host);
+
+            if (slot.at > deadline) {
+                return null;
+            }
+
+            paces.set(host, slot.pace);
+            await sleep(slot.at - Date.now());
+
+            try {
+                return await fetchPublic(url, pacedDeps(), { method });
+            } catch (error) {
+                if (attempt >= foreignAttempts) {
+                    return error instanceof Error
+                        ? error
+                        : new Error(String(error));
+                }
+            }
+        }
+    }
+
+    return { read, counts };
 }

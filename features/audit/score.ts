@@ -19,10 +19,11 @@ export type ScoredPage = Pick<
     | 'canonical_url'
     | 'in_sitemap'
     | 'image_count'
+    | 'external_link_count'
 >;
 
 export const scoredPageColumns =
-    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count';
+    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count';
 
 export type ScoredFinding = Pick<
     Tables<'audit_findings'>,
@@ -63,12 +64,23 @@ export const crossPageChecks = [
     'title-duplicate',
     'title-boilerplate',
     'description-duplicate',
+    'orphan',
+    'link-depth',
+    'link-broken-internal',
+    'link-to-redirect',
 ] as const satisfies readonly CheckId[];
 
 export const probeChecks = [
     'redirect-to-home',
     'host-variants',
     'staging-indexable',
+] as const satisfies readonly CheckId[];
+
+export const resourceChecks = [
+    'link-broken-external',
+    'link-external-refused',
+    'resource-broken',
+    'img-heavy',
 ] as const satisfies readonly CheckId[];
 
 export function scoreAudit({ checks, pages, findings, marks, homes }: Audited) {
@@ -102,7 +114,9 @@ export function checksRun({
     obeyRobots: boolean;
 }) {
     const skipped = new Set<CheckId>([
-        ...(hasCrossPageChecks ? [] : [...crossPageChecks, ...probeChecks]),
+        ...(hasCrossPageChecks
+            ? []
+            : [...crossPageChecks, ...probeChecks, ...resourceChecks]),
         ...(obeyRobots ? ['noindex-blocked' as const] : []),
     ]);
 
@@ -316,6 +330,19 @@ const pageScopes = {
 
         return answered.filter((page) => sample.has(page.url));
     },
+    'images-or-sample': (pages: ScoredPage[], homes: string[]) => {
+        const sampled = new Set(pageScopes.sampled(pages, homes));
+
+        return pages.filter(
+            (page) =>
+                page.is_indexable &&
+                (page.image_count > 0 || sampled.has(page)),
+        );
+    },
+    'external-links': (pages: ScoredPage[]) =>
+        pages.filter(
+            (page) => page.is_indexable && page.external_link_count > 0,
+        ),
     'self-canonical': (pages: ScoredPage[]) =>
         pages.some((page) => page.in_sitemap)
             ? pages.filter(isSelfCanonical)
@@ -415,6 +442,22 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'picture-no-src': 'images',
     'img-no-dimensions': 'images',
     'img-filename-generic': 'images',
+    'img-heavy': 'images',
+    'og-image-bad': 'indexable',
+    'link-broken-internal': 'indexable',
+    'link-broken-external': 'external-links',
+    'link-external-refused': 'external-links',
+    'resource-broken': 'images-or-sample',
+    'link-uncrawlable': 'indexable',
+    'link-malformed': 'indexable',
+    'link-to-redirect': 'indexable',
+    'link-nofollow-internal': 'indexable',
+    'page-no-outlinks': 'indexable',
+    orphan: 'indexable',
+    'link-depth': 'indexable',
+    'link-count': 'indexable',
+    'anchor-generic': 'indexable',
+    'anchor-empty': 'indexable',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

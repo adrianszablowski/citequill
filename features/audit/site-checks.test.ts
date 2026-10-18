@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { siteHosts } from '@/features/audit/queue';
 import {
+    deepClicks,
     type SiteContext,
     siteChecks,
     type SiteRow,
@@ -13,6 +14,7 @@ const context: SiteContext = {
     hosts: siteHosts('acme.com', ['https://acme.com']),
     isDisallowed: () => false,
     isHttpsSite: true,
+    linkedFrom: new Map(),
 };
 
 function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
@@ -28,6 +30,9 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         canonical_url: url,
         in_sitemap: true,
         image_count: 0,
+        external_link_count: 0,
+        click_depth: 1,
+        inbound_links: 2,
         body_hash: `hash of ${path}`,
         body_simhash: null,
         title: null,
@@ -612,6 +617,119 @@ describe('siteChecks', () => {
                 check: 'title-boilerplate',
                 url: 'https://acme.com/',
                 detail: { title: 'Welcome', siteName: null },
+            },
+        ]);
+    });
+});
+
+describe('siteChecks, for the links', () => {
+    const only = (rows: SiteRow[], names: string[], linkedFrom = new Map()) =>
+        siteChecks(rows, { ...context, linkedFrom }).filter(({ check }) =>
+            names.includes(check),
+        );
+
+    it('calls an indexable page in a sitemap that no page links to an orphan, never a home page', () => {
+        expect(
+            only(
+                [
+                    row('/', { inbound_links: 0, click_depth: 0 }),
+                    row('/lone', { inbound_links: 0, click_depth: null }),
+                    row('/hidden', {
+                        inbound_links: 0,
+                        click_depth: null,
+                        in_sitemap: false,
+                    }),
+                    row('/noindex', {
+                        inbound_links: 0,
+                        click_depth: null,
+                        is_indexable: false,
+                    }),
+                ],
+                ['orphan', 'link-depth'],
+            ),
+        ).toEqual([
+            {
+                check: 'orphan',
+                url: 'https://acme.com/lone',
+                detail: { inbound: 0, depth: null },
+            },
+        ]);
+    });
+
+    it(`notes a page with one inbound link or ${deepClicks} clicks or more from a home page`, () => {
+        expect(
+            only(
+                [
+                    row('/', { inbound_links: 1, click_depth: 0 }),
+                    row('/one', { inbound_links: 1, click_depth: 1 }),
+                    row('/deep', { inbound_links: 3, click_depth: deepClicks }),
+                    row('/near', {
+                        inbound_links: 3,
+                        click_depth: deepClicks - 1,
+                    }),
+                ],
+                ['orphan', 'link-depth'],
+            ).map(({ check, url }) => [check, url]),
+        ).toEqual([
+            ['link-depth', 'https://acme.com/one'],
+            ['link-depth', 'https://acme.com/deep'],
+        ]);
+    });
+
+    it('puts a broken or redirected link on each page recorded as linking to it, with the count of every linking page', () => {
+        const linking = ['https://acme.com/a', 'https://acme.com/b'];
+
+        expect(
+            only(
+                [
+                    row('/gone', {
+                        status_code: 404,
+                        is_indexable: false,
+                        inbound_links: 9,
+                    }),
+                    row('/moved', {
+                        status_code: 301,
+                        redirect_to: 'https://acme.com/new',
+                        is_indexable: false,
+                        canonical_url: null,
+                    }),
+                    row('/copy', { canonical_url: 'https://acme.com/main' }),
+                    row('/fine'),
+                ],
+                ['link-broken-internal', 'link-to-redirect'],
+                new Map(
+                    ['/gone', '/moved', '/copy', '/fine'].map((path) => [
+                        `https://acme.com${path}`,
+                        path === '/gone' ? linking : linking.slice(0, 1),
+                    ]),
+                ),
+            ),
+        ).toEqual([
+            ...linking.map((url) => ({
+                check: 'link-broken-internal',
+                url,
+                subject: 'https://acme.com/gone',
+                detail: { status: 404, linkCount: 9 },
+            })),
+            {
+                check: 'link-to-redirect',
+                url: linking[0],
+                subject: 'https://acme.com/moved',
+                detail: {
+                    reason: 'redirect',
+                    target: 'https://acme.com/new',
+                    linkCount: 2,
+                },
+            },
+            {
+                check: 'link-to-redirect',
+                url: linking[0],
+                subject: 'https://acme.com/copy',
+                detail: {
+                    reason: 'canonical',
+                    target: 'https://acme.com/main',
+                    linkCount: 2,
+                },
             },
         ]);
     });

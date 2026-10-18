@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { siteClient } from '@/features/audit/client';
+import { foreignClient, siteClient } from '@/features/audit/client';
 import { firstPace, stoppedAnswering } from '@/features/audit/pacing';
 import type { QueueEntry } from '@/features/audit/queue';
 import { type RobotsFile, robotsFile } from '@/features/audit/robots';
+import { resourceChecks } from '@/features/audit/score';
 import {
+    checkResources,
     checkSite,
     closeAudit,
     discoverSite,
@@ -15,6 +17,7 @@ import type { Fetched } from '@/features/crawl/fetch';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type FakeQuery, fakeSupabase } from '@/lib/supabase/fake';
+import { Constants } from '@/lib/types/database';
 
 vi.mock('@/lib/supabase/admin', () => {
     return { createAdminClient: vi.fn() };
@@ -25,7 +28,7 @@ vi.mock('@/features/runs/steps', () => {
 });
 
 vi.mock('@/features/audit/client', () => {
-    return { siteClient: vi.fn() };
+    return { siteClient: vi.fn(), foreignClient: vi.fn() };
 });
 
 const startedAt = '2026-10-17T10:00:00Z';
@@ -38,6 +41,7 @@ interface Setup {
     linkedHosts?: object | null;
     robotsRules?: RobotsFile[];
     audits?: object[];
+    resources?: Record<string, unknown>[];
 }
 
 function database({
@@ -52,6 +56,7 @@ function database({
         { id: 'stopped', runs: { status: 'failed' } },
         { id: 'older', runs: { status: 'finished' } },
     ],
+    resources = [],
 }: Setup = {}) {
     const answers: Record<string, (query: FakeQuery) => object> = {
         runs: () => ({ data: { status: runStatus, started_at: startedAt } }),
@@ -73,6 +78,10 @@ function database({
             ],
         }),
         audit_queue: () => ({ data: queue }),
+        audit_resources: ({ calls }) =>
+            calls[0][0] === 'select'
+                ? { data: selected(resources, calls) }
+                : {},
         audits: ({ calls }) => {
             if (calls[0][0] === 'update') {
                 return { data: { is_partial: isPartial } };
@@ -131,6 +140,19 @@ function answering(
     return client;
 }
 
+function abroad(
+    read: (
+        url: string,
+        options?: { method?: 'GET' | 'HEAD' },
+    ) => Promise<Fetched | Error | null>,
+) {
+    const client = { read: vi.fn(read), counts: { requests: 0 } };
+
+    vi.mocked(foreignClient).mockReturnValue(client);
+
+    return client;
+}
+
 function notFound(url: string): Fetched {
     return {
         ok: false,
@@ -171,6 +193,63 @@ function call(
 ) {
     return fake.queries.filter(
         ({ name, calls }) => name === table && calls[0][0] === method,
+    );
+}
+
+function filters(query: FakeQuery) {
+    return Object.fromEntries(
+        query.calls
+            .filter(([method]) => method !== 'delete')
+            .map(([method, column, value]) => [
+                `${method} ${String(column)}`,
+                value,
+            ]),
+    );
+}
+
+const kindOrder: readonly string[] = Constants.public.Enums.audit_resource_kind;
+
+function selected(rows: Record<string, unknown>[], calls: FakeQuery['calls']) {
+    const orders: string[] = [];
+    let result = [...rows];
+
+    for (const [method, column, value] of calls) {
+        const key = String(column);
+
+        if (method === 'eq' && key !== 'audit_id') {
+            result = result.filter((row) => row[key] === value);
+        }
+
+        if (method === 'in') {
+            result = result.filter((row) =>
+                (value as unknown[]).includes(row[key]),
+            );
+        }
+
+        if (method === 'order') {
+            orders.push(key);
+        }
+    }
+
+    const rank = (row: Record<string, unknown>, key: string) =>
+        key === 'kind' ? kindOrder.indexOf(String(row.kind)) : String(row[key]);
+
+    result.sort((a, b) => {
+        for (const key of orders) {
+            if (rank(a, key) !== rank(b, key)) {
+                return rank(a, key) < rank(b, key) ? -1 : 1;
+            }
+        }
+
+        return 0;
+    });
+
+    const [, limit] = calls.find(([method]) => method === 'limit') ?? [];
+    const [, from, to] = calls.find(([method]) => method === 'range') ?? [];
+
+    return result.slice(
+        (from as number | undefined) ?? 0,
+        to === undefined ? (limit as number | undefined) : Number(to) + 1,
     );
 }
 
@@ -298,6 +377,7 @@ describe('readPages', () => {
                     state: 'queued',
                     in_sitemap: false,
                     inbound_links: 1,
+                    linked_from: [],
                 },
             ],
         });
@@ -327,6 +407,139 @@ describe('readPages', () => {
     });
 });
 
+describe('readPages, for the resources', () => {
+    it('adds what the page links to into the frontier, with the page as the one linking, before it marks the page read, and never makes the audit partial', async () => {
+        const url = 'https://acme.com/about';
+
+        const fake = database({
+            queue: [
+                {
+                    url,
+                    depth: 1,
+                    state: 'queued',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                    linked_from: [],
+                },
+            ],
+            resources: [
+                {
+                    url: 'https://acme.com/logo.png',
+                    kind: 'image',
+                    linked_from: ['https://acme.com/'],
+                    link_count: 1,
+                    state: 'queued',
+                    status_code: null,
+                    content_length: null,
+                    error: null,
+                },
+            ],
+        });
+
+        answering(async () =>
+            answered(
+                [{ url, status: 200 }],
+                '<img src="/logo.png" alt="Acme"><a href="https://other.com/x">x</a><a href="/team">team</a>',
+            ),
+        );
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        const [upsert] = call(fake, 'audit_resources', 'upsert');
+
+        expect(upsert.calls[0][1]).toEqual([
+            {
+                audit_id: 'audit',
+                url: 'https://acme.com/logo.png',
+                kind: 'image',
+                linked_from: ['https://acme.com/', url],
+                link_count: 2,
+                state: 'queued',
+                status_code: null,
+                content_length: null,
+                error: null,
+            },
+            {
+                audit_id: 'audit',
+                url: 'https://other.com/x',
+                kind: 'external',
+                linked_from: [url],
+                link_count: 1,
+                state: 'queued',
+                status_code: null,
+                content_length: null,
+                error: null,
+            },
+        ]);
+
+        const [queueUpsert] = call(fake, 'audit_queue', 'upsert');
+
+        expect(fake.queries.indexOf(upsert)).toBeLessThan(
+            fake.queries.indexOf(queueUpsert),
+        );
+
+        expect(queueUpsert.calls[0][1]).toContainEqual(
+            expect.objectContaining({
+                url: 'https://acme.com/team',
+                linked_from: [url],
+            }),
+        );
+
+        expect(
+            call(fake, 'audits', 'update')[0].calls[0][1],
+        ).not.toHaveProperty('is_partial');
+    });
+});
+
+describe('readPages, in read order', () => {
+    it('keeps the pages linking to a URL in the order of the batch, whatever order the answers came in', async () => {
+        const pages = ['https://acme.com/a', 'https://acme.com/b'];
+
+        async function linkedFrom(slow: string) {
+            const fake = database({
+                queue: pages.map((url) => ({
+                    url,
+                    depth: 1,
+                    state: 'queued' as const,
+                    in_sitemap: false,
+                    inbound_links: 1,
+                    linked_from: [],
+                })),
+            });
+
+            answering(async (url) => {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, url === slow ? 10 : 0),
+                );
+
+                return answered(
+                    [{ url, status: 200 }],
+                    '<a href="/t">t</a><a href="https://other.com/x">x</a>',
+                );
+            });
+
+            await readPages('project', 'run', 'audit', firstPace);
+
+            return ['audit_queue', 'audit_resources'].map(
+                (table) =>
+                    (
+                        call(fake, table, 'upsert')[0].calls[0][1] as {
+                            url: string;
+                            linked_from: string[];
+                        }[]
+                    ).find(
+                        ({ url }) =>
+                            url === 'https://acme.com/t' ||
+                            url === 'https://other.com/x',
+                    )!.linked_from,
+            );
+        }
+
+        expect(await linkedFrom(pages[0])).toEqual([pages, pages]);
+        expect(await linkedFrom(pages[1])).toEqual([pages, pages]);
+    });
+});
+
 describe('readPages, for the probes', () => {
     it('adds the first linked URL of each foreign host to the hosts the audit already holds', async () => {
         const url = 'https://acme.com/about';
@@ -339,6 +552,7 @@ describe('readPages, for the probes', () => {
                     state: 'queued',
                     in_sitemap: false,
                     inbound_links: 1,
+                    linked_from: [],
                 },
             ],
             linkedHosts: { 'old.com': 'https://old.com/' },
@@ -397,6 +611,7 @@ describe('probeSite', () => {
                     state: 'read',
                     in_sitemap: false,
                     inbound_links: 0,
+                    linked_from: [],
                 },
                 {
                     url: 'https://acme.com/shop/1',
@@ -404,6 +619,7 @@ describe('probeSite', () => {
                     state: 'blocked',
                     in_sitemap: false,
                     inbound_links: 1,
+                    linked_from: [],
                 },
             ],
         });
@@ -576,6 +792,7 @@ describe('readPages, before it writes the batch', () => {
                     state: 'queued',
                     in_sitemap: false,
                     inbound_links: 1,
+                    linked_from: [],
                 },
             ],
             sitePages: [{ url, redirect_to: target }],
@@ -695,6 +912,434 @@ describe('checkSite', () => {
     });
 });
 
+describe('checkSite, for the links', () => {
+    it("writes the queue's inbound counts into the pages before it reads them, and puts a broken link on the pages linking to it", async () => {
+        const gone = 'https://acme.com/gone';
+        const linking = 'https://acme.com/a';
+
+        const fake = database({
+            queue: [
+                {
+                    url: gone,
+                    depth: 2,
+                    state: 'read',
+                    in_sitemap: false,
+                    inbound_links: 3,
+                    linked_from: [linking],
+                },
+                {
+                    url: 'https://acme.com/later',
+                    depth: 3,
+                    state: 'queued',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                    linked_from: [gone],
+                },
+            ],
+            sitePages: [
+                {
+                    id: 'id of gone',
+                    url: gone,
+                    status_code: 404,
+                    redirect_to: null,
+                    is_indexable: false,
+                    is_blocked: false,
+                    canonical_url: null,
+                    in_sitemap: false,
+                    image_count: 0,
+                    external_link_count: 0,
+                    click_depth: 2,
+                    inbound_links: 3,
+                },
+                {
+                    id: 'id of a',
+                    url: linking,
+                    status_code: 200,
+                    redirect_to: null,
+                    is_indexable: true,
+                    is_blocked: false,
+                    canonical_url: null,
+                    in_sitemap: false,
+                    image_count: 0,
+                    external_link_count: 0,
+                    click_depth: 1,
+                    inbound_links: 2,
+                },
+            ],
+        });
+
+        await checkSite('project', 'run', 'audit');
+
+        const upsert = fake.queries.find(
+            ({ name, calls }) =>
+                name === 'site_pages' && calls[0][0] === 'upsert',
+        )!;
+
+        expect(upsert.calls[0][1]).toMatchObject([
+            { project_id: 'project', url: gone, inbound_links: 3 },
+        ]);
+
+        expect(fake.queries.indexOf(upsert)).toBeLessThan(
+            fake.queries.indexOf(call(fake, 'site_pages', 'select')[0]),
+        );
+
+        expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
+            'click_depth, inbound_links',
+        );
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => [
+                row.check,
+                row.site_page_id,
+                row.subject,
+            ]),
+        ).toEqual([['link-broken-internal', 'id of a', gone]]);
+    });
+});
+
+describe('checkResources', () => {
+    const linking = 'https://acme.com/a';
+
+    function resource(
+        url: string,
+        kind: string,
+        linkedFrom = [linking],
+        answer: { state?: string; status_code?: number } = {},
+    ) {
+        return {
+            url,
+            kind,
+            linked_from: linkedFrom,
+            link_count: linkedFrom.length,
+            state: 'queued',
+            status_code: null,
+            content_length: null,
+            error: null,
+            ...answer,
+        };
+    }
+
+    const urls = (rows: { url: string }[]) =>
+        new Set(rows.map(({ url }) => url));
+
+    const sitePages = [
+        {
+            id: 'id of home',
+            url: 'https://acme.com/',
+            is_indexable: true,
+            status_code: 200,
+            redirect_to: null,
+        },
+        {
+            id: 'id of a',
+            url: linking,
+            is_indexable: true,
+            status_code: 200,
+            redirect_to: null,
+        },
+    ];
+
+    it('leaves an audit whose run has ended as it is, so a stopped audit checks no resource', async () => {
+        const fake = database({ runStatus: 'failed' });
+
+        expect(
+            await checkResources('project', 'run', 'audit', firstPace),
+        ).toEqual({ hasWork: false, pace: firstPace });
+
+        expect(fake.writes()).toEqual([]);
+        expect(siteClient).not.toHaveBeenCalled();
+    });
+
+    it('takes the first 50 queued rows by kind, images before external links, then by URL, and says when none is left', async () => {
+        const externals = Array.from({ length: 45 }, (_, i) =>
+            resource(
+                `https://other.com/${String(i).padStart(2, '0')}`,
+                'external',
+            ),
+        );
+
+        const images = Array.from({ length: 10 }, (_, i) =>
+            resource(`https://www.acme.com/${i}.png`, 'image'),
+        );
+
+        const fake = database({
+            sitePages,
+            resources: [
+                ...externals,
+                ...images,
+                resource('https://acme.com/done.png', 'image', [linking], {
+                    state: 'checked',
+                    status_code: 200,
+                }),
+            ],
+        });
+
+        answering(async (url) => answered([{ url, status: 200 }]));
+        abroad(async (url) => answered([{ url, status: 200 }]));
+
+        const reading = await checkResources(
+            'project',
+            'run',
+            'audit',
+            firstPace,
+        );
+
+        const [upsert] = call(fake, 'audit_resources', 'upsert');
+        const written = upsert.calls[0][1] as { url: string; state: string }[];
+
+        expect(urls(written)).toEqual(
+            urls([...images, ...externals.slice(0, 40)]),
+        );
+
+        expect(written.every(({ state }) => state === 'checked')).toBe(true);
+        expect(reading.hasWork).toBe(true);
+
+        const empty = database();
+
+        expect(
+            (await checkResources('project', 'run', 'audit', firstPace))
+                .hasWork,
+        ).toBe(false);
+
+        expect(empty.writes()).toEqual([]);
+    });
+
+    it('sends HEAD, then GET when HEAD is refused with 405, an image under the domain at the site pace and every external link, one under the domain included, abroad', async () => {
+        database({
+            sitePages,
+            resources: [
+                resource('https://cdn.acme.com/a.png', 'image'),
+                resource('https://other.com/x', 'external'),
+                resource('https://blog.acme.com/y', 'external'),
+            ],
+        });
+
+        const site = answering(async (url, options) =>
+            answered([{ url, status: options?.method === 'HEAD' ? 405 : 200 }]),
+        );
+
+        const foreign = abroad(async (url) => answered([{ url, status: 200 }]));
+
+        await checkResources('project', 'run', 'audit', firstPace);
+
+        expect(site.read.mock.calls).toEqual([
+            ['https://cdn.acme.com/a.png', { method: 'HEAD' }],
+            ['https://cdn.acme.com/a.png', { method: 'GET' }],
+        ]);
+
+        expect(foreign.read.mock.calls).toEqual([
+            ['https://blog.acme.com/y', { method: 'HEAD' }],
+            ['https://other.com/x', { method: 'HEAD' }],
+        ]);
+    });
+
+    it('keeps one request in flight per foreign host, and none between two hosts', async () => {
+        database({
+            sitePages,
+            resources: [
+                resource('https://other.com/a', 'external'),
+                resource('https://other.com/b', 'external'),
+                resource('https://else.net/c', 'external'),
+            ],
+        });
+
+        answering(async () => null);
+
+        const events: string[] = [];
+
+        abroad(async (url) => {
+            events.push(`start ${url}`);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            events.push(`end ${url}`);
+
+            return answered([{ url, status: 200 }]);
+        });
+
+        await checkResources('project', 'run', 'audit', firstPace);
+
+        expect(events.filter((event) => event.includes('other.com'))).toEqual([
+            'start https://other.com/a',
+            'end https://other.com/a',
+            'start https://other.com/b',
+            'end https://other.com/b',
+        ]);
+
+        expect(events.indexOf('start https://other.com/a')).toBeLessThan(
+            events.indexOf('end https://else.net/c'),
+        );
+    });
+
+    it('puts a finding on each page linking to a broken resource, deleting the batch’s own findings first, then marks the rows checked', async () => {
+        const fake = database({
+            sitePages,
+            resources: [
+                resource('https://acme.com/gone.png', 'image', [
+                    linking,
+                    'https://acme.com/',
+                ]),
+                resource('https://acme.com/og.png', 'og_image'),
+            ],
+        });
+
+        answering(async (url) => notFound(url));
+        abroad(async () => null);
+
+        await checkResources('project', 'run', 'audit', firstPace);
+
+        const deletes = call(fake, 'audit_findings', 'delete');
+        const batch = ['https://acme.com/gone.png', 'https://acme.com/og.png'];
+
+        expect(deletes.map(filters)).toEqual([
+            {
+                'eq audit_id': 'audit',
+                'in check': resourceChecks,
+                'in subject': batch,
+            },
+            {
+                'eq audit_id': 'audit',
+                'eq check': 'og-image-bad',
+                'contains detail': { reason: 'image' },
+                'in subject': batch,
+            },
+        ]);
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => [
+                row.check,
+                row.site_page_id,
+                row.subject,
+            ]),
+        ).toEqual([
+            ['resource-broken', 'id of a', 'https://acme.com/gone.png'],
+            ['resource-broken', 'id of home', 'https://acme.com/gone.png'],
+            ['og-image-bad', 'id of a', 'https://acme.com/og.png'],
+        ]);
+
+        const insert = fake.queries.find(
+            ({ name, calls }) =>
+                name === 'audit_findings' && calls[0][0] === 'insert',
+        )!;
+
+        const upsert = call(fake, 'audit_resources', 'upsert')[0];
+
+        for (const query of deletes) {
+            expect(fake.queries.indexOf(query)).toBeLessThan(
+                fake.queries.indexOf(insert),
+            );
+        }
+
+        expect(fake.queries.indexOf(insert)).toBeLessThan(
+            fake.queries.indexOf(upsert),
+        );
+
+        expect(upsert.calls[0][1]).toContainEqual(
+            expect.objectContaining({
+                url: 'https://acme.com/gone.png',
+                state: 'checked',
+                status_code: 404,
+            }),
+        );
+    });
+
+    it('refuses the rest of a host after a 403, in the step and from the rows an earlier step checked, without a request', async () => {
+        const fake = database({
+            sitePages,
+            resources: [
+                resource('https://other.com/a', 'external'),
+                resource('https://other.com/b', 'external'),
+                resource('https://shy.net/c', 'external'),
+                resource('https://shy.net/old', 'external', [linking], {
+                    state: 'checked',
+                    status_code: 429,
+                }),
+            ],
+        });
+
+        answering(async () => null);
+
+        const foreign = abroad(async (url) => answered([{ url, status: 403 }]));
+
+        await checkResources('project', 'run', 'audit', firstPace);
+
+        expect(foreign.read.mock.calls.map(([url]) => url)).toHaveLength(1);
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => [
+                row.check,
+                row.subject,
+                (row.detail as { status: number }).status,
+            ]),
+        ).toEqual(
+            expect.arrayContaining([
+                ['link-external-refused', 'https://shy.net/c', 429],
+                ['link-external-refused', 'https://other.com/b', 403],
+            ]),
+        );
+    });
+
+    it('marks an asset off the sample checked without a request, and leaves a row it had no time for queued', async () => {
+        const fake = database({
+            sitePages,
+            resources: [
+                resource('https://acme.com/a.js', 'asset', [
+                    'https://acme.com/x/y',
+                ]),
+                resource('https://acme.com/b.png', 'image'),
+            ],
+        });
+
+        const site = answering(async () => null);
+
+        abroad(async () => null);
+
+        const reading = await checkResources(
+            'project',
+            'run',
+            'audit',
+            firstPace,
+        );
+
+        expect(site.read.mock.calls.map(([url]) => url)).toEqual([
+            'https://acme.com/b.png',
+        ]);
+
+        expect(call(fake, 'audit_resources', 'upsert')[0].calls[0][1]).toEqual([
+            expect.objectContaining({
+                url: 'https://acme.com/a.js',
+                state: 'checked',
+                status_code: null,
+            }),
+        ]);
+
+        expect(inserted(fake, 'audit_findings')).toEqual([]);
+        expect(reading.hasWork).toBe(true);
+    });
+
+    it('adds the requests of both clients to the audit, and the 429 and 5xx answers of the site alone', async () => {
+        const fake = database({
+            sitePages,
+            resources: [resource('https://acme.com/b.png', 'image')],
+        });
+
+        const site = answering(async (url) => answered([{ url, status: 200 }]));
+        const foreign = abroad(async () => null);
+
+        site.counts.requests = 4;
+        site.counts.tooMany = 1;
+        foreign.counts.requests = 6;
+
+        await checkResources('project', 'run', 'audit', firstPace);
+
+        expect(call(fake, 'audits', 'update')[0].calls[0][1]).toEqual({
+            request_count: 13,
+            host_429_count: 2,
+            host_5xx_count: 2,
+        });
+
+        expect(markProgress).toHaveBeenCalledWith('run');
+    });
+});
+
 describe('closeAudit', () => {
     it('leaves an audit whose run has ended as it is, its queue to the retention sweep', async () => {
         const fake = database({ runStatus: 'failed' });
@@ -716,6 +1361,7 @@ describe('closeAudit', () => {
             'update audits',
             'update site_pages',
             'delete audit_queue',
+            'delete audit_resources',
             'delete audit_check_results',
             'delete audit_findings',
             'delete audit_renders',
@@ -727,11 +1373,13 @@ describe('closeAudit', () => {
             ['or', 'last_audit_id.is.null,last_audit_id.neq.audit'],
         ]);
 
-        expect(call(fake, 'audit_queue', 'delete')[0].calls).toContainEqual([
-            'in',
-            'audit_id',
-            ['audit', 'stopped', 'older'],
-        ]);
+        for (const frontier of ['audit_queue', 'audit_resources']) {
+            expect(call(fake, frontier, 'delete')[0].calls).toContainEqual([
+                'in',
+                'audit_id',
+                ['audit', 'stopped', 'older'],
+            ]);
+        }
 
         for (const table of [
             'audit_check_results',
@@ -748,7 +1396,7 @@ describe('closeAudit', () => {
         expect(finishRun).toHaveBeenCalledWith('run');
     });
 
-    it("empties only its own queue on a project's first audit, with no older audit to delete", async () => {
+    it("empties only its own frontiers on a project's first audit, with no older audit to delete", async () => {
         const fake = database({
             audits: [{ id: 'audit', runs: { status: 'running' } }],
         });
@@ -757,7 +1405,7 @@ describe('closeAudit', () => {
 
         expect(
             fake.writes().filter((write) => write.startsWith('delete')),
-        ).toEqual(['delete audit_queue']);
+        ).toEqual(['delete audit_queue', 'delete audit_resources']);
 
         expect(call(fake, 'audit_queue', 'delete')[0].calls).toContainEqual([
             'in',
@@ -779,6 +1427,7 @@ describe('closeAudit', () => {
                         state: 'queued' as const,
                         in_sitemap: false,
                         inbound_links: 1,
+                        linked_from: [],
                     },
                 ],
             },

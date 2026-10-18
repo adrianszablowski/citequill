@@ -398,6 +398,49 @@ describe('onPageChecks', () => {
     });
 });
 
+describe('onPageChecks, for og:url', () => {
+    const tagged = (ogUrl: string, head = '') =>
+        `<html><head><meta property="og:url" content="${ogUrl}">${head}</head><body></body></html>`;
+
+    const ogUrl = (html: string, headers: Record<string, string> = {}) =>
+        check(html, { headers }).filter(
+            (finding) => finding.check === 'og-image-bad',
+        );
+
+    it('reports an og:url that differs from the canonical, by tag or by header', () => {
+        expect(
+            ogUrl(tagged('/', `<link rel="canonical" href="${url}">`)),
+        ).toEqual([
+            {
+                check: 'og-image-bad',
+                url,
+                subject: 'https://acme.com/',
+                detail: { reason: 'url', canonical: url },
+            },
+        ]);
+
+        expect(
+            ogUrl(tagged('https://acme.com/other'), {
+                link: `<${url}>; rel="canonical"`,
+            }),
+        ).toHaveLength(1);
+    });
+
+    it('passes an og:url equal to the canonical, and a page with no canonical or no og:url', () => {
+        expect(
+            ogUrl(tagged('/pricing', `<link rel="canonical" href="${url}">`)),
+        ).toEqual([]);
+
+        expect(ogUrl(tagged('https://acme.com/other'))).toEqual([]);
+
+        expect(
+            ogUrl(
+                `<html><head><link rel="canonical" href="${url}"></head></html>`,
+            ),
+        ).toEqual([]);
+    });
+});
+
 describe('repeatedWord', () => {
     it('finds a word of 4 or more letters said 3 times, Polish letters included', () => {
         expect(repeatedWord('Żółw, żółw i ŻÓŁW')).toBe('żółw');

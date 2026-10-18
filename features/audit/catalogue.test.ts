@@ -52,6 +52,15 @@ describe('catalogue', () => {
         expect(checkOf('og-missing').needs).toBe('raw');
     });
 
+    it('holds the 17 rows of the Links table, hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'links'),
+        ).toHaveLength(17);
+
+        expect(checkOf('link-external-refused').severity).toBe('hint');
+        expect(checkOf('link-rendered-only').needs).toBe('rendered');
+    });
+
     it('weighs the seven areas to 100', () => {
         expect(
             Object.values(areaWeights).reduce<number>(

@@ -17,6 +17,7 @@ import {
     scoreAudit,
     type ScoredFinding,
     type ScoredPage,
+    resourceChecks,
     shippedChecks,
 } from '@/features/audit/score';
 
@@ -33,6 +34,7 @@ function page(index: number, overrides: Partial<ScoredPage> = {}): ScoredPage {
         canonical_url: null,
         in_sitemap: true,
         image_count: 0,
+        external_link_count: 0,
         ...overrides,
     };
 }
@@ -489,6 +491,36 @@ describe('appliesTo', () => {
             appliesTo('page-5xx', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-0', 'page-1']);
     });
+
+    it('applies the external link checks to the indexable pages with an external link', () => {
+        const sitePages = [
+            page(0),
+            page(1, { external_link_count: 2 }),
+            page(2, { external_link_count: 1, is_indexable: false }),
+        ];
+
+        for (const check of [
+            'link-broken-external',
+            'link-external-refused',
+        ] as const) {
+            expect(
+                appliesTo(check, sitePages, [home]).map(({ id }) => id),
+            ).toEqual(['page-1']);
+        }
+    });
+
+    it('applies resource-broken to the indexable pages with images and to the sample, which holds every home', () => {
+        const sitePages = [
+            page(0),
+            page(1, { url: 'https://acme.com/a/b', image_count: 2 }),
+            page(2, { url: 'https://acme.com/a/c' }),
+            page(3, { image_count: 1, is_indexable: false }),
+        ];
+
+        expect(
+            appliesTo('resource-broken', sitePages, [home]).map(({ id }) => id),
+        ).toEqual(['page-0', 'page-1']);
+    });
 });
 
 describe('the on-page checks', () => {
@@ -552,9 +584,10 @@ describe('the on-page checks', () => {
         for (const check of [
             'title-language',
             'twitter-card',
-            'og-image-bad',
-            'img-heavy',
             'img-oversized',
+            'link-blank-noopener',
+            'link-scripted',
+            'link-rendered-only',
             'title-rendered-only',
             'jsonld-invalid',
             'structured-data-format',
@@ -632,8 +665,23 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 92 checks, the probes of indexability included', () => {
-        expect(shippedChecks).toHaveLength(92);
+    it('ships 108 checks, the links and the two image hints that need a request included', () => {
+        expect(shippedChecks).toHaveLength(108);
+    });
+
+    it('leaves the resource and cross-page link checks out of a stopped audit, and keeps the Read half of og-image-bad', () => {
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        for (const check of [...resourceChecks, 'orphan', 'link-to-redirect']) {
+            expect(stopped).not.toContain(check);
+        }
+
+        expect(stopped).toContain('og-image-bad');
+        expect(stopped).toContain('anchor-generic');
     });
 
     it('compares pages for near-duplicate, so a stopped audit skips it, and scores the two-half checks from their Read half', () => {

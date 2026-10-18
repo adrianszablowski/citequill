@@ -9,6 +9,7 @@ vi.mock('@/features/audit/steps', () => {
     return {
         discoverSite: vi.fn(),
         readPages: vi.fn(),
+        checkResources: vi.fn(),
         probeSite: vi.fn(async () => {}),
         checkSite: vi.fn(async () => {}),
         closeAudit: vi.fn(async () => {}),
@@ -30,19 +31,34 @@ beforeEach(() => {
 });
 
 describe('auditSite', () => {
-    it('reads while a step reports work left, hands each step the pace of the last, then probes, checks the site and closes', async () => {
-        const paces = [1, 2, 3].map((streak) => ({ ...firstPace, streak }));
+    it('reads, then checks the resources, while a step reports work left, hands each step the pace of the last, then probes, checks the site and closes', async () => {
+        const paces = [1, 2, 3, 4, 5].map((streak) => ({
+            ...firstPace,
+            streak,
+        }));
 
         mocked.readPages
             .mockResolvedValueOnce({ hasWork: true, pace: paces[0] })
             .mockResolvedValueOnce({ hasWork: true, pace: paces[1] })
             .mockResolvedValueOnce({ hasWork: false, pace: paces[2] });
 
+        mocked.checkResources
+            .mockResolvedValueOnce({ hasWork: true, pace: paces[3] })
+            .mockResolvedValueOnce({ hasWork: false, pace: paces[4] });
+
         await auditSite('project', 'run', 'audit');
 
         expect(mocked.readPages.mock.calls.map(([, , , pace]) => pace)).toEqual(
             [firstPace, paces[0], paces[1]],
         );
+
+        expect(
+            mocked.checkResources.mock.calls.map(([, , , pace]) => pace),
+        ).toEqual([paces[2], paces[3]]);
+
+        expect(
+            mocked.checkResources.mock.invocationCallOrder[0],
+        ).toBeGreaterThan(mocked.readPages.mock.invocationCallOrder[2]);
 
         expect(mocked.checkSite).toHaveBeenCalledWith(
             'project',
@@ -60,11 +76,11 @@ describe('auditSite', () => {
             'project',
             'run',
             'audit',
-            paces[2],
+            paces[4],
         );
 
         expect(mocked.probeSite.mock.invocationCallOrder[0]).toBeGreaterThan(
-            mocked.readPages.mock.invocationCallOrder[2],
+            mocked.checkResources.mock.invocationCallOrder[1],
         );
 
         expect(mocked.checkSite.mock.invocationCallOrder[0]).toBeGreaterThan(
@@ -90,6 +106,7 @@ describe('auditSite', () => {
             'The site stopped answering.',
         );
 
+        expect(mocked.checkResources).not.toHaveBeenCalled();
         expect(mocked.probeSite).not.toHaveBeenCalled();
         expect(mocked.checkSite).not.toHaveBeenCalled();
         expect(mocked.closeAudit).not.toHaveBeenCalled();

@@ -4,7 +4,9 @@ import {
     linkDepth,
     linkTarget,
     type QueueEntry,
+    withoutSlash,
 } from '@/features/audit/queue';
+import { externalLinks, pageResources } from '@/features/audit/resources';
 import { type Fetched, type Hop, isHtml } from '@/features/crawl/fetch';
 import { absolute } from '@/features/crawl/html';
 import { type Locale, localeOf } from '@/features/crawl/locales';
@@ -20,6 +22,7 @@ export interface ReadContext {
     auditId: string;
     locales: Locale[];
     hosts: string[];
+    domain: string;
     pageIds: Map<string, string>;
 }
 
@@ -41,7 +44,7 @@ export interface Observation {
 
 export function observeRead(
     { entry, outcome }: Read,
-    { projectId, auditId, locales, hosts, pageIds }: ReadContext,
+    { projectId, auditId, locales, hosts, domain, pageIds }: ReadContext,
 ) {
     const fetched =
         outcome === 'blocked' || outcome instanceof Error ? null : outcome;
@@ -60,9 +63,11 @@ export function observeRead(
         fetched && {
             hops: fetched.hops,
             title: page?.title ?? null,
-            canonical:
-                page?.canonical ??
-                headerCanonical(fetched.headers.get('link'), fetched.url),
+            canonical: canonicalOf(
+                page?.canonical ?? null,
+                fetched.headers,
+                fetched.url,
+            ),
             directives,
         },
     );
@@ -78,10 +83,13 @@ export function observeRead(
             page && page.wordCount >= thinPageWords ? page.simhash : null,
         description: page?.descriptions[0]?.content || null,
         image_count: page?.images.length ?? 0,
+        external_link_count: page
+            ? externalLinks(entry.url, page, hosts).length
+            : 0,
         hreflang: page ? (page.alternates as unknown as Json) : null,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,
-        page_id: pageIds.get(entry.url.replace(/\/$/, '')) ?? null,
+        page_id: pageIds.get(withoutSlash(entry.url)) ?? null,
         last_audit_id: auditId,
     };
 
@@ -89,7 +97,14 @@ export function observeRead(
         const url = linkTarget(href, hosts);
 
         return url && url !== entry.url
-            ? [{ url, depth: linkDepth(entry.depth), inbound: 1 }]
+            ? [
+                  {
+                      url,
+                      depth: linkDepth(entry.depth),
+                      inbound: 1,
+                      from: entry.url,
+                  },
+              ]
             : [];
     });
 
@@ -102,6 +117,7 @@ export function observeRead(
         row,
         page,
         directives,
+        resources: page ? pageResources(entry.url, page, hosts, domain) : [],
         candidates:
             landing && landing !== entry.url
                 ? [...links, { url: landing, depth: entry.depth }]
@@ -152,6 +168,14 @@ export function googlebotDirectives(
     ]
         .map((directive) => directive.trim().toLowerCase())
         .filter(Boolean);
+}
+
+export function canonicalOf(
+    htmlCanonical: string | null,
+    headers: Headers,
+    url: string,
+) {
+    return htmlCanonical ?? headerCanonical(headers.get('link'), url);
 }
 
 export function headerCanonical(header: string | null, url: string) {

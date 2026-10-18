@@ -52,7 +52,14 @@ function entry(
     state: QueueEntry['state'],
     depth: number | null = 1,
 ): QueueEntry {
-    return { url, depth, state, in_sitemap: false, inbound_links: 1 };
+    return {
+        url,
+        depth,
+        state,
+        in_sitemap: false,
+        inbound_links: 1,
+        linked_from: [],
+    };
 }
 
 describe('randomPathToken', () => {
