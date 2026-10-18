@@ -84,6 +84,10 @@ export function selectorOf({ name, attribs }: Tag) {
     ].join('');
 }
 
+export function isTemplateSelector(selector: string) {
+    return /[#.]/.test(selector);
+}
+
 export function snippetOf(html: string) {
     const text = html.replace(/\s+/g, ' ').trim();
 

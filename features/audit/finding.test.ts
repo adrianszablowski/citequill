@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     fingerprint,
     findingRows,
+    isTemplateSelector,
     selectorOf,
     snippetLength,
     snippetOf,
@@ -99,6 +100,18 @@ describe('selectorOf', () => {
         expect(
             selectorOf({ name: 'link', attribs: { rel: 'canonical' } }),
         ).toBe('link');
+    });
+});
+
+describe('isTemplateSelector', () => {
+    it('holds for a selector with an id or a class, which names one element of the template', () => {
+        expect(isTemplateSelector('img#logo.brand')).toBe(true);
+        expect(isTemplateSelector('a.read-more')).toBe(true);
+    });
+
+    it('fails for a bare tag, which would match every such element on the site', () => {
+        expect(isTemplateSelector('a')).toBe(false);
+        expect(isTemplateSelector('img')).toBe(false);
     });
 });
 

@@ -665,6 +665,13 @@ The Findings card showed the check text, the subject, the selector and the snipp
 - Slice 3 rejected showing the detail as "a UI change for one case", so `link-external-refused` became a check of its own; slice 4 made it five cases, and the generic renderer earns its place. `link-external-refused` stays a check, because a hint a customer filters by needs an id.
 - Reason: the planner's call that a finding whose meaning is in its detail is unreadable without it, 18 October 2026, and the texts of `security-headers`, `tls-invalid`, `mobile-content-differs`, `robots-googlebot-blocked`, `link-broken-internal` and `resource-broken`, which already promise what the finding names.
 
+## 2026-10-18: a mark on every page needs a selector with an id or a class
+
+A finding on an element with no id and no class has a bare tag as its selector, `a` or `img`, and the button "Mark this element as intended on every page" wrote a mark on that selector, which `hasMark()` matches by check and selector alone. So a mark on a legal page's link to the privacy policy, whose text is its URL, would have hidden every `anchor-generic` finding on every plain link of the site, the "read more" in an article included.
+
+- The Findings card offers the selector grain only when `isTemplateSelector()` in `features/audit/finding.ts` holds, a selector with a `#` or a `.`. The URL grain and the check grain stay. Rejected: a warning beside the button, because a mark the owner has to be warned about is a mark the card should not offer; a finer selector, such as the element's position, because the fingerprint and the marks of every earlier audit stand on the selector as it is.
+- Reason: the owner's call on seeing the row, 18 October 2026, and the rule of the marks that a selector covers the template, never the whole site.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.
