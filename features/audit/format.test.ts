@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import { findingsPerPage } from '@/features/audit/finding';
 import {
     altAsShown,
     ancestorAsShown,
     changesLine,
+    detailLines,
     formatDuration,
     startedAgo,
 } from '@/features/audit/format';
@@ -82,5 +84,65 @@ describe('ancestorAsShown', () => {
     it('names the ancestor that decided the verdict', () => {
         expect(ancestorAsShown('link')).toBe('In a link');
         expect(ancestorAsShown('figure')).toBe('In a figure');
+    });
+});
+
+describe('detailLines', () => {
+    it('writes one labelled line per key the customer can act on', () => {
+        expect(
+            detailLines({
+                missing: [
+                    'strict-transport-security',
+                    'content-security-policy',
+                ],
+                code: 'CERT_HAS_EXPIRED',
+                status: 404,
+            }),
+        ).toEqual([
+            'Missing: strict-transport-security, content-security-policy',
+            'Code: CERT_HAS_EXPIRED',
+            'Status: 404',
+        ]);
+    });
+
+    it('hides the keys the audit keeps for itself and the values with nothing to show', () => {
+        expect(
+            detailLines({
+                reason: 'no-redirect',
+                hops: [{ url: 'http://acme.com/', status: 301 }],
+                isNoindex: true,
+                error: null,
+                missing: [],
+                finalUrl: 'http://acme.com/',
+            }),
+        ).toEqual(['Final URL: http://acme.com/']);
+    });
+
+    it('spells out the counts of a nested record', () => {
+        expect(
+            detailLines({
+                reasons: ['headings', 'words'],
+                desktop: { headings: 12, words: 1840, links: 30 },
+                phone: { headings: 8, words: 900, links: 30 },
+            }),
+        ).toEqual([
+            'Reasons: headings, words',
+            'Desktop: headings 12, words 1,840, links 30',
+            'Phone: headings 8, words 900, links 30',
+        ]);
+    });
+
+    it('counts the elements beyond the 20 listed, and says nothing when all are listed', () => {
+        expect(detailLines({ total: findingsPerPage + 14 })).toEqual([
+            'and 14 more',
+        ]);
+
+        expect(detailLines({ total: findingsPerPage })).toEqual([]);
+    });
+
+    it('shows nothing for a finding with no detail', () => {
+        expect(detailLines(null)).toEqual([]);
+        expect(detailLines(undefined)).toEqual([]);
+        expect(detailLines('served')).toEqual([]);
     });
 });

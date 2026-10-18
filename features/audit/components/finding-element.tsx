@@ -1,9 +1,9 @@
+import { detailLines } from '@/features/audit/format';
 import type { FindingItem } from '@/features/audit/queries';
 
 interface FindingElementProps {
-    finding: Pick<FindingItem, 'selector' | 'snippet'> & {
-        subject?: string | null;
-    };
+    finding: Pick<FindingItem, 'selector' | 'snippet'> &
+        Partial<Pick<FindingItem, 'subject' | 'detail'>>;
 }
 
 export default function FindingElement({
@@ -22,6 +22,11 @@ export default function FindingElement({
                     {finding.snippet}
                 </code>
             )}
+            {detailLines(finding.detail).map((line) => (
+                <p key={line} className="wrap-break-word text-muted-foreground">
+                    {line}
+                </p>
+            ))}
         </div>
     );
 }

@@ -210,7 +210,7 @@ export async function getFindings(auditId: string, query: FindingListQuery) {
     let request = supabase
         .from('audit_findings')
         .select(
-            'id, check, severity, subject, selector, snippet, is_intended, site_page_id, site_pages(url, locale)',
+            'id, check, severity, subject, selector, snippet, detail, is_intended, site_page_id, site_pages(url, locale)',
             { count: 'exact' },
         )
         .eq('audit_id', auditId);
