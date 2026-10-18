@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { foreignClient, siteClient } from '@/features/audit/client';
 import { firstPace, stoppedAnswering } from '@/features/audit/pacing';
@@ -165,6 +165,7 @@ function notFound(url: string): Fetched {
         body: '',
         isTruncated: false,
         hops: [{ url, status: 404 }],
+        headersMs: 0,
     };
 }
 
@@ -179,6 +180,7 @@ function answered(hops: { url: string; status: number }[], body = ''): Fetched {
         body,
         isTruncated: false,
         hops,
+        headersMs: 0,
     };
 }
 
@@ -258,6 +260,10 @@ function selected(rows: Record<string, unknown>[], calls: FakeQuery['calls']) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+});
+
+afterEach(() => {
+    vi.unstubAllEnvs();
 });
 
 describe('discoverSite', () => {
@@ -407,6 +413,101 @@ describe('readPages', () => {
         ]);
 
         expect(markProgress).toHaveBeenCalledWith('run');
+    });
+});
+
+describe('readPages, for html-slow', () => {
+    const url = 'https://acme.com/slow';
+
+    const queue: QueueEntry[] = [
+        {
+            url,
+            depth: 1,
+            state: 'queued',
+            in_sitemap: false,
+            inbound_links: 1,
+            linked_from: [],
+        },
+    ];
+
+    const timed = (headersMs: number, title = 'Slow') => ({
+        ...answered([{ url, status: 200 }], `<title>${title}</title>`),
+        headersMs,
+    });
+
+    it('reads a page over 800 ms a second time and reports it when both reads were slow, with the page row from the first read', async () => {
+        vi.stubEnv('VERCEL_REGION', 'fra1');
+
+        const fake = database({ queue });
+        const answers = [timed(1200), timed(950, 'Second')];
+
+        const client = answering(async () => answers.shift()!);
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        expect(client.read.mock.calls.map(([target]) => target)).toEqual([
+            url,
+            url,
+        ]);
+
+        expect(call(fake, 'site_pages', 'upsert')[0].calls[0][1]).toMatchObject(
+            [{ url, title: 'Slow', status_code: 200 }],
+        );
+
+        expect(
+            inserted(fake, 'audit_findings').filter(
+                (row) => row.check === 'html-slow',
+            ),
+        ).toMatchObject([
+            {
+                site_page_id: `id of ${url}`,
+                detail: { ms: [1200, 950], region: 'fra1' },
+            },
+        ]);
+    });
+
+    it('reports nothing when the second read fails, is fast or answers anything but 200 HTML, and never reads a fast page twice', async () => {
+        for (const second of [
+            new Error('timed out'),
+            timed(300),
+            { ...answered([{ url, status: 503 }]), headersMs: 900 },
+        ]) {
+            const fake = database({ queue });
+            const answers = [timed(1200), second];
+
+            answering(async () => answers.shift()!);
+
+            await readPages('project', 'run', 'audit', firstPace);
+
+            expect(
+                inserted(fake, 'audit_findings').map((row) => row.check),
+            ).not.toContain('html-slow');
+        }
+
+        database({ queue });
+
+        const client = answering(async () => timed(800));
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        expect(client.read).toHaveBeenCalledTimes(1);
+    });
+
+    it('reports nothing when the budget leaves the second read unsent, and still records the first read', async () => {
+        const fake = database({ queue });
+        const answers: (Fetched | null)[] = [timed(1200), null];
+
+        answering(async () => answers.shift() ?? null);
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        expect(call(fake, 'site_pages', 'upsert')[0].calls[0][1]).toMatchObject(
+            [{ url, title: 'Slow', status_code: 200 }],
+        );
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => row.check),
+        ).not.toContain('html-slow');
     });
 });
 
@@ -966,6 +1067,73 @@ describe('checkSite', () => {
                 ['eq', 'check', 'facets-indexable'],
                 ['contains', 'detail', { reason: 'volume' }],
             ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'assets-heavy'],
+                ['contains', 'detail', { reason: 'bytes' }],
+            ],
+        ]);
+    });
+
+    it('weighs the scripts and stylesheets of each home page that answered 200, by the Content-Length the resource step read', async () => {
+        const home = 'https://acme.com/';
+
+        const asset = (
+            url: string,
+            contentLength: number | null,
+            overrides: Record<string, unknown> = {},
+        ) => ({
+            url,
+            kind: 'asset',
+            linked_from: [home],
+            link_count: 1,
+            state: 'checked',
+            status_code: 200,
+            content_length: contentLength,
+            error: null,
+            ...overrides,
+        });
+
+        const fake = database({
+            sitePages: [
+                {
+                    id: 'id of home',
+                    url: home,
+                    status_code: 200,
+                    redirect_to: null,
+                    is_indexable: true,
+                    is_blocked: false,
+                    canonical_url: null,
+                    in_sitemap: true,
+                },
+            ],
+            resources: [
+                asset('https://acme.com/app.js', 1_500_000),
+                asset('https://acme.com/app.css', 600_000),
+                asset('https://acme.com/lazy.js', null),
+                asset('https://acme.com/gone.js', 900_000, {
+                    status_code: 404,
+                }),
+                asset('https://acme.com/hero.png', 900_000, { kind: 'image' }),
+            ],
+        });
+
+        await checkSite('project', 'run', 'audit');
+
+        expect(call(fake, 'audit_resources', 'select')[0].calls).toContainEqual(
+            ['select', 'linked_from, content_length'],
+        );
+
+        expect(
+            inserted(fake, 'audit_findings').filter(
+                (row) => row.check === 'assets-heavy',
+            ),
+        ).toMatchObject([
+            {
+                site_page_id: 'id of home',
+                detail: { reason: 'bytes', bytes: 2_100_000, files: 3 },
+            },
         ]);
     });
 });

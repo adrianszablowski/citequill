@@ -32,6 +32,7 @@ function answer(hops: Hop[], { body = '', headers = {} } = {}): Fetched {
         body,
         isTruncated: false,
         hops,
+        headersMs: 0,
     };
 }
 

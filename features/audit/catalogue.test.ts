@@ -82,6 +82,23 @@ describe('catalogue', () => {
         });
     });
 
+    it('holds the 5 rows of the Performance table, hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'performance'),
+        ).toHaveLength(5);
+
+        for (const id of [
+            'assets-uncached',
+            'assets-heavy',
+            'dom-size',
+        ] as const) {
+            expect(checkOf(id).severity, id).toBe('hint');
+        }
+
+        expect(checkOf('html-slow').severity).toBe('2');
+        expect(checkOf('html-uncompressed').severity).toBe('2');
+    });
+
     it('weighs the seven areas to 100', () => {
         expect(
             Object.values(areaWeights).reduce<number>(

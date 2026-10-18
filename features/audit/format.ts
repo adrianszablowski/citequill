@@ -184,4 +184,7 @@ const detailLabels: Record<string, string> = {
     lastModified: 'Last-Modified',
     modifiedTime: 'article:modified_time',
     series: 'Series',
+    ms: 'Time (ms)',
+    region: 'Region',
+    files: 'Files',
 };

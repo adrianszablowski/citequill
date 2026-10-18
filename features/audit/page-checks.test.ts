@@ -54,10 +54,15 @@ function fetched(
         ok: hops.at(-1)!.status < 300,
         status: hops.at(-1)!.status,
         url: hops.at(-1)!.url,
-        headers: new Headers({ 'content-type': 'text/html', ...headers }),
+        headers: new Headers({
+            'content-type': 'text/html',
+            'content-encoding': 'gzip',
+            ...headers,
+        }),
         body,
         isTruncated,
         hops,
+        headersMs: 0,
     };
 }
 
@@ -274,13 +279,16 @@ describe('checkPage', () => {
             'html-over-2mb',
         ]);
 
-        expect(
-            checks(
-                fetched(html(''), {
-                    headers: { 'content-length': String(maxBytes + 1) },
-                }),
-            ),
-        ).toEqual(['html-over-2mb']);
+        const uncompressed = fetched(html(''), {
+            headers: { 'content-length': String(maxBytes + 1) },
+        });
+
+        uncompressed.headers.delete('content-encoding');
+
+        expect(checks(uncompressed)).toEqual([
+            'html-over-2mb',
+            'html-uncompressed',
+        ]);
 
         expect(
             checks(

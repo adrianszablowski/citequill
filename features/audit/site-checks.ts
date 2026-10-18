@@ -42,6 +42,7 @@ export const deepClicks = 4;
 export const siteHalves = [
     ['param-duplicates', 'variants'],
     ['facets-indexable', 'volume'],
+    ['assets-heavy', 'bytes'],
 ] as const;
 
 export const stockTitles = new Set([

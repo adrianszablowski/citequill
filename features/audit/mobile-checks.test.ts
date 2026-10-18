@@ -28,6 +28,7 @@ function answer(
         body,
         isTruncated: false,
         hops,
+        headersMs: 0,
     };
 }
 

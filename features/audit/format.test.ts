@@ -118,6 +118,17 @@ describe('detailLines', () => {
         ).toEqual(['Final URL: http://acme.com/']);
     });
 
+    it('shows both times of a slow page with the region it was read from, and the half of assets-heavy by its count alone', () => {
+        expect(detailLines({ ms: [1240, 1810], region: 'fra1' })).toEqual([
+            'Time (ms): 1,240, 1,810',
+            'Region: fra1',
+        ]);
+
+        expect(
+            detailLines({ reason: 'bytes', bytes: 2_400_000, files: 38 }),
+        ).toEqual(['Bytes: 2,400,000', 'Files: 38']);
+    });
+
     it('spells out the counts of a nested record', () => {
         expect(
             detailLines({

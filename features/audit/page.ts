@@ -86,6 +86,7 @@ export interface AuditPage {
     plugins: Plugin[];
     visibleText: string;
     markupLength: number;
+    elementCount: number;
     images: PageImage[];
     lang: string | null;
     canonical: string | null;
@@ -268,6 +269,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
             .map((tag) => ({ ...located(tag), name: tag.name })),
         visibleText: body.text().replace(/\s+/g, ' ').trim(),
         markupLength: html.replace(scriptOrStyle, '').length,
+        elementCount: inDocument('*' as cheerio.SelectorType).length,
         images: imagesOf($, base),
         lang: $('html').attr('lang')?.trim().toLowerCase() || null,
         canonical: absolute(canonicals[0]?.href, base),

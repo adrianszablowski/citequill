@@ -798,4 +798,34 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         link: links.mobileFirst,
         fix: 'Give phones the same text, headings, links and tags as desktops. Put a long section into a tab or an accordion on a phone and keep it in the HTML. The finding lists what differed.',
     },
+    'html-slow': {
+        name: 'The server is slow to answer a page',
+        says: 'Google raises the crawl capacity of a site that responds consistently and whose response times, Time to First Byte included, stay stable or improve.',
+        link: links.crawlBudget,
+        fix: 'Cache the page at your CDN or server, and find in the server’s logs what makes it slow. The audit read the page twice, and the headers of both answers took over 800 ms, Citequill’s threshold from web.dev’s Time to First Byte advice; the audit’s time leaves out the connection a browser opens first. The finding names both times and the region the audit asked from.',
+    },
+    'html-uncompressed': {
+        name: 'A page is sent uncompressed',
+        says: 'Google’s crawl budget guide asks you to optimize your server response times and resources, because it might read more of your site when your pages load faster.',
+        link: links.crawlBudget,
+        fix: 'Turn on gzip or Brotli compression for HTML at your server or CDN. The audit asked for gzip and br, as a browser does, and the answer came back without a Content-Encoding.',
+    },
+    'assets-uncached': {
+        name: 'A script or stylesheet has no cache headers',
+        says: 'Google’s crawl budget guide asks you to make your pages efficient to load and to use HTTP caching, so that a 304 answer lets Google reuse the copy it already has.',
+        link: links.crawlBudget,
+        fix: 'Send the file with a Cache-Control header, such as Cache-Control: public, max-age=31536000, immutable for a file whose name changes with its content. Without Cache-Control or Expires, each browser guesses how long to keep the file. If the file is on a host you do not control, host the file yourself or pick another.',
+    },
+    'assets-heavy': {
+        name: 'A page loads many or heavy scripts and stylesheets',
+        says: 'Google’s crawl budget guide asks you to optimize your server response times and resources so your pages load faster.',
+        link: links.crawlBudget,
+        fix: 'Remove the scripts and stylesheets the page does not use, and split large bundles so a page loads only what it needs. The finding says whether the page uses over 100 files, or the files of a home page weigh over 2 MB by the sizes the server declares.',
+    },
+    'dom-size': {
+        name: 'A page has very many HTML elements',
+        says: 'Google’s crawl budget guide says it might read more of your site when it can load and render your pages faster.',
+        link: links.crawlBudget,
+        fix: 'Most tools flag a page with over 1 500 elements, and the audit counts an inline SVG as one element. Remove wrappers that add nothing, and split long lists into pages.',
+    },
 };

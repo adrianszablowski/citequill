@@ -733,8 +733,13 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 119 checks, the HTTPS and viewport checks and the phone comparison included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(119);
+    it('ships 124 checks, the HTTPS, viewport and performance checks and the phone comparison included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(124);
+    });
+
+    it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {
+        expect(checksInScope('sampled')).toContain('assets-uncached');
+        expect(resourceChecks).toContain('assets-uncached');
     });
 
     it('scores the probed half of https-missing with its Read half, so a stopped audit keeps the check and skips the phone comparison', () => {
@@ -774,6 +779,7 @@ describe('shippedChecks', () => {
         expect(stopped).not.toContain('near-duplicate');
         expect(stopped).toContain('param-duplicates');
         expect(stopped).toContain('facets-indexable');
+        expect(stopped).toContain('assets-heavy');
     });
 });
 

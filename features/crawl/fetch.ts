@@ -31,6 +31,7 @@ export interface Fetched {
     body: string;
     isTruncated: boolean;
     hops: Hop[];
+    headersMs: number;
 }
 
 export interface FetchDeps {
@@ -59,6 +60,7 @@ export async function fetchPublic(
         const sent = new Headers({
             'user-agent': userAgent,
             accept: 'text/html,*/*',
+            'accept-encoding': 'gzip, br',
         });
 
         for (const [name, value] of Object.entries(headers)) {
@@ -69,12 +71,16 @@ export async function fetchPublic(
             sent.set(botSecretHeader, botSecret.value);
         }
 
+        const sentAt = Date.now();
+
         const response = await deps.fetch(current.href, {
             method,
             headers: sent,
             redirect: 'manual',
             signal,
         });
+
+        const headersMs = Date.now() - sentAt;
 
         hops.push({ url: current.href, status: response.status });
 
@@ -109,6 +115,7 @@ export async function fetchPublic(
             body,
             isTruncated,
             hops,
+            headersMs,
         };
     }
 }

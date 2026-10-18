@@ -26,6 +26,7 @@ export interface ResourceAnswer {
     contentLength: number | null;
     error: string | null;
     finalUrl: string | null;
+    isUncached: boolean;
 }
 
 export type ReadUrl = (
@@ -169,6 +170,7 @@ export function answerOf(outcome: Fetched | Error): ResourceAnswer {
             contentLength: null,
             error: outcome.message,
             finalUrl: null,
+            isUncached: false,
         };
     }
 
@@ -183,11 +185,20 @@ export function answerOf(outcome: Fetched | Error): ResourceAnswer {
                 : null,
         error: null,
         finalUrl: outcome.url,
+        isUncached:
+            !outcome.headers.has('cache-control') &&
+            !outcome.headers.has('expires'),
     };
 }
 
 export function refusedAnswer(status: number): ResourceAnswer {
-    return { status, contentLength: null, error: null, finalUrl: null };
+    return {
+        status,
+        contentLength: null,
+        error: null,
+        finalUrl: null,
+        isUncached: false,
+    };
 }
 
 export function isForeignResource(
@@ -270,7 +281,7 @@ function capOf(kind: ResourceKind) {
 
 function verdictOf(
     kind: ResourceKind,
-    { status, contentLength: bytes }: ResourceAnswer,
+    { status, contentLength: bytes, isUncached }: ResourceAnswer,
     isForeign: boolean,
 ): { check: Finding['check']; reason?: string } | null {
     if (isForeign && status !== null && refusals.has(status)) {
@@ -291,6 +302,10 @@ function verdictOf(
 
     if (status !== 200) {
         return { check: 'resource-broken' };
+    }
+
+    if (kind === 'asset') {
+        return isUncached ? { check: 'assets-uncached' } : null;
     }
 
     return kind === 'image' && bytes !== null && bytes > imgHeavyBytes

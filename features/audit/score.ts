@@ -83,6 +83,7 @@ export const resourceChecks = [
     'link-external-refused',
     'resource-broken',
     'img-heavy',
+    'assets-uncached',
 ] as const satisfies readonly CheckId[];
 
 export function scoreAudit({ checks, pages, findings, marks, homes }: Audited) {
@@ -480,6 +481,11 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'viewport-missing': 'indexable',
     'viewport-misconfigured': 'indexable',
     'mobile-content-differs': 'sampled',
+    'html-slow': 'answered',
+    'html-uncompressed': 'answered',
+    'assets-uncached': 'sampled',
+    'assets-heavy': 'answered',
+    'dom-size': 'answered',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

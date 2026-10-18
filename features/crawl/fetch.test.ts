@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
     botSecretHeader,
@@ -236,8 +236,48 @@ describe('fetchPublic', () => {
         expect(result.body).toBe('');
 
         expect(sent).toEqual([
-            { method: 'HEAD', userAgent: 'Phone', secret: null },
+            {
+                method: 'HEAD',
+                userAgent: 'Phone',
+                encoding: 'gzip, br',
+                secret: null,
+            },
         ]);
+    });
+
+    it('times each answer from its request to its headers and keeps the time of the final hop', async () => {
+        const answers = fakeDeps({
+            'https://acme.com/': redirect('https://www.acme.com/'),
+            'https://www.acme.com/': page('<h1>Acme</h1>'),
+        });
+
+        const waits: Record<string, number> = {
+            'https://acme.com/': 120,
+            'https://www.acme.com/': 40,
+        };
+
+        const deps: FetchDeps = {
+            ...answers,
+            fetch: async (input, init) => {
+                await new Promise((resolve) =>
+                    setTimeout(resolve, waits[String(input)]),
+                );
+
+                return answers.fetch(input, init);
+            },
+        };
+
+        vi.useFakeTimers();
+
+        try {
+            const fetched = fetchPublic('https://acme.com/', deps);
+
+            await vi.advanceTimersByTimeAsync(160);
+
+            expect((await fetched).headersMs).toBe(40);
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('cuts the body at the size cap and says it did', async () => {
@@ -288,6 +328,7 @@ function recordingDeps(responses: Record<string, Response>) {
     const sent: {
         method: string | undefined;
         userAgent: string | null;
+        encoding: string | null;
         secret: string | null;
     }[] = [];
 
@@ -301,6 +342,7 @@ function recordingDeps(responses: Record<string, Response>) {
             sent.push({
                 method: init?.method,
                 userAgent: headers.get('user-agent'),
+                encoding: headers.get('accept-encoding'),
                 secret: headers.get(botSecretHeader),
             });
 

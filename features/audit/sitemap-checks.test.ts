@@ -41,6 +41,7 @@ function file(
             body: xml,
             isTruncated,
             hops: [{ url, status }],
+            headersMs: 0,
         },
         sitemap: status === 200 ? readSitemap(xml) : emptySitemap,
     };

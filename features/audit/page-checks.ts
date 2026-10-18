@@ -13,6 +13,7 @@ import {
 } from '@/features/audit/observe';
 import { onPageChecks } from '@/features/audit/on-page-checks';
 import { type CanonicalTag, thinPageWords } from '@/features/audit/page';
+import { performanceChecks } from '@/features/audit/performance-checks';
 import { isHttpUrl } from '@/features/audit/queue';
 import {
     type Fetched,
@@ -44,7 +45,7 @@ export type Observed = Pick<
 >;
 
 export function checkPage(
-    { entry, outcome }: Read,
+    { entry, outcome, secondReadMs }: Read,
     observed: Observed,
     context: PageCheckContext,
 ): Finding[] {
@@ -81,7 +82,7 @@ export function checkPage(
         ...redirectFindings(url, outcome),
         ...temporaryFindings(url, outcome, context.previousRedirects),
         ...(outcome.hops.length === 1 && status === 200
-            ? answerFindings(url, outcome, observed, context)
+            ? answerFindings(url, outcome, observed, context, secondReadMs)
             : []),
     ];
 }
@@ -164,6 +165,7 @@ function answerFindings(
     fetched: Fetched,
     { row, page, directives }: Observed,
     context: PageCheckContext,
+    secondReadMs: number | undefined,
 ): Finding[] {
     const { obeyRobots, isDisallowed, locales, now } = context;
     const findings: Finding[] = [];
@@ -238,6 +240,7 @@ function answerFindings(
               ...canonicalFindings(url, fetched, page, locales),
               ...contentFindings(url, page, isIndexable),
               ...heuristicChecks(url, row, page, directives, context),
+              ...performanceChecks(url, fetched, page, secondReadMs),
               ...(isIndexable
                   ? [
                         ...onPageChecks(url, page, fetched, now),

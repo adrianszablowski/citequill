@@ -199,6 +199,9 @@ const rows = {
     performance: [
         ['html-slow', '2'],
         ['html-uncompressed', '2'],
+        ['assets-uncached', 'hint'],
+        ['assets-heavy', 'hint'],
+        ['dom-size', 'hint'],
     ],
     'ai-access': [
         ['ai-search-bots-blocked', '2'],

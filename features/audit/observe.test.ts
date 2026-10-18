@@ -49,6 +49,7 @@ function page(
         body: `<html><body>${body}</body></html>`,
         isTruncated: false,
         hops,
+        headersMs: 0,
     } satisfies Fetched;
 }
 

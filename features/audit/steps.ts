@@ -11,6 +11,11 @@ import { judgeMobile } from '@/features/audit/mobile-checks';
 import { observeRead, type Read } from '@/features/audit/observe';
 import { checkPage } from '@/features/audit/page-checks';
 import {
+    assetWeightChecks,
+    isHtmlAnswer,
+    isSlowRead,
+} from '@/features/audit/performance-checks';
+import {
     firstPace,
     hasStopped,
     type Pace,
@@ -770,7 +775,7 @@ export async function checkSite(
             })),
     );
 
-    const [site, audit, rows] = await Promise.all([
+    const [site, audit, rows, assets] = await Promise.all([
         loadSite(projectId),
         one(
             supabase
@@ -789,19 +794,35 @@ export async function checkSite(
                 .order('id')
                 .range(from, to),
         ),
+        all((from, to) =>
+            supabase
+                .from('audit_resources')
+                .select('linked_from, content_length')
+                .eq('audit_id', auditId)
+                .eq('kind', 'asset')
+                .eq('status_code', 200)
+                .order('url')
+                .range(from, to),
+        ),
     ]);
 
     const files = (audit.robots_rules ?? []) as unknown as RobotsFile[];
 
-    const findings = siteChecks(rows, {
-        homes: site.homes,
-        hosts: site.access.hosts,
-        isDisallowed: googlebotBlocks(files),
-        isHttpsSite: site.homes.some((home) => home.startsWith('https:')),
-        linkedFrom: new Map(
-            [...queue.values()].map((entry) => [entry.url, entry.linked_from]),
-        ),
-    });
+    const findings = [
+        ...siteChecks(rows, {
+            homes: site.homes,
+            hosts: site.access.hosts,
+            isDisallowed: googlebotBlocks(files),
+            isHttpsSite: site.homes.some((home) => home.startsWith('https:')),
+            linkedFrom: new Map(
+                [...queue.values()].map((entry) => [
+                    entry.url,
+                    entry.linked_from,
+                ]),
+            ),
+        }),
+        ...assetWeightChecks(site.homes, assets),
+    ];
 
     await done(
         supabase
@@ -1208,7 +1229,20 @@ async function readBatch(
                     return;
                 }
 
-                reads.push({ entry, outcome });
+                const second =
+                    outcome instanceof Error || !isSlowRead(outcome)
+                        ? null
+                        : await client.read(entry.url);
+
+                reads.push({
+                    entry,
+                    outcome,
+                    ...(second &&
+                        !(second instanceof Error) &&
+                        isHtmlAnswer(second) && {
+                            secondReadMs: second.headersMs,
+                        }),
+                });
             }
         }),
     );

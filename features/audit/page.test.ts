@@ -444,4 +444,13 @@ describe('readAuditPage', () => {
                 .simhash,
         ).toBeNull();
     });
+
+    it('counts the elements inside the document, an inline SVG as one element whatever it draws', () => {
+        expect(
+            readAuditPage(
+                '<html><head><title>A</title></head><body><p>Text</p><svg><g><path d="M0 0"/><circle r="1"/></g></svg></body></html>',
+                'https://acme.com/',
+            ).elementCount,
+        ).toBe(5);
+    });
 });

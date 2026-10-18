@@ -12,6 +12,7 @@ import {
     isSampledAsset,
     judgeResource,
     pageResources,
+    refusedAnswer,
     refusedHosts,
     type ReadUrl,
     type Resource,
@@ -47,6 +48,7 @@ function fetched(
         body: '',
         isTruncated: false,
         hops: [{ url: 'https://acme.com/final.png', status }],
+        headersMs: 0,
     };
 }
 
@@ -63,12 +65,17 @@ function row(kind: Resource['kind'], linkedFrom = [page]): Resource {
     };
 }
 
-function answer(status: number | null, contentLength: number | null = null) {
+function answer(
+    status: number | null,
+    contentLength: number | null = null,
+    isUncached = false,
+) {
     return {
         status,
         contentLength,
         error: status === null ? 'timed out' : null,
         finalUrl: status === null ? null : 'https://acme.com/final.png',
+        isUncached,
     };
 }
 
@@ -267,6 +274,7 @@ describe('answerOf', () => {
             contentLength: 2048,
             error: null,
             finalUrl: 'https://acme.com/final.png',
+            isUncached: true,
         });
 
         expect(answerOf(fetched(200)).contentLength).toBeNull();
@@ -283,7 +291,28 @@ describe('answerOf', () => {
             contentLength: null,
             error: 'timed out',
             finalUrl: null,
+            isUncached: false,
         });
+    });
+
+    it('calls an answer uncached when it has neither Cache-Control nor Expires', () => {
+        expect(answerOf(fetched(200)).isUncached).toBe(true);
+
+        expect(
+            answerOf(fetched(200, { 'cache-control': 'max-age=31536000' }))
+                .isUncached,
+        ).toBe(false);
+
+        expect(
+            answerOf(fetched(200, { expires: 'Thu, 01 Dec 2027 16:00:00 GMT' }))
+                .isUncached,
+        ).toBe(false);
+    });
+});
+
+describe('refusedAnswer', () => {
+    it('never calls a refusal uncached, because no answer was read', () => {
+        expect(refusedAnswer(403).isUncached).toBe(false);
     });
 });
 
@@ -419,6 +448,37 @@ describe('judgeResource', () => {
         expect(checks(row('og_image'), answer(200, imgHeavyBytes * 9))).toEqual(
             [],
         );
+    });
+
+    it('calls a script or stylesheet that answers 200 without cache headers uncached, on its sample pages, never an image or a broken asset', () => {
+        const pages = ['https://acme.com/a', 'https://acme.com/b'];
+
+        expect(
+            judgeResource(
+                row('asset', pages),
+                answer(200, null, true),
+                false,
+                sample,
+            ),
+        ).toEqual([
+            {
+                check: 'assets-uncached',
+                url: page,
+                subject: 'https://acme.com/r.png',
+                detail: {
+                    status: 200,
+                    finalUrl: 'https://acme.com/final.png',
+                    linkCount: 7,
+                },
+            },
+        ]);
+
+        expect(checks(row('asset'), answer(200, null, false))).toEqual([]);
+        expect(checks(row('image'), answer(200, null, true))).toEqual([]);
+
+        expect(checks(row('asset'), answer(404, null, true))).toEqual([
+            'resource-broken',
+        ]);
     });
 
     it('calls an og:image that is not 200 og-image-bad alone, by its image half', () => {

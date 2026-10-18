@@ -15,6 +15,7 @@ import type { Json, TablesInsert } from '@/lib/types/database';
 export interface Read {
     entry: QueueEntry;
     outcome: Fetched | Error | 'blocked';
+    secondReadMs?: number;
 }
 
 export interface ReadContext {
