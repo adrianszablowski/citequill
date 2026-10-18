@@ -14,6 +14,7 @@ import {
     isSelfCanonical,
     isSiteCheck,
     type Mark,
+    offersSelectorMark,
     probeChecks,
     scoreAudit,
     type ScoredFinding,
@@ -684,6 +685,28 @@ describe('hasMark', () => {
     });
 });
 
+describe('offersSelectorMark', () => {
+    const onTag = {
+        check: 'anchor-generic' as const,
+        url: null,
+        selector: 'a',
+    };
+
+    it('offers the selector grain for a selector with an id or a class', () => {
+        expect(offersSelectorMark([], { ...onTag, selector: 'a.logo' })).toBe(
+            true,
+        );
+    });
+
+    it('withholds the selector grain from a bare tag with no mark', () => {
+        expect(offersSelectorMark([], onTag)).toBe(false);
+    });
+
+    it('keeps the selector grain for a bare tag that already has a mark, so the mark can be removed', () => {
+        expect(offersSelectorMark([onTag], onTag)).toBe(true);
+    });
+});
+
 describe('isSiteCheck', () => {
     it('tells a check on the site from a check on its pages', () => {
         expect(isSiteCheck('sitemap-missing')).toBe(true);
@@ -710,8 +733,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 120 checks, the HTTPS and viewport checks and the phone comparison included', () => {
-        expect(shippedChecks).toHaveLength(120);
+    it('ships 119 checks, the HTTPS and viewport checks and the phone comparison included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(119);
     });
 
     it('scores the probed half of https-missing with its Read half, so a stopped audit keeps the check and skips the phone comparison', () => {

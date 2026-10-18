@@ -774,12 +774,6 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         link: links.fileTypes,
         fix: 'Send the page with Content-Type: text/html; charset=utf-8. A server or CDN rule that matches the address, such as one for .txt or .json files, is the usual cause.',
     },
-    'protocol-relative': {
-        name: 'A resource address starts with //',
-        says: 'Google’s HTTPS tips of 2014 advise relative URLs for resources on your own secure domain and protocol-relative URLs for other domains.',
-        link: links.httpsSignal,
-        fix: 'Nothing breaks on an https page. Write https:// in full when you next change the template, so the file never loads over HTTP from an http copy of the page.',
-    },
     'security-headers': {
         name: 'The home page lacks security headers',
         says: 'Google names HSTS as one way to make sure it prefers your HTTPS pages as canonical.',

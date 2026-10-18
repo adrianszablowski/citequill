@@ -62,7 +62,6 @@ export interface Anchor extends PageElement {
 
 export interface ResourceRef extends PageElement {
     kind: 'script' | 'stylesheet' | 'iframe' | 'image' | 'media';
-    raw: string;
     url: string | null;
 }
 
@@ -176,11 +175,10 @@ export function readAuditPage(html: string, url: string): AuditPage {
                 (attribute === 'srcset'
                     ? srcsetUrls(tag.attribs.srcset)
                     : [tag.attribs[attribute].trim()]
-                ).map((raw) => ({
+                ).map((value) => ({
                     ...located(tag),
                     kind,
-                    raw,
-                    url: absolute(raw, base),
+                    url: absolute(value, base),
                 })),
             ),
     );

@@ -31,7 +31,7 @@ describe('httpsChecks', () => {
 
     it('reports a script, stylesheet or iframe over http as active mixed content, once per URL, and never a protocol-relative one', () => {
         const findings = checksOf(
-            '<html><head><script src="http://cdn.com/a.js"></script><script class="again" src="http://cdn.com/a.js"></script><link rel="stylesheet" href="http://cdn.com/b.css"></head><body><iframe src="http://maps.com/x"></iframe><script src="https://cdn.com/c.js"></script></body></html>',
+            '<html><head><script src="http://cdn.com/a.js"></script><script class="again" src="http://cdn.com/a.js"></script><link rel="stylesheet" href="http://cdn.com/b.css"></head><body><iframe src="http://maps.com/x"></iframe><script src="https://cdn.com/c.js"></script><script src="//cdn.com/d.js"></script></body></html>',
         );
 
         expect(
@@ -51,9 +51,9 @@ describe('httpsChecks', () => {
         );
     });
 
-    it('reports an image, a srcset candidate, a media source or a poster over http, and a link to an http URL of the site, as passive mixed content', () => {
+    it('reports an image, a srcset candidate, a media source or a poster over http, and a link to an http URL of the site, as passive mixed content, and never a protocol-relative one', () => {
         const findings = checksOf(
-            '<html><body><img src="http://acme.com/a.png" srcset="https://acme.com/b.png 1x, http://acme.com/c.png 2x"><video src="http://acme.com/v.mp4" poster="http://acme.com/p.jpg"></video><a href="http://www.acme.com/about">About</a><a href="http://other.com/">Partner</a></body></html>',
+            '<html><body><img src="http://acme.com/a.png" srcset="https://acme.com/b.png 1x, http://acme.com/c.png 2x"><img src="//cdn.com/p.png" srcset="//cdn.com/q.png 2x"><video src="http://acme.com/v.mp4" poster="http://acme.com/p.jpg"></video><a href="http://www.acme.com/about">About</a><a href="http://other.com/">Partner</a></body></html>',
         );
 
         expect(
@@ -176,23 +176,6 @@ describe('httpsChecks', () => {
                     (detail as { total: number }).total === findingsPerPage + 1,
             ),
         ).toBe(true);
-    });
-
-    it('notes a protocol-relative URL in any resource attribute once per raw URL, never in a link', () => {
-        const findings = checksOf(
-            '<html><head><script src="//cdn.com/a.js"></script><script class="b" src=" //cdn.com/a.js"></script></head><body><img srcset="//cdn.com/x.png 2x"><a href="//other.com/">Partner</a></body></html>',
-        );
-
-        expect(
-            findings.map(({ check, subject, selector }) => [
-                check,
-                subject,
-                selector,
-            ]),
-        ).toEqual([
-            ['protocol-relative', '//cdn.com/a.js', 'script'],
-            ['protocol-relative', '//cdn.com/x.png', 'img'],
-        ]);
     });
 
     it('lists the missing security headers of a home page, frame-ancestors standing for X-Frame-Options and a report-only policy standing for nothing', () => {

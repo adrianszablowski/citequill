@@ -255,7 +255,7 @@ describe('readAuditPage', () => {
         ]);
     });
 
-    it('reads every resource attribute with its raw text and its absolute URL, srcset candidates one by one', () => {
+    it('reads every resource attribute with its kind and its absolute URL, srcset candidates one by one', () => {
         const page = readAuditPage(
             `<html><head><script src=" //cdn.com/a.js "></script><link rel="stylesheet" href="http://acme.com/b.css"></head><body>
 <iframe src="https://maps.com/x"></iframe>
@@ -265,21 +265,19 @@ describe('readAuditPage', () => {
             'https://acme.com/',
         );
 
-        expect(
-            page.resources.map(({ kind, raw, url }) => [kind, raw, url]),
-        ).toEqual([
-            ['script', '//cdn.com/a.js', 'https://cdn.com/a.js'],
-            ['stylesheet', 'http://acme.com/b.css', 'http://acme.com/b.css'],
-            ['iframe', 'https://maps.com/x', 'https://maps.com/x'],
-            ['image', '/a.webp', 'https://acme.com/a.webp'],
-            ['image', 'http://acme.com/a2.webp', 'http://acme.com/a2.webp'],
-            ['image', '/a.png', 'https://acme.com/a.png'],
-            ['image', '/a-400.png', 'https://acme.com/a-400.png'],
-            ['image', '/a-800.png', 'https://acme.com/a-800.png'],
-            ['media', '/v.mp4', 'https://acme.com/v.mp4'],
-            ['image', '//cdn.com/p.jpg', 'https://cdn.com/p.jpg'],
-            ['media', '/v.webm', 'https://acme.com/v.webm'],
-            ['media', '/s.mp3', 'https://acme.com/s.mp3'],
+        expect(page.resources.map(({ kind, url }) => [kind, url])).toEqual([
+            ['script', 'https://cdn.com/a.js'],
+            ['stylesheet', 'http://acme.com/b.css'],
+            ['iframe', 'https://maps.com/x'],
+            ['image', 'https://acme.com/a.webp'],
+            ['image', 'http://acme.com/a2.webp'],
+            ['image', 'https://acme.com/a.png'],
+            ['image', 'https://acme.com/a-400.png'],
+            ['image', 'https://acme.com/a-800.png'],
+            ['media', 'https://acme.com/v.mp4'],
+            ['image', 'https://cdn.com/p.jpg'],
+            ['media', 'https://acme.com/v.webm'],
+            ['media', 'https://acme.com/s.mp3'],
         ]);
 
         expect(page.resources[0]).toMatchObject({

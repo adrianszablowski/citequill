@@ -5,6 +5,7 @@ import {
     isScored,
     scoredChecks,
 } from '@/features/audit/catalogue';
+import { isTemplateSelector } from '@/features/audit/finding';
 import { variantSample } from '@/features/audit/sample';
 import type { Tables, TablesInsert } from '@/lib/types/database';
 
@@ -134,6 +135,13 @@ export function hasMark(marks: Mark[], mark: Mark) {
             other.url === mark.url &&
             other.selector === mark.selector,
     );
+}
+
+export function offersSelectorMark(
+    marks: Mark[],
+    mark: Mark & { selector: string },
+) {
+    return isTemplateSelector(mark.selector) || hasMark(marks, mark);
 }
 
 export function appliesTo(
@@ -468,7 +476,6 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'mixed-passive': 'answered',
     'form-on-http': 'answered',
     'content-type-wrong': 'answered',
-    'protocol-relative': 'answered',
     'security-headers': 'homes',
     'viewport-missing': 'indexable',
     'viewport-misconfigured': 'indexable',

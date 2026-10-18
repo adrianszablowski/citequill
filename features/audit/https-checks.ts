@@ -35,12 +35,6 @@ export function httpsChecks(
             ? [
                   ...(isHttps ? mixedFindings(url, page, hosts) : []),
                   ...formFindings(url, page, isHttps),
-                  ...located(
-                      'protocol-relative',
-                      url,
-                      page.resources.filter(({ raw }) => raw.startsWith('//')),
-                      ({ raw }) => raw,
-                  ),
               ]
             : []),
     ];

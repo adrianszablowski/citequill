@@ -1,8 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import MarkForm from '@/features/audit/components/mark-form';
-import { isTemplateSelector } from '@/features/audit/finding';
 import type { FindingItem } from '@/features/audit/queries';
-import { hasMark, type Mark } from '@/features/audit/score';
+import { hasMark, type Mark, offersSelectorMark } from '@/features/audit/score';
 
 interface FindingMarksProps {
     projectId: string;
@@ -26,12 +25,11 @@ export default function FindingMarks({
         selector: null,
     };
 
-    const onSelector = finding.selector &&
-        isTemplateSelector(finding.selector) && {
-            check: finding.check,
-            url: null,
-            selector: finding.selector,
-        };
+    const onSelector = finding.selector && {
+        check: finding.check,
+        url: null,
+        selector: finding.selector,
+    };
 
     return (
         <div className="flex flex-col items-start gap-2">
@@ -48,7 +46,7 @@ export default function FindingMarks({
                     }
                 />
             )}
-            {canMark && onSelector && (
+            {canMark && onSelector && offersSelectorMark(marks, onSelector) && (
                 <MarkForm
                     projectId={projectId}
                     mark={onSelector}
