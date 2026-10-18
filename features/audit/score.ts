@@ -5,7 +5,7 @@ import {
     isScored,
     scoredChecks,
 } from '@/features/audit/catalogue';
-import type { Tables } from '@/lib/types/database';
+import type { Tables, TablesInsert } from '@/lib/types/database';
 
 export type ScoredPage = Pick<
     Tables<'site_pages'>,
@@ -55,6 +55,7 @@ export const crossPageChecks = [
     'canonical-chain',
     'canonical-cross-domain',
     'duplicate-body',
+    'near-duplicate',
     'page-not-in-sitemap',
     'sitemap-url-error',
     'sitemap-url-noncanonical',
@@ -251,6 +252,18 @@ export function isAnswered(page: ScoredPage) {
     return page.status_code === 200 && page.redirect_to === null;
 }
 
+export function isSelfCanonical(
+    page: Pick<
+        TablesInsert<'site_pages'>,
+        'url' | 'canonical_url' | 'is_indexable'
+    >,
+) {
+    return (
+        page.is_indexable === true &&
+        (!page.canonical_url || page.canonical_url === page.url)
+    );
+}
+
 export function isNoindexed(page: ScoredPage) {
     return isAnswered(page) && !page.is_indexable && !page.is_blocked;
 }
@@ -271,12 +284,7 @@ const pageScopes = {
         pages.filter((page) => page.is_indexable && page.image_count > 0),
     'self-canonical': (pages: ScoredPage[]) =>
         pages.some((page) => page.in_sitemap)
-            ? pages.filter(
-                  (page) =>
-                      page.is_indexable &&
-                      (page.canonical_url === null ||
-                          page.canonical_url === page.url),
-              )
+            ? pages.filter(isSelfCanonical)
             : [],
 };
 
@@ -303,6 +311,11 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'robots-none': 'answered',
     'unavailable-after-past': 'indexable',
     'html-over-2mb': 'indexable',
+    'robots-assets-blocked': 'indexable',
+    'search-results-indexable': 'indexable',
+    'facets-indexable': 'indexable',
+    'pagination-canonical': 'answered',
+    'utility-indexable': 'indexable',
     'page-4xx': 'read',
     'page-5xx': 'read',
     'redirect-chain': 'redirected',
@@ -311,6 +324,7 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'redirect-to-error': 'redirected',
     'redirect-meta': 'indexable',
     'redirect-slash-or-case': 'redirected',
+    'redirect-temporary': 'redirected',
     'canonical-missing': 'indexable',
     'canonical-outside-head': 'canonical',
     'canonical-relative': 'canonical',
@@ -319,7 +333,10 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'canonical-to-error': 'canonical',
     'canonical-chain': 'canonical',
     'canonical-cross-domain': 'canonical',
+    'param-duplicates': 'indexable',
     'duplicate-body': 'indexable',
+    'near-duplicate': 'indexable',
+    'spam-pattern': 'answered',
     'page-not-in-sitemap': 'self-canonical',
     'sitemap-url-error': 'listed',
     'sitemap-url-noncanonical': 'listed',

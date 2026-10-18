@@ -300,6 +300,60 @@ describe('readPages', () => {
     });
 });
 
+describe('readPages, before it writes the batch', () => {
+    it('reads the redirect each URL of the batch held, so redirect-temporary compares with the audit before', async () => {
+        const url = 'https://acme.com/moved';
+        const target = 'https://acme.com/new';
+
+        const fake = database({
+            queue: [
+                {
+                    url,
+                    depth: 1,
+                    state: 'queued',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                },
+            ],
+            sitePages: [{ url, redirect_to: target }],
+        });
+
+        answering(async () => ({
+            ...notFound(url),
+            ok: true,
+            status: 200,
+            hops: [
+                { url, status: 302 },
+                { url: target, status: 200 },
+            ],
+        }));
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        const [select] = call(fake, 'site_pages', 'select');
+
+        expect(select.calls).toEqual([
+            ['select', 'url, redirect_to'],
+            ['eq', 'project_id', 'project'],
+            ['in', 'url', [url]],
+        ]);
+
+        expect(
+            fake.queries.findIndex((query) => query === select),
+        ).toBeLessThan(
+            fake.queries.findIndex(
+                (query) =>
+                    query.name === 'site_pages' &&
+                    query.calls[0][0] === 'upsert',
+            ),
+        );
+
+        expect(
+            inserted(fake, 'audit_findings').map((row) => row.check),
+        ).toContain('redirect-temporary');
+    });
+});
+
 describe('checkSite', () => {
     it('leaves an audit whose run has ended as it is, so a stopped audit has no checks that compare pages', async () => {
         const fake = database({ runStatus: 'failed' });
@@ -350,6 +404,31 @@ describe('checkSite', () => {
         ]);
 
         expect(markProgress).toHaveBeenCalledWith('run');
+    });
+
+    it('deletes only its own halves of param-duplicates and facets-indexable, told apart by their reason', async () => {
+        const fake = database();
+
+        await checkSite('project', 'run', 'audit');
+
+        expect(
+            call(fake, 'audit_findings', 'delete')
+                .slice(1)
+                .map(({ calls }) => calls),
+        ).toEqual([
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'param-duplicates'],
+                ['contains', 'detail', { reason: 'variants' }],
+            ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'facets-indexable'],
+                ['contains', 'detail', { reason: 'volume' }],
+            ],
+        ]);
     });
 });
 

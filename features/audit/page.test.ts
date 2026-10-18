@@ -237,4 +237,73 @@ describe('readAuditPage', () => {
 
         expect(page.wordCount).toBe(1);
     });
+
+    it('reads the stylesheets and scripts of the document once each, as absolute URLs', () => {
+        const page = readAuditPage(
+            '<html><head><link rel="Stylesheet" href="/a.css"><link rel="preload stylesheet" href="https://cdn.com/b.css"><link rel="icon" href="/icon.png"><script src="/app.js"></script><script>inline()</script></head><body><script src="/app.js"></script></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.assets).toEqual([
+            'https://acme.com/a.css',
+            'https://cdn.com/b.css',
+            'https://acme.com/app.js',
+        ]);
+    });
+
+    it('keeps the raw links whose fragment is a page number', () => {
+        const page = readAuditPage(
+            '<html><body><a href="#page=2">2</a><a href="/blog#strona=3">3</a><a href="/blog#page-2">x</a><a href="/blog?page=2">y</a></body></html>',
+            'https://acme.com/blog',
+        );
+
+        expect(page.fragmentLinks).toEqual(['#page=2', '/blog#strona=3']);
+    });
+
+    it('reads the outermost blocks off screen or at zero size or opacity, of 50 words or more with no link, button or form control inside, and no block with display:none', () => {
+        const words = (count: number) =>
+            Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+
+        const page = readAuditPage(
+            `<html><body><main><p>Text</p>
+            <div id="seo" style="position:absolute; left:-9999px"><p style="font-size:0">${words(30)}</p> ${words(20)}</div>
+            <div class="off" style="text-indent:-9999px">${words(60)}</div>
+            <div style="display:none">${words(60)}</div>
+            <div style="display:none"><p class="faded" style="opacity:0">${words(60)}</p></div>
+            <div style="font-size:0">${words(49)}</div>
+            <nav style="text-indent:-9999px">${words(60)}<a href="/">Home</a></nav>
+            <div style="opacity:0">${words(60)}<button>Accept</button></div>
+            <div style="left:-9999px">${words(40)}<script>${words(20)}</script></div>
+            </main></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(
+            page.hiddenBlocks.map(({ selector, words }) => [selector, words]),
+        ).toEqual([
+            ['div#seo', 50],
+            ['div.off', 60],
+            ['p.faded', 60],
+        ]);
+
+        expect(page.hiddenBlocks[0].text).toBe(`${words(30)} ${words(20)}`);
+        expect(page.hiddenBlocks[0].snippet).toMatch(/^<div id="seo"/);
+    });
+
+    it('takes a SimHash of the main text the body hash is taken from, and none of an empty page', () => {
+        const one = readAuditPage(html, 'https://acme.com/pricing');
+
+        const other = readAuditPage(
+            html.replace('<header><a href="/">Home</a></header>', ''),
+            'https://acme.com/pricing-copy',
+        );
+
+        expect(one.simhash).toMatch(/^[0-9a-f]{16}$/);
+        expect(other.simhash).toBe(one.simhash);
+
+        expect(
+            readAuditPage('<html><body></body></html>', 'https://acme.com/')
+                .simhash,
+        ).toBeNull();
+    });
 });

@@ -6,6 +6,7 @@ import {
     siteChecks,
     type SiteRow,
 } from '@/features/audit/site-checks';
+import { facetVolume } from '@/features/audit/url-patterns';
 
 const context: SiteContext = {
     homes: ['https://acme.com/'],
@@ -28,6 +29,7 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         in_sitemap: true,
         image_count: 0,
         body_hash: `hash of ${path}`,
+        body_simhash: null,
         title: null,
         description: null,
         ...overrides,
@@ -138,6 +140,182 @@ describe('siteChecks', () => {
                 },
             },
         ]);
+    });
+
+    it('compares one URL per path for duplicate-body, the first by URL, and leaves the variants of a path to param-duplicates', () => {
+        const rows = [
+            row('/a?ref=2', { body_hash: 'same' }),
+            row('/a', { body_hash: 'same' }),
+            row('/a?ref=1', { body_hash: 'same' }),
+            row('/b', { body_hash: 'same' }),
+        ];
+
+        const findings = siteChecks(rows, context);
+
+        expect(
+            findings
+                .filter(({ check }) => check === 'duplicate-body')
+                .map(({ url, detail }) => [url, detail]),
+        ).toEqual([
+            [
+                'https://acme.com/a',
+                { value: 'same', duplicates: ['https://acme.com/b'] },
+            ],
+            [
+                'https://acme.com/b',
+                { value: 'same', duplicates: ['https://acme.com/a'] },
+            ],
+        ]);
+
+        expect(
+            findings
+                .filter(({ check }) => check === 'param-duplicates')
+                .map(({ url, subject, detail }) => [url, subject, detail]),
+        ).toEqual([
+            [
+                'https://acme.com/a',
+                'https://acme.com/a?ref=1',
+                {
+                    reason: 'variants',
+                    value: 'same',
+                    duplicates: [
+                        'https://acme.com/a?ref=1',
+                        'https://acme.com/a?ref=2',
+                    ],
+                },
+            ],
+            [
+                'https://acme.com/a?ref=1',
+                'https://acme.com/a',
+                {
+                    reason: 'variants',
+                    value: 'same',
+                    duplicates: [
+                        'https://acme.com/a',
+                        'https://acme.com/a?ref=2',
+                    ],
+                },
+            ],
+            [
+                'https://acme.com/a?ref=2',
+                'https://acme.com/a',
+                {
+                    reason: 'variants',
+                    value: 'same',
+                    duplicates: [
+                        'https://acme.com/a',
+                        'https://acme.com/a?ref=1',
+                    ],
+                },
+            ],
+        ]);
+    });
+
+    it('finds no variants under one path with different bodies, or where a variant names the clean URL as canonical', () => {
+        expect(
+            checks([
+                row('/a', { body_hash: 'one' }),
+                row('/a?page=2', { body_hash: 'two' }),
+                row('/b'),
+                row('/b?utm_source=x', {
+                    body_hash: 'hash of /b',
+                    canonical_url: 'https://acme.com/b',
+                    in_sitemap: false,
+                }),
+            ]),
+        ).toEqual([]);
+    });
+
+    it('notes indexable pages whose SimHashes differ in 6 bits or fewer, with different body hashes and no canonical between them', () => {
+        const rows = [
+            row('/warsaw', { body_simhash: '0000000000000000' }),
+            row('/krakow', { body_simhash: '000000000000003f' }),
+            row('/gdansk', { body_simhash: '000000000000007f' }),
+            row('/same', {
+                body_hash: 'hash of /warsaw',
+                body_simhash: '0000000000000000',
+            }),
+            row('/print', {
+                body_simhash: '8000000000000000',
+                canonical_url: 'https://acme.com/warsaw',
+            }),
+            row('/short', { body_simhash: null }),
+            row('/hidden', {
+                body_simhash: '0000000000000000',
+                is_indexable: false,
+            }),
+        ];
+
+        expect(
+            siteChecks(rows, context)
+                .filter(({ check }) => check === 'near-duplicate')
+                .map(({ url, subject, detail }) => [url, subject, detail]),
+        ).toEqual([
+            [
+                'https://acme.com/gdansk',
+                'https://acme.com/krakow',
+                { duplicates: ['https://acme.com/krakow'] },
+            ],
+            [
+                'https://acme.com/krakow',
+                'https://acme.com/gdansk',
+                {
+                    duplicates: [
+                        'https://acme.com/gdansk',
+                        'https://acme.com/same',
+                        'https://acme.com/warsaw',
+                    ],
+                },
+            ],
+            [
+                'https://acme.com/print',
+                'https://acme.com/same',
+                { duplicates: ['https://acme.com/same'] },
+            ],
+            [
+                'https://acme.com/same',
+                'https://acme.com/krakow',
+                {
+                    duplicates: [
+                        'https://acme.com/krakow',
+                        'https://acme.com/print',
+                    ],
+                },
+            ],
+            [
+                'https://acme.com/warsaw',
+                'https://acme.com/krakow',
+                { duplicates: ['https://acme.com/krakow'] },
+            ],
+        ]);
+    });
+
+    it(`reports every indexable, self-canonical URL of a facet path once ${facetVolume} of them share it`, () => {
+        const facets = (count: number, path = '/shoes') =>
+            Array.from({ length: count }, (_, i) => row(`${path}?color=c${i}`));
+
+        const findings = siteChecks(
+            [
+                ...facets(facetVolume),
+                ...facets(facetVolume - 1, '/bags'),
+                row('/hats?sort=a', { canonical_url: 'https://acme.com/hats' }),
+                ...facets(facetVolume - 1, '/hats'),
+            ],
+            context,
+        ).filter(({ check }) => check === 'facets-indexable');
+
+        expect(findings).toHaveLength(facetVolume);
+
+        expect(findings[0]).toEqual({
+            check: 'facets-indexable',
+            url: 'https://acme.com/shoes?color=c0',
+            subject: 'https://acme.com/shoes',
+            detail: {
+                reason: 'volume',
+                path: 'https://acme.com/shoes',
+                count: facetVolume,
+            },
+        });
     });
 
     it('names the same twin as the subject of a duplicate whatever order the pages come in', () => {

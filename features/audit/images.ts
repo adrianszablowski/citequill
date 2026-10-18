@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 
 import type * as cheerio from 'cheerio';
-import type { Element, ParentNode } from 'domhandler';
+import type { Element } from 'domhandler';
 
 import { selectorOf } from '@/features/audit/finding';
+import { inlineStyle, isHidden } from '@/features/audit/hidden';
 import { absolute } from '@/features/crawl/html';
 
 export interface PageImage {
@@ -122,8 +123,6 @@ function ancestorOf(isFigureSole: boolean, isInLink: boolean) {
     return isInLink ? 'link' : null;
 }
 
-const hiddenStyles = ['display:none', 'visibility:hidden'];
-
 function isListed(element: Element) {
     const role = element.attribs.role?.trim().toLowerCase();
 
@@ -144,27 +143,6 @@ function isInSvg(element: Element) {
     return false;
 }
 
-function isHidden(element: Element) {
-    for (let node: ParentNode | null = element; node; node = node.parent) {
-        if (!('attribs' in node)) {
-            continue;
-        }
-
-        const { name, attribs } = node;
-        const style = inlineStyle(attribs.style);
-
-        if (
-            name === 'template' ||
-            attribs['aria-hidden']?.trim().toLowerCase() === 'true' ||
-            hiddenStyles.some((hidden) => style.includes(hidden))
-        ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 function isPixel({ name, attribs }: Element) {
     const isTiny = (value: string | undefined) =>
         Number.parseFloat(value ?? '') <= 1;
@@ -175,8 +153,4 @@ function isPixel({ name, attribs }: Element) {
         isTiny(attribs.width) &&
         isTiny(attribs.height)
     );
-}
-
-function inlineStyle(style: string | undefined) {
-    return (style ?? '').toLowerCase().replace(/\s+/g, '');
 }

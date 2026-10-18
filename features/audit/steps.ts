@@ -30,7 +30,7 @@ import {
 } from '@/features/audit/robots';
 import { robotsChecks } from '@/features/audit/robots-checks';
 import { crossPageChecks, scoredPageColumns } from '@/features/audit/score';
-import { siteChecks } from '@/features/audit/site-checks';
+import { siteChecks, siteHalves } from '@/features/audit/site-checks';
 import { rowsPerWrite, writeSitePages } from '@/features/audit/site-pages';
 import { sitemapChecks } from '@/features/audit/sitemap-checks';
 import { readSitemaps } from '@/features/audit/sitemaps';
@@ -231,6 +231,17 @@ export async function readPages(
         touched.add(entry.url);
     }
 
+    const previous = await one(
+        supabase
+            .from('site_pages')
+            .select('url, redirect_to')
+            .eq('project_id', projectId)
+            .in(
+                'url',
+                batch.map((entry) => entry.url),
+            ),
+    );
+
     const sitePageIds = await writeSitePages(
         observed.map(({ row }) => ({
             ...row,
@@ -242,6 +253,12 @@ export async function readPages(
         obeyRobots: site.obeyRobots,
         isDisallowed: googlebotBlocks(files),
         locales: site.locales,
+        hosts: site.access.hosts,
+        previousRedirects: new Map(
+            previous.flatMap(({ url, redirect_to }) =>
+                redirect_to ? [[url, redirect_to] as const] : [],
+            ),
+        ),
         now: Date.now(),
     };
 
@@ -327,7 +344,7 @@ export async function checkSite(
             supabase
                 .from('site_pages')
                 .select(
-                    `${scoredPageColumns}, body_hash, title, description` as const,
+                    `${scoredPageColumns}, body_hash, body_simhash, title, description` as const,
                 )
                 .eq('last_audit_id', auditId)
                 .order('id')
@@ -351,6 +368,17 @@ export async function checkSite(
             .eq('audit_id', auditId)
             .in('check', crossPageChecks),
     );
+
+    for (const [check, reason] of siteHalves) {
+        await done(
+            supabase
+                .from('audit_findings')
+                .delete()
+                .eq('audit_id', auditId)
+                .eq('check', check)
+                .contains('detail', { reason }),
+        );
+    }
 
     await writeFindings(
         findingRows(findings, {

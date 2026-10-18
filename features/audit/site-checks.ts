@@ -3,12 +3,22 @@ import {
     appliesTo,
     isAnswered,
     isNoindexed,
+    isSelfCanonical,
     type ScoredPage,
 } from '@/features/audit/score';
+import {
+    hammingDistance,
+    nearDuplicateBits,
+    simhashBits,
+} from '@/features/audit/simhash';
+import { facetPath, facetVolume } from '@/features/audit/url-patterns';
 import type { Tables } from '@/lib/types/database';
 
 export type SiteRow = ScoredPage &
-    Pick<Tables<'site_pages'>, 'body_hash' | 'title' | 'description'>;
+    Pick<
+        Tables<'site_pages'>,
+        'body_hash' | 'body_simhash' | 'title' | 'description'
+    >;
 
 export interface SiteContext {
     homes: string[];
@@ -20,6 +30,11 @@ export interface SiteContext {
 export const duplicatesListed = 10;
 
 export const noindexSiteShare = 0.95;
+
+export const siteHalves = [
+    ['param-duplicates', 'variants'],
+    ['facets-indexable', 'volume'],
+] as const;
 
 export const stockTitles = new Set([
     'home',
@@ -37,7 +52,14 @@ export function siteChecks(rows: SiteRow[], context: SiteContext) {
     return [
         ...noindexFindings(rows, context),
         ...rows.flatMap((row) => canonicalFindings(row, byUrl, context)),
-        ...duplicateFindings('duplicate-body', rows, (row) => row.body_hash),
+        ...duplicateFindings(
+            'duplicate-body',
+            onePerPath(rows),
+            (row) => row.body_hash,
+        ),
+        ...variantFindings(rows),
+        ...nearDuplicateFindings(rows),
+        ...volumeFindings(rows),
         ...duplicateFindings('title-duplicate', rows, (row) =>
             collapsed(row.title),
         ),
@@ -149,21 +171,7 @@ function duplicateFindings(
     }
 
     return valued.flatMap(({ row, value }): Finding[] => {
-        const duplicates: string[] = [];
-
-        for (const other of groups.get(value)!) {
-            if (duplicates.length === duplicatesListed) {
-                break;
-            }
-
-            if (
-                other !== row &&
-                other.canonical_url !== row.url &&
-                row.canonical_url !== other.url
-            ) {
-                duplicates.push(other.url);
-            }
-        }
+        const duplicates = twinsOf(row, groups.get(value)!);
 
         return duplicates.length > 0
             ? [
@@ -176,6 +184,157 @@ function duplicateFindings(
               ]
             : [];
     });
+}
+
+function variantFindings(rows: SiteRow[]): Finding[] {
+    const groups = new Map<string, SiteRow[]>();
+
+    for (const row of sortedByUrl(rows)) {
+        const key = variantKey(row);
+
+        if (key) {
+            groups.set(key, [...(groups.get(key) ?? []), row]);
+        }
+    }
+
+    return [...groups.values()].flatMap((group) =>
+        group.flatMap((row): Finding[] => {
+            const duplicates = twinsOf(row, group);
+
+            return duplicates.length > 0
+                ? [
+                      {
+                          check: 'param-duplicates',
+                          url: row.url,
+                          subject: duplicates[0],
+                          detail: {
+                              reason: 'variants',
+                              value: row.body_hash,
+                              duplicates,
+                          },
+                      },
+                  ]
+                : [];
+        }),
+    );
+}
+
+function nearDuplicateFindings(rows: SiteRow[]): Finding[] {
+    const hashed = sortedByUrl(rows).flatMap((row) =>
+        row.is_indexable && row.body_simhash
+            ? [{ row, bits: simhashBits(row.body_simhash) }]
+            : [],
+    );
+
+    const near = new Map<SiteRow, SiteRow[]>(
+        hashed.map(({ row }) => [row, []]),
+    );
+
+    for (let i = 0; i < hashed.length; i++) {
+        for (let j = i + 1; j < hashed.length; j++) {
+            const one = hashed[i];
+            const other = hashed[j];
+
+            if (
+                one.row.body_hash !== other.row.body_hash &&
+                hammingDistance(one.bits, other.bits) <= nearDuplicateBits
+            ) {
+                near.get(one.row)!.push(other.row);
+                near.get(other.row)!.push(one.row);
+            }
+        }
+    }
+
+    return [...near].flatMap(([row, others]): Finding[] => {
+        const duplicates = twinsOf(row, others);
+
+        return duplicates.length > 0
+            ? [
+                  {
+                      check: 'near-duplicate',
+                      url: row.url,
+                      subject: duplicates[0],
+                      detail: { duplicates },
+                  },
+              ]
+            : [];
+    });
+}
+
+function volumeFindings(rows: SiteRow[]): Finding[] {
+    const groups = new Map<string, SiteRow[]>();
+
+    for (const row of rows) {
+        const path = facetPath(row.url);
+
+        if (path && isSelfCanonical(row)) {
+            groups.set(path, [...(groups.get(path) ?? []), row]);
+        }
+    }
+
+    return [...groups].flatMap(([path, group]) =>
+        group.length >= facetVolume
+            ? group.map((row): Finding => ({
+                  check: 'facets-indexable',
+                  url: row.url,
+                  subject: path,
+                  detail: { reason: 'volume', path, count: group.length },
+              }))
+            : [],
+    );
+}
+
+function twinsOf(row: SiteRow, others: SiteRow[]) {
+    const duplicates: string[] = [];
+
+    for (const other of others) {
+        if (duplicates.length === duplicatesListed) {
+            break;
+        }
+
+        if (
+            other !== row &&
+            other.canonical_url !== row.url &&
+            row.canonical_url !== other.url
+        ) {
+            duplicates.push(other.url);
+        }
+    }
+
+    return duplicates;
+}
+
+function onePerPath(rows: SiteRow[]) {
+    const firsts = new Map<string, string>();
+
+    for (const row of rows) {
+        const key = variantKey(row);
+        const first = key && firsts.get(key);
+
+        if (key && (!first || row.url < first)) {
+            firsts.set(key, row.url);
+        }
+    }
+
+    return rows.filter((row) => {
+        const key = variantKey(row);
+
+        return !key || firsts.get(key) === row.url;
+    });
+}
+
+function variantKey({ url, is_indexable, body_hash }: SiteRow) {
+    if (!is_indexable || !body_hash) {
+        return null;
+    }
+
+    const { origin, pathname } = new URL(url);
+
+    return `${origin}${pathname} ${body_hash}`;
+}
+
+function sortedByUrl(rows: SiteRow[]) {
+    return [...rows].sort((one, other) => (one.url < other.url ? -1 : 1));
 }
 
 function boilerplateFindings(

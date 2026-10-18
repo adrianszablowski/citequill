@@ -1,4 +1,5 @@
 import type { Finding } from '@/features/audit/finding';
+import { heuristicChecks } from '@/features/audit/heuristic-checks';
 import { imageChecks } from '@/features/audit/image-checks';
 import {
     googlebotDirectives,
@@ -7,7 +8,7 @@ import {
     type Read,
 } from '@/features/audit/observe';
 import { onPageChecks } from '@/features/audit/on-page-checks';
-import type { CanonicalTag } from '@/features/audit/page';
+import { type CanonicalTag, thinPageWords } from '@/features/audit/page';
 import { type Fetched, maxBytes, maxHops } from '@/features/crawl/fetch';
 import { absolute } from '@/features/crawl/html';
 import {
@@ -21,6 +22,8 @@ export interface PageCheckContext {
     obeyRobots: boolean;
     isDisallowed: (url: string) => boolean;
     locales: Locale[];
+    hosts: string[];
+    previousRedirects: ReadonlyMap<string, string>;
     now: number;
 }
 
@@ -28,8 +31,6 @@ export type Observed = Pick<
     ReturnType<typeof observeRead>,
     'row' | 'page' | 'directives'
 >;
-
-export const thinPageWords = 150;
 
 export function checkPage(
     { entry, outcome }: Read,
@@ -51,6 +52,7 @@ export function checkPage(
     return [
         ...statusFindings(url, status),
         ...redirectFindings(url, outcome),
+        ...temporaryFindings(url, outcome, context.previousRedirects),
         ...(outcome.hops.length === 1 && status === 200
             ? answerFindings(url, outcome, observed, context)
             : []),
@@ -101,12 +103,34 @@ function redirectFindings(url: string, { hops }: Fetched): Finding[] {
     return checks.map((check) => ({ ...redirect, check }));
 }
 
+function temporaryFindings(
+    url: string,
+    { hops }: Fetched,
+    previousRedirects: ReadonlyMap<string, string>,
+): Finding[] {
+    const [first, next] = hops;
+
+    return next &&
+        temporaryStatuses.has(first.status) &&
+        previousRedirects.get(url) === next.url
+        ? [
+              {
+                  check: 'redirect-temporary',
+                  url,
+                  subject: next.url,
+                  detail: { status: first.status, target: next.url },
+              },
+          ]
+        : [];
+}
+
 function answerFindings(
     url: string,
     fetched: Fetched,
     { row, page, directives }: Observed,
-    { obeyRobots, isDisallowed, locales, now }: PageCheckContext,
+    context: PageCheckContext,
 ): Finding[] {
+    const { obeyRobots, isDisallowed, locales, now } = context;
     const findings: Finding[] = [];
     const isIndexable = row.is_indexable === true;
     const bytes = Number(fetched.headers.get('content-length') ?? 0);
@@ -176,6 +200,7 @@ function answerFindings(
               ...findings,
               ...canonicalFindings(url, fetched, page, locales),
               ...contentFindings(url, page, isIndexable),
+              ...heuristicChecks(url, row, page, directives, context),
               ...(isIndexable
                   ? [
                         ...onPageChecks(url, page, fetched, now),
@@ -301,6 +326,8 @@ function contentFindings(
 
     return findings;
 }
+
+const temporaryStatuses = new Set([302, 303, 307]);
 
 const languageTag = /^[a-z]{2,3}(-[a-z0-9]{1,8})*$/i;
 

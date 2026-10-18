@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { observeRead, type Read } from '@/features/audit/observe';
-import {
-    checkPage,
-    type PageCheckContext,
-    thinPageWords,
-} from '@/features/audit/page-checks';
+import { thinPageWords } from '@/features/audit/page';
+import { checkPage, type PageCheckContext } from '@/features/audit/page-checks';
 import { type QueueEntry, siteHosts } from '@/features/audit/queue';
 import { type Fetched, type Hop, maxBytes } from '@/features/crawl/fetch';
 
@@ -14,10 +11,14 @@ const locales = [
     { locale: 'de', base_url: 'https://acme.com/de', is_default: false },
 ];
 
+const hosts = siteHosts('acme.com', ['https://acme.com']);
+
 const context: PageCheckContext = {
     obeyRobots: true,
     isDisallowed: () => false,
     locales,
+    hosts,
+    previousRedirects: new Map(),
     now: Date.parse('2026-10-17T12:00:00Z'),
 };
 
@@ -94,7 +95,7 @@ function check(
         projectId: 'project',
         auditId: 'audit',
         locales,
-        hosts: siteHosts('acme.com', ['https://acme.com']),
+        hosts,
         pageIds,
     });
 
@@ -207,6 +208,59 @@ describe('checkPage', () => {
                 }),
             ),
         ).toEqual(['redirect-slash-or-case']);
+    });
+
+    it('notes a 302, 303 or 307 whose target is the one the row held before this read', () => {
+        const target = 'https://acme.com/new';
+
+        const temporary = (status: number, previous: string) =>
+            check(
+                fetched('', {
+                    hops: [
+                        { url, status },
+                        { url: target, status: 200 },
+                    ],
+                }),
+                { previousRedirects: new Map([[url, previous]]) },
+            );
+
+        for (const status of [302, 303, 307]) {
+            expect(temporary(status, target), String(status)).toEqual([
+                {
+                    check: 'redirect-temporary',
+                    url,
+                    subject: target,
+                    detail: { status, target },
+                },
+            ]);
+        }
+
+        expect(temporary(301, target)).toEqual([]);
+        expect(temporary(302, 'https://acme.com/other')).toEqual([]);
+
+        expect(
+            checks(
+                fetched('', {
+                    hops: [
+                        { url, status: 302 },
+                        { url: target, status: 200 },
+                    ],
+                }),
+            ),
+        ).toEqual([]);
+    });
+
+    it('runs the heuristics of indexability on the page it read', () => {
+        expect(
+            checks(
+                fetched(
+                    html(
+                        '',
+                        `<main>${words}</main><a href="/a?utm_source=x">a</a>`,
+                    ),
+                ),
+            ),
+        ).toEqual(['param-duplicates']);
     });
 
     it('reports HTML the fetch cut at 2 MB, or an uncompressed length over it', () => {

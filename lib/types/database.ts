@@ -721,6 +721,7 @@ export type Database = {
             site_pages: {
                 Row: {
                     body_hash: string | null;
+                    body_simhash: string | null;
                     canonical_url: string | null;
                     click_depth: number | null;
                     description: string | null;
@@ -747,6 +748,7 @@ export type Database = {
                 };
                 Insert: {
                     body_hash?: string | null;
+                    body_simhash?: string | null;
                     canonical_url?: string | null;
                     click_depth?: number | null;
                     description?: string | null;
@@ -773,6 +775,7 @@ export type Database = {
                 };
                 Update: {
                     body_hash?: string | null;
+                    body_simhash?: string | null;
                     canonical_url?: string | null;
                     click_depth?: number | null;
                     description?: string | null;

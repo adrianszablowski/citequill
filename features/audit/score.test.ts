@@ -10,11 +10,13 @@ import {
     crossPageChecks,
     gateCap,
     hasMark,
+    isSelfCanonical,
     isSiteCheck,
     type Mark,
     scoreAudit,
     type ScoredFinding,
     type ScoredPage,
+    shippedChecks,
 } from '@/features/audit/score';
 
 const home = 'https://acme.com/';
@@ -549,5 +551,49 @@ describe('checksInScope', () => {
     it('lists the checks on the site for the site scope', () => {
         expect(checksInScope('site')).toContain('sitemap-missing');
         expect(checksInScope('site').every(isSiteCheck)).toBe(true);
+    });
+});
+
+describe('shippedChecks', () => {
+    it('ships 88 checks, the heuristics of indexability included', () => {
+        expect(shippedChecks).toHaveLength(88);
+    });
+
+    it('compares pages for near-duplicate, so a stopped audit skips it, and scores the two-half checks from their Read half', () => {
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        expect(stopped).not.toContain('near-duplicate');
+        expect(stopped).toContain('param-duplicates');
+        expect(stopped).toContain('facets-indexable');
+    });
+});
+
+describe('isSelfCanonical', () => {
+    it('is an indexable page with no canonical or one naming itself', () => {
+        const url = 'https://acme.com/a';
+
+        expect(
+            isSelfCanonical({ url, canonical_url: null, is_indexable: true }),
+        ).toBe(true);
+
+        expect(
+            isSelfCanonical({ url, canonical_url: url, is_indexable: true }),
+        ).toBe(true);
+
+        expect(
+            isSelfCanonical({
+                url,
+                canonical_url: 'https://acme.com/b',
+                is_indexable: true,
+            }),
+        ).toBe(false);
+
+        expect(
+            isSelfCanonical({ url, canonical_url: null, is_indexable: false }),
+        ).toBe(false);
     });
 });

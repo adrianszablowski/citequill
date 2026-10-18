@@ -4,7 +4,9 @@ import * as cheerio from 'cheerio';
 import type { Element } from 'domhandler';
 
 import { selectorOf } from '@/features/audit/finding';
+import { hidingStyle } from '@/features/audit/hidden';
 import { imagesOf, type PageImage } from '@/features/audit/images';
+import { simhash } from '@/features/audit/simhash';
 import {
     absolute,
     type Alternate,
@@ -43,6 +45,11 @@ export interface Plugin extends PageElement {
     name: string;
 }
 
+export interface HiddenBlock extends PageElement {
+    words: number;
+    text: string;
+}
+
 export interface AuditPage {
     title: string | null;
     titles: TitleTag[];
@@ -65,9 +72,16 @@ export interface AuditPage {
     refresh: string | null;
     alternates: Alternate[];
     links: string[];
+    assets: string[];
+    hiddenBlocks: HiddenBlock[];
+    fragmentLinks: string[];
+    mainText: string;
     bodyHash: string | null;
+    simhash: string | null;
     wordCount: number;
 }
+
+export const thinPageWords = 150;
 
 export function readAuditPage(html: string, url: string): AuditPage {
     const $ = cheerio.load(html, { sourceCodeLocationInfo: true });
@@ -95,9 +109,19 @@ export function readAuditPage(html: string, url: string): AuditPage {
 
     body.find('script, style, template, noscript').remove();
 
-    const links = $('a[href]')
+    const hrefs = $('a[href]')
         .toArray()
-        .map((element) => absolute($(element).attr('href'), base))
+        .map((element) => $(element).attr('href') ?? '');
+
+    const links = hrefs
+        .map((href) => absolute(href, base))
+        .filter((href) => href !== null);
+
+    const assets = $('link[rel~="stylesheet" i][href], script[src]')
+        .toArray()
+        .map((element) =>
+            absolute($(element).attr('href') ?? $(element).attr('src'), base),
+        )
         .filter((href) => href !== null);
 
     const canonicals = $('link[rel="canonical"]')
@@ -184,9 +208,12 @@ export function readAuditPage(html: string, url: string): AuditPage {
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
         alternates: alternatesOf($, base),
         links: [...new Set(links)],
+        assets: [...new Set(assets)],
+        hiddenBlocks: hiddenBlocksOf($, body),
+        fragmentLinks: hrefs.filter((href) => pageFragment.test(href)),
     };
 
-    const text = cheerio
+    const mainText = cheerio
         .load(mainContent($))
         .text()
         .replace(/\s+/g, ' ')
@@ -194,8 +221,12 @@ export function readAuditPage(html: string, url: string): AuditPage {
 
     return {
         ...page,
-        bodyHash: text ? createHash('sha256').update(text).digest('hex') : null,
-        wordCount: text ? text.split(' ').length : 0,
+        mainText,
+        bodyHash: mainText
+            ? createHash('sha256').update(mainText).digest('hex')
+            : null,
+        simhash: simhash(mainText),
+        wordCount: mainText ? mainText.split(' ').length : 0,
     };
 }
 
@@ -206,6 +237,12 @@ const pluginTypes = [
 ];
 
 const pluginFiles = /\.(swf|jar|class|xap)$/;
+
+const hiddenBlockWords = 50;
+
+const pageFragment = /#(?:page|strona)=\d+$/i;
+
+const blockControls = 'a, button, input, select, textarea';
 
 const scriptOrStyle = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 
@@ -225,6 +262,36 @@ function locatedOf($: cheerio.CheerioAPI) {
         selector: selectorOf(tag),
         snippet: $.html(tag),
     });
+}
+
+function hiddenBlocksOf(
+    $: cheerio.CheerioAPI,
+    body: cheerio.Cheerio<Element>,
+): HiddenBlock[] {
+    return body
+        .find('[style]')
+        .toArray()
+        .filter(
+            (element) =>
+                isOffscreen(element) &&
+                !$(element).parents('[style]').toArray().some(isOffscreen) &&
+                $(element).find(blockControls).length === 0,
+        )
+        .map((element) => {
+            const text = $(element).text().replace(/\s+/g, ' ').trim();
+
+            return {
+                selector: selectorOf(element),
+                snippet: $.html(element),
+                words: text ? text.split(' ').length : 0,
+                text,
+            };
+        })
+        .filter(({ words }) => words >= hiddenBlockWords);
+}
+
+function isOffscreen(element: Element) {
+    return hidingStyle(element.attribs.style) === 'offscreen';
 }
 
 function isInHead($: cheerio.CheerioAPI, tag: Element) {

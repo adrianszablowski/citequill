@@ -9,6 +9,7 @@ import {
     type Read,
     type ReadContext,
 } from '@/features/audit/observe';
+import { thinPageWords } from '@/features/audit/page';
 import { type QueueEntry, siteHosts } from '@/features/audit/queue';
 import type { Fetched, Hop } from '@/features/crawl/fetch';
 
@@ -136,6 +137,22 @@ describe('observeRead', () => {
         expect(row).toMatchObject({ description: 'Plans.', image_count: 2 });
     });
 
+    it(`records the SimHash of a main text of ${thinPageWords} words or more, which near-duplicate compares, and none of a shorter one`, () => {
+        const url = 'https://acme.com/a';
+
+        const simhashOf = (count: number) =>
+            observe({
+                entry: entry(url),
+                outcome: {
+                    ...page(url, []),
+                    body: `<html><body><main>${Array.from({ length: count }, (_, i) => `word${i}`).join(' ')}</main></body></html>`,
+                },
+            }).row.body_simhash;
+
+        expect(simhashOf(thinPageWords)).toMatch(/^[0-9a-f]{16}$/);
+        expect(simhashOf(thinPageWords - 1)).toBeNull();
+    });
+
     it('records a blocked or failed read as a URL that did not answer, with what the queue knew', () => {
         const url = 'https://acme.com/private';
 
@@ -152,6 +169,7 @@ describe('observeRead', () => {
                 is_blocked: isBlocked,
                 title: null,
                 body_hash: null,
+                body_simhash: null,
                 description: null,
                 image_count: 0,
                 click_depth: 1,

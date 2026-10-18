@@ -1,4 +1,4 @@
-import { readAuditPage } from '@/features/audit/page';
+import { readAuditPage, thinPageWords } from '@/features/audit/page';
 import {
     type Candidate,
     linkDepth,
@@ -74,6 +74,8 @@ export function observeRead(
         ...observation,
         is_blocked: outcome === 'blocked',
         body_hash: page?.bodyHash ?? null,
+        body_simhash:
+            page && page.wordCount >= thinPageWords ? page.simhash : null,
         description: page?.descriptions[0]?.content || null,
         image_count: page?.images.length ?? 0,
         hreflang: page ? (page.alternates as unknown as Json) : null,
