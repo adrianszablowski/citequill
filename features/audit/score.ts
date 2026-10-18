@@ -17,10 +17,11 @@ export type ScoredPage = Pick<
     | 'is_blocked'
     | 'canonical_url'
     | 'in_sitemap'
+    | 'image_count'
 >;
 
 export const scoredPageColumns =
-    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap';
+    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count';
 
 export type ScoredFinding = Pick<
     Tables<'audit_findings'>,
@@ -57,6 +58,9 @@ export const crossPageChecks = [
     'page-not-in-sitemap',
     'sitemap-url-error',
     'sitemap-url-noncanonical',
+    'title-duplicate',
+    'title-boilerplate',
+    'description-duplicate',
 ] as const satisfies readonly CheckId[];
 
 export function scoreAudit({ checks, pages, findings, marks, homes }: Audited) {
@@ -263,6 +267,8 @@ const pageScopes = {
     canonical: (pages: ScoredPage[]) =>
         pages.filter((page) => page.canonical_url !== null),
     listed: (pages: ScoredPage[]) => pages.filter((page) => page.in_sitemap),
+    images: (pages: ScoredPage[]) =>
+        pages.filter((page) => page.is_indexable && page.image_count > 0),
     'self-canonical': (pages: ScoredPage[]) =>
         pages.some((page) => page.in_sitemap)
             ? pages.filter(
@@ -319,6 +325,41 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'sitemap-url-noncanonical': 'listed',
     'html-lang': 'indexable',
     'thin-page': 'indexable',
+    'title-missing': 'indexable',
+    'title-duplicate': 'indexable',
+    'title-boilerplate': 'indexable',
+    'title-stuffed': 'indexable',
+    'title-width': 'indexable',
+    'description-missing': 'indexable',
+    'description-duplicate': 'indexable',
+    'description-length': 'indexable',
+    'h1-missing': 'indexable',
+    'h1-count': 'indexable',
+    'heading-order': 'indexable',
+    'head-invalid': 'indexable',
+    'lorem-ipsum': 'indexable',
+    plugins: 'indexable',
+    'text-ratio': 'indexable',
+    'content-stale': 'indexable',
+    'url-shape': 'indexable',
+    'og-missing': 'indexable',
+    'img-alt-missing': 'images',
+    'img-alt-whitespace': 'images',
+    'img-generator-blank': 'images',
+    'img-decorative-focusable': 'images',
+    'img-decorative-title': 'images',
+    'img-title-only': 'images',
+    'img-figure-no-alt': 'images',
+    'img-alt-redundant': 'images',
+    'img-alt-filename': 'images',
+    'img-alt-long': 'images',
+    'img-alt-stuffed': 'images',
+    'svg-no-name': 'images',
+    'svg-no-role': 'images',
+    'icon-no-name': 'images',
+    'picture-no-src': 'images',
+    'img-no-dimensions': 'images',
+    'img-filename-generic': 'images',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

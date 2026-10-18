@@ -717,10 +717,12 @@ export type Database = {
                     body_hash: string | null;
                     canonical_url: string | null;
                     click_depth: number | null;
+                    description: string | null;
                     final_url: string | null;
                     first_seen_at: string;
                     hreflang: Json | null;
                     id: string;
+                    image_count: number;
                     in_sitemap: boolean;
                     inbound_links: number;
                     is_blocked: boolean;
@@ -741,10 +743,12 @@ export type Database = {
                     body_hash?: string | null;
                     canonical_url?: string | null;
                     click_depth?: number | null;
+                    description?: string | null;
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
                     id?: string;
+                    image_count?: number;
                     in_sitemap?: boolean;
                     inbound_links?: number;
                     is_blocked?: boolean;
@@ -765,10 +769,12 @@ export type Database = {
                     body_hash?: string | null;
                     canonical_url?: string | null;
                     click_depth?: number | null;
+                    description?: string | null;
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
                     id?: string;
+                    image_count?: number;
                     in_sitemap?: boolean;
                     inbound_links?: number;
                     is_blocked?: boolean;

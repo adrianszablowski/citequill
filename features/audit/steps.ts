@@ -326,7 +326,9 @@ export async function checkSite(
         all((from, to) =>
             supabase
                 .from('site_pages')
-                .select(`${scoredPageColumns}, body_hash` as const)
+                .select(
+                    `${scoredPageColumns}, body_hash, title, description` as const,
+                )
                 .eq('last_audit_id', auditId)
                 .order('id')
                 .range(from, to),

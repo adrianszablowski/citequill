@@ -38,6 +38,20 @@ describe('catalogue', () => {
         expect(new Set(ids).size).toBe(ids.length);
     });
 
+    it('holds the 57 rows of the On-page table, hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'on-page'),
+        ).toHaveLength(57);
+
+        expect(checkOf('title-rendered-only')).toMatchObject({
+            severity: 'hint',
+            needs: 'rendered',
+        });
+
+        expect(checkOf('structured-data-format').needs).toBe('slice-6');
+        expect(checkOf('og-missing').needs).toBe('raw');
+    });
+
     it('weighs the seven areas to 100', () => {
         expect(
             Object.values(areaWeights).reduce<number>(

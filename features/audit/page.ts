@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 
 import * as cheerio from 'cheerio';
+import type { Element } from 'domhandler';
 
 import { selectorOf } from '@/features/audit/finding';
+import { imagesOf, type PageImage } from '@/features/audit/images';
 import {
     absolute,
     type Alternate,
@@ -18,8 +20,44 @@ export interface CanonicalTag {
     snippet: string;
 }
 
+export interface PageElement {
+    selector: string;
+    snippet: string;
+}
+
+export interface TitleTag extends PageElement {
+    text: string;
+    isInHead: boolean;
+}
+
+export interface DescriptionTag {
+    content: string;
+    isInHead: boolean;
+}
+
+export interface Heading extends PageElement {
+    level: number;
+}
+
+export interface Plugin extends PageElement {
+    name: string;
+}
+
 export interface AuditPage {
     title: string | null;
+    titles: TitleTag[];
+    descriptions: DescriptionTag[];
+    h1s: string[];
+    headings: Heading[];
+    hasDoctype: boolean;
+    hasMetaCharset: boolean;
+    misplaced: PageElement[];
+    openGraph: string[];
+    modifiedTime: string | null;
+    plugins: Plugin[];
+    visibleText: string;
+    markupLength: number;
+    images: PageImage[];
     lang: string | null;
     canonical: string | null;
     canonicals: CanonicalTag[];
@@ -32,8 +70,30 @@ export interface AuditPage {
 }
 
 export function readAuditPage(html: string, url: string): AuditPage {
-    const $ = cheerio.load(html);
+    const $ = cheerio.load(html, { sourceCodeLocationInfo: true });
     const base = new URL(url);
+    const inDocument = documentElements($);
+    const located = locatedOf($);
+    const headEnd = html.search(/<\/head\s*>|<body[\s>]/i);
+
+    const titles = inDocument('title').map((tag) => ({
+        ...located(tag),
+        text: $(tag).text().trim(),
+        isInHead: isInHead($, tag),
+    }));
+
+    const metas = inDocument('meta').map((tag) => ({
+        keys: [tag.attribs.name, tag.attribs.property].map(
+            (key) => key?.trim().toLowerCase() ?? '',
+        ),
+        content: tag.attribs.content?.trim() ?? '',
+        isInHead: isInHead($, tag),
+        attribs: tag.attribs,
+    }));
+
+    const body = $('body').clone();
+
+    body.find('script, style, template, noscript').remove();
 
     const links = $('a[href]')
         .toArray()
@@ -44,7 +104,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         .toArray()
         .map((element) => ({
             href: $(element).attr('href')?.trim() ?? '',
-            isInHead: $(element).parents('head').length > 0,
+            isInHead: isInHead($, element),
             selector: selectorOf(element),
             snippet: $.html(element),
         }));
@@ -58,7 +118,65 @@ export function readAuditPage(html: string, url: string): AuditPage {
         );
 
     const page = {
-        title: $('title').first().text().trim() || null,
+        title: titles[0]?.text || null,
+        titles,
+        descriptions: metas
+            .filter(({ keys }) => keys[0] === 'description')
+            .map(({ content, isInHead }) => ({ content, isInHead })),
+        h1s: inDocument('h1').map((tag) => {
+            const text = $(tag).text().replace(/\s+/g, ' ').trim();
+
+            return (
+                text ||
+                $(tag)
+                    .find('img[alt]')
+                    .toArray()
+                    .map((image) => image.attribs.alt.trim())
+                    .filter(Boolean)
+                    .join(' ')
+            );
+        }),
+        headings: inDocument('h1, h2, h3, h4, h5, h6').map((tag) => ({
+            ...located(tag),
+            level: Number(tag.name.slice(1)),
+        })),
+        hasDoctype: $.root()
+            .contents()
+            .toArray()
+            .some((node) => node.type === 'directive'),
+        hasMetaCharset: metas.some(
+            ({ attribs }) =>
+                Boolean(attribs.charset?.trim()) ||
+                (attribs['http-equiv']?.trim().toLowerCase() ===
+                    'content-type' &&
+                    /charset=/i.test(attribs.content ?? '')),
+        ),
+        misplaced:
+            headEnd < 0
+                ? []
+                : inDocument('title, meta, link, base, style')
+                      .filter(
+                          (tag) =>
+                              !isInHead($, tag) &&
+                              (tag.startIndex ?? Infinity) < headEnd,
+                      )
+                      .map(located),
+        openGraph: [
+            ...new Set(
+                metas.flatMap(({ keys, content }) =>
+                    content ? keys.filter((key) => key.startsWith('og:')) : [],
+                ),
+            ),
+        ],
+        modifiedTime:
+            metas.find(({ keys }) => keys.includes('article:modified_time'))
+                ?.content || null,
+        plugins: inDocument('frame, frameset, applet, object, embed')
+            .filter(isPlugin)
+            .map((tag) => ({ ...located(tag), name: tag.name })),
+        visibleText: body.text().replace(/\s+/g, ' ').trim(),
+        markupLength: html.replace(scriptOrStyle, '').length,
+        images: imagesOf($, base),
         lang: $('html').attr('lang')?.trim().toLowerCase() || null,
         canonical: absolute(canonicals[0]?.href, base),
         canonicals,
@@ -79,4 +197,51 @@ export function readAuditPage(html: string, url: string): AuditPage {
         bodyHash: text ? createHash('sha256').update(text).digest('hex') : null,
         wordCount: text ? text.split(' ').length : 0,
     };
+}
+
+const pluginTypes = [
+    'application/x-shockwave-flash',
+    'application/x-java-applet',
+    'application/x-silverlight',
+];
+
+const pluginFiles = /\.(swf|jar|class|xap)$/;
+
+const scriptOrStyle = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+
+function documentElements($: cheerio.CheerioAPI) {
+    return (selector: cheerio.SelectorType) =>
+        $(selector)
+            .toArray()
+            .filter(
+                (tag) =>
+                    $(tag).parents('html').length > 0 &&
+                    $(tag).parents('svg').length === 0,
+            );
+}
+
+function locatedOf($: cheerio.CheerioAPI) {
+    return (tag: Element) => ({
+        selector: selectorOf(tag),
+        snippet: $.html(tag),
+    });
+}
+
+function isInHead($: cheerio.CheerioAPI, tag: Element) {
+    return $(tag).parents('head').length > 0;
+}
+
+function isPlugin({ name, attribs }: Element) {
+    if (name !== 'object' && name !== 'embed') {
+        return true;
+    }
+
+    const type = attribs.type?.trim().toLowerCase() ?? '';
+
+    return (
+        pluginTypes.some((plugin) => type.startsWith(plugin)) ||
+        [attribs.src, attribs.data].some((file) =>
+            pluginFiles.test((file ?? '').toLowerCase().split(/[?#]/)[0]),
+        )
+    );
 }

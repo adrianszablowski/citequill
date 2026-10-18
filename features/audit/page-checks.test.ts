@@ -58,8 +58,23 @@ function fetched(
     };
 }
 
-function html(head: string, body = `<main>${words}</main>`) {
-    return `<html lang="en"><head>${head}<link rel="canonical" href="${url}"></head><body>${body}</body></html>`;
+const description =
+    'Two plans for a team of any size, billed monthly or yearly, with every feature included.';
+
+const openGraph = ['title', 'description', 'image', 'url', 'type']
+    .map((tag) => `<meta property="og:${tag}" content="Pricing">`)
+    .join('');
+
+function documentOf(
+    head: string,
+    body = `<main>${words}</main>`,
+    lang = ' lang="en"',
+) {
+    return `<!doctype html><html${lang}><head><meta charset="utf-8"><title>Pricing</title><meta name="description" content="${description}">${openGraph}${head}</head><body><h1>Pricing</h1>${body}</body></html>`;
+}
+
+function html(head: string, body?: string) {
+    return documentOf(`${head}<link rel="canonical" href="${url}">`, body);
 }
 
 function check(
@@ -92,7 +107,7 @@ function checks(...args: Parameters<typeof check>) {
 
 describe('checkPage', () => {
     it('finds nothing on an indexable page with its canonical, its language and enough words', () => {
-        expect(checks(fetched(html('<title>Pricing</title>')))).toEqual([]);
+        expect(checks(fetched(html('')))).toEqual([]);
     });
 
     it('finds nothing on a page robots.txt kept the audit from', () => {
@@ -310,7 +325,7 @@ describe('checkPage', () => {
     });
 
     it('notes an indexable page with no canonical, by tag or by header', () => {
-        const bare = `<html lang="en"><head></head><body><main>${words}</main></body></html>`;
+        const bare = documentOf('');
 
         expect(checks(fetched(bare))).toEqual(['canonical-missing']);
 
@@ -333,7 +348,10 @@ describe('checkPage', () => {
     it('reports a canonical in the body, a relative one, and two that disagree', () => {
         const findings = check(
             fetched(
-                `<html lang="en"><head><link rel="canonical" href="/pricing#plans"></head><body><main>${words}</main><link rel="canonical" id="late" href="https://acme.com/other"></body></html>`,
+                documentOf(
+                    '<link rel="canonical" href="/pricing#plans">',
+                    `<main>${words}</main><link rel="canonical" id="late" href="https://acme.com/other">`,
+                ),
             ),
         );
 
@@ -378,7 +396,7 @@ describe('checkPage', () => {
 
     it("reports a canonical to another locale's base URL or to http from https", () => {
         const pointing = (target: string) =>
-            `<html lang="en"><head><link rel="canonical" href="${target}"></head><body><main>${words}</main></body></html>`;
+            documentOf(`<link rel="canonical" href="${target}">`);
 
         expect(checks(fetched(pointing('https://acme.com/de/preise')))).toEqual(
             ['canonical-language'],
@@ -408,7 +426,11 @@ describe('checkPage', () => {
     it('notes a missing or invalid language, or one the hreflang self-entry contradicts', () => {
         const page = (lang: string, head = '') =>
             fetched(
-                `<html${lang}><head><link rel="canonical" href="${url}">${head}</head><body><main>${words}</main></body></html>`,
+                documentOf(
+                    `<link rel="canonical" href="${url}">${head}`,
+                    undefined,
+                    lang,
+                ),
             );
 
         expect(checks(page(''))).toEqual(['html-lang']);
@@ -434,8 +456,31 @@ describe('checkPage', () => {
     });
 
     it(`notes main content under ${thinPageWords} words`, () => {
+        const short = fetched(html('', '<main>Too short.</main>'));
+
+        expect(checks(short)).toEqual(['thin-page', 'text-ratio']);
+
+        expect(check(short)[0]).toMatchObject({
+            check: 'thin-page',
+            detail: { words: 2 },
+        });
+    });
+
+    it('runs the on-page and image checks on an indexable page only', () => {
+        const bare = `<html lang="en"><head><link rel="canonical" href="${url}"></head><body><main>${words}</main><img src="/a.png"></body></html>`;
+
+        expect(checks(fetched(bare))).toEqual([
+            'title-missing',
+            'description-missing',
+            'h1-missing',
+            'head-invalid',
+            'og-missing',
+            'img-no-dimensions',
+            'img-alt-missing',
+        ]);
+
         expect(
-            check(fetched(html('', '<main>Too short.</main>'))),
-        ).toMatchObject([{ check: 'thin-page', detail: { words: 2 } }]);
+            checks(fetched(bare, { headers: { 'x-robots-tag': 'noindex' } })),
+        ).toEqual([]);
     });
 });

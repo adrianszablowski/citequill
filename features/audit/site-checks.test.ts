@@ -26,7 +26,10 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         is_blocked: false,
         canonical_url: url,
         in_sitemap: true,
+        image_count: 0,
         body_hash: `hash of ${path}`,
+        title: null,
+        description: null,
         ...overrides,
     };
 }
@@ -120,13 +123,19 @@ describe('siteChecks', () => {
                 check: 'duplicate-body',
                 url: 'https://acme.com/a',
                 subject: 'https://acme.com/b',
-                detail: { duplicates: ['https://acme.com/b'] },
+                detail: {
+                    value: 'same',
+                    duplicates: ['https://acme.com/b'],
+                },
             },
             {
                 check: 'duplicate-body',
                 url: 'https://acme.com/b',
                 subject: 'https://acme.com/a',
-                detail: { duplicates: ['https://acme.com/a'] },
+                detail: {
+                    value: 'same',
+                    duplicates: ['https://acme.com/a'],
+                },
             },
         ]);
     });
@@ -146,17 +155,26 @@ describe('siteChecks', () => {
             [
                 'https://acme.com/a',
                 'https://acme.com/b',
-                { duplicates: ['https://acme.com/b', 'https://acme.com/c'] },
+                {
+                    value: 'same',
+                    duplicates: ['https://acme.com/b', 'https://acme.com/c'],
+                },
             ],
             [
                 'https://acme.com/b',
                 'https://acme.com/a',
-                { duplicates: ['https://acme.com/a', 'https://acme.com/c'] },
+                {
+                    value: 'same',
+                    duplicates: ['https://acme.com/a', 'https://acme.com/c'],
+                },
             ],
             [
                 'https://acme.com/c',
                 'https://acme.com/a',
-                { duplicates: ['https://acme.com/a', 'https://acme.com/b'] },
+                {
+                    value: 'same',
+                    duplicates: ['https://acme.com/a', 'https://acme.com/b'],
+                },
             ],
         ]);
 
@@ -250,5 +268,173 @@ describe('siteChecks', () => {
 
         expect(checks(many(4))).toContain('noindex-site null');
         expect(checks(many(5))).not.toContain('noindex-site null');
+    });
+
+    it('reports indexable pages that share a title or a description, whitespace aside, unless one names the other as canonical', () => {
+        const rows = [
+            row('/a', { title: 'Pricing  | Acme', description: 'Plans.' }),
+            row('/b', { title: ' Pricing | Acme', description: 'Plans.' }),
+            row('/c', { title: 'Pricing | Acme', is_indexable: false }),
+            row('/print', {
+                title: 'Story | Acme',
+                canonical_url: 'https://acme.com/story',
+            }),
+            row('/story', { title: 'Story | Acme' }),
+            row('/d', { title: null, description: '' }),
+            row('/e', { title: null, description: null }),
+        ];
+
+        expect(
+            siteChecks(rows, context).filter(({ check }) =>
+                check.endsWith('-duplicate'),
+            ),
+        ).toEqual([
+            {
+                check: 'title-duplicate',
+                url: 'https://acme.com/a',
+                subject: 'https://acme.com/b',
+                detail: {
+                    value: 'Pricing | Acme',
+                    duplicates: ['https://acme.com/b'],
+                },
+            },
+            {
+                check: 'title-duplicate',
+                url: 'https://acme.com/b',
+                subject: 'https://acme.com/a',
+                detail: {
+                    value: 'Pricing | Acme',
+                    duplicates: ['https://acme.com/a'],
+                },
+            },
+            {
+                check: 'description-duplicate',
+                url: 'https://acme.com/a',
+                subject: 'https://acme.com/b',
+                detail: {
+                    value: 'Plans.',
+                    duplicates: ['https://acme.com/b'],
+                },
+            },
+            {
+                check: 'description-duplicate',
+                url: 'https://acme.com/b',
+                subject: 'https://acme.com/a',
+                detail: {
+                    value: 'Plans.',
+                    duplicates: ['https://acme.com/a'],
+                },
+            },
+        ]);
+    });
+
+    it('lists at most 10 twins of a duplicate title', () => {
+        const rows = Array.from({ length: 12 }, (_, index) =>
+            row(`/p${String(index).padStart(2, '0')}`, { title: 'Same' }),
+        );
+
+        const [first] = siteChecks(rows, context).filter(
+            ({ check }) => check === 'title-duplicate',
+        );
+
+        expect(
+            (first.detail as { duplicates: string[] }).duplicates,
+        ).toHaveLength(10);
+    });
+
+    it('lists each page of a large group with at most 10 twins, the first in sorted order, never itself', () => {
+        const paths = Array.from(
+            { length: 30 },
+            (_, index) => `/p${String(29 - index).padStart(2, '0')}`,
+        );
+
+        const findings = siteChecks(
+            paths.map((path) => row(path, { title: 'Same' })),
+            context,
+        ).filter(({ check }) => check === 'title-duplicate');
+
+        expect(findings).toHaveLength(30);
+
+        for (const { url, subject, detail } of findings) {
+            const { duplicates } = detail as { duplicates: string[] };
+
+            const expected = paths
+                .map((path) => `https://acme.com${path}`)
+                .filter((other) => other !== url)
+                .sort()
+                .slice(0, 10);
+
+            expect(duplicates).toEqual(expected);
+            expect(subject).toBe(expected[0]);
+        }
+    });
+
+    it('finds no shared or boilerplate title or description on a site of one page', () => {
+        expect(
+            checks([row('/', { title: 'Acme', description: 'Plans.' })]),
+        ).toEqual([]);
+
+        expect(
+            checks([
+                row('/pricing', {
+                    title: 'Pricing | Acme',
+                    description: 'Plans.',
+                }),
+            ]),
+        ).toEqual([]);
+    });
+
+    it('reports a title that is only the site name off the home page, or a stock word once the site name is removed', () => {
+        const titled = (path: string, title: string) => row(path, { title });
+
+        const findings = siteChecks(
+            [
+                titled('/', 'Acme'),
+                titled('/pricing', 'Pricing | Acme'),
+                titled('/blog', 'Acme \u2013 Blog'),
+                titled('/about', 'Acme'),
+                titled('/start', 'Home - Acme'),
+                titled('/draft', 'Untitled'),
+                titled('/team', 'Team: Acme'),
+            ],
+            context,
+        ).filter(({ check }) => check === 'title-boilerplate');
+
+        expect(findings).toEqual([
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/about',
+                detail: { title: 'Acme', siteName: 'acme' },
+            },
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/start',
+                detail: { title: 'Home - Acme', siteName: 'acme' },
+            },
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/draft',
+                detail: { title: 'Untitled', siteName: 'acme' },
+            },
+        ]);
+    });
+
+    it('finds no site name in fewer than 2 titles, and still notes a stock word', () => {
+        expect(
+            siteChecks(
+                [
+                    row('/', { title: 'Welcome' }),
+                    row('/a', { title: 'Pricing | Acme' }),
+                    row('/b', { title: 'Acme' }),
+                ],
+                context,
+            ).filter(({ check }) => check === 'title-boilerplate'),
+        ).toEqual([
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/',
+                detail: { title: 'Welcome', siteName: null },
+            },
+        ]);
     });
 });

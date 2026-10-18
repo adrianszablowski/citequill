@@ -74,6 +74,8 @@ export function observeRead(
         ...observation,
         is_blocked: outcome === 'blocked',
         body_hash: page?.bodyHash ?? null,
+        description: page?.descriptions[0]?.content || null,
+        image_count: page?.images.length ?? 0,
         hreflang: page ? (page.alternates as unknown as Json) : null,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,

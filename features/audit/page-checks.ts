@@ -1,10 +1,12 @@
 import type { Finding } from '@/features/audit/finding';
+import { imageChecks } from '@/features/audit/image-checks';
 import {
     googlebotDirectives,
     headerCanonical,
     type observeRead,
     type Read,
 } from '@/features/audit/observe';
+import { onPageChecks } from '@/features/audit/on-page-checks';
 import type { CanonicalTag } from '@/features/audit/page';
 import { type Fetched, maxBytes, maxHops } from '@/features/crawl/fetch';
 import { absolute } from '@/features/crawl/html';
@@ -174,6 +176,12 @@ function answerFindings(
               ...findings,
               ...canonicalFindings(url, fetched, page, locales),
               ...contentFindings(url, page, isIndexable),
+              ...(isIndexable
+                  ? [
+                        ...onPageChecks(url, page, fetched, now),
+                        ...imageChecks(url, page.images),
+                    ]
+                  : []),
           ]
         : findings;
 }

@@ -106,4 +106,135 @@ describe('readAuditPage', () => {
             readAuditPage(html, 'https://acme.com/pricing').refresh,
         ).toBeNull();
     });
+
+    it('reads the titles, descriptions and Open Graph tags of the document, never an inline svg title, and names matched in any case', () => {
+        const page = readAuditPage(
+            `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><title> Pricing </title><meta name="Description" content=" Two plans. "><meta property="OG:Title" content="Pricing"><meta name="og:image" content="/a.png"><meta property="og:url" content=""><meta property="article:modified_time" content="2026-01-01"></head><body><svg role="img"><title>Logo</title></svg><main><p>Text</p></main></body></html>`,
+            'https://acme.com/pricing',
+        );
+
+        expect(page).toMatchObject({
+            title: 'Pricing',
+            titles: [
+                {
+                    text: 'Pricing',
+                    isInHead: true,
+                    selector: 'title',
+                    snippet: '<title> Pricing </title>',
+                },
+            ],
+            descriptions: [{ content: 'Two plans.', isInHead: true }],
+            hasDoctype: true,
+            hasMetaCharset: true,
+            openGraph: ['og:title', 'og:image'],
+            modifiedTime: '2026-01-01',
+            misplaced: [],
+        });
+    });
+
+    it('has no doctype, charset, title or description on a bare fragment', () => {
+        expect(readAuditPage('<p>Hi</p>', 'https://acme.com/')).toMatchObject({
+            title: null,
+            titles: [],
+            descriptions: [],
+            hasDoctype: false,
+            hasMetaCharset: false,
+            openGraph: [],
+            modifiedTime: null,
+            images: [],
+        });
+    });
+
+    it('reads the H1s and every heading level in document order', () => {
+        const page = readAuditPage(
+            '<html><body><header><h2>Menu</h2></header><h1> Plans  for teams </h1><h3 id="faq">FAQ</h3><h1>Again</h1></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.h1s).toEqual(['Plans for teams', 'Again']);
+
+        expect(
+            page.headings.map(({ level, selector }) => [level, selector]),
+        ).toEqual([
+            [2, 'h2'],
+            [1, 'h1'],
+            [3, 'h3#faq'],
+            [1, 'h1'],
+        ]);
+    });
+
+    it('reads an H1 that holds only an image by the alt of the image', () => {
+        const page = readAuditPage(
+            '<html><body><h1><a href="/"><img src="/logo.svg" alt=" Acme "></a></h1><h1><img src="/x.png" alt=""></h1></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.h1s).toEqual(['Acme', '']);
+    });
+
+    it('finds the head elements the parser moved into the body after an element the head does not allow, and not the ones written in the body', () => {
+        const page = readAuditPage(
+            '<html><head><title>A</title><img src="/pixel.gif"><meta name="description" content="Late"><link rel="canonical" href="https://acme.com/"></head><body><style>.a{}</style><meta itemprop="price" content="9"></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.misplaced).toEqual([
+            {
+                selector: 'meta',
+                snippet: '<meta name="description" content="Late">',
+            },
+            {
+                selector: 'link',
+                snippet: '<link rel="canonical" href="https://acme.com/">',
+            },
+        ]);
+
+        expect(page.descriptions).toEqual([
+            { content: 'Late', isInHead: false },
+        ]);
+
+        expect(
+            readAuditPage(
+                '<title>A</title><div>x</div><meta name="description" content="Late">',
+                'https://acme.com/',
+            ).misplaced,
+        ).toEqual([]);
+    });
+
+    it('reads frames, applets and plugin objects, and the visible text without scripts, styles, templates or noscript', () => {
+        const page = readAuditPage(
+            '<html><body><p>Lorem  ipsum</p><script>var a = 1;</script><style>p{}</style><noscript><img src="/x.gif"></noscript><template><p>Row</p></template><object type="application/x-shockwave-flash" data="/a"></object><iframe src="/b"></iframe><embed src="/movie.mp4"></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.visibleText).toBe('Lorem ipsum');
+
+        expect(page.markupLength).toBe(
+            '<html><body><p>Lorem  ipsum</p><noscript><img src="/x.gif"></noscript><template><p>Row</p></template><object type="application/x-shockwave-flash" data="/a"></object><iframe src="/b"></iframe><embed src="/movie.mp4"></body></html>'
+                .length,
+        );
+
+        expect(page.plugins).toEqual([
+            {
+                name: 'object',
+                selector: 'object',
+                snippet:
+                    '<object type="application/x-shockwave-flash" data="/a"></object>',
+            },
+        ]);
+    });
+
+    it('reads the images before the main text is cut out, so a logo in the header is listed', () => {
+        const page = readAuditPage(
+            '<html><body><header><img src="/logo.png" alt="Acme"><svg role="img"><title>Menu</title></svg></header><main><p>Text</p></main></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.images.map(({ tag, src }) => src ?? tag)).toEqual([
+            'https://acme.com/logo.png',
+            'svg',
+        ]);
+
+        expect(page.wordCount).toBe(1);
+    });
 });

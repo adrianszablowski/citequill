@@ -28,6 +28,7 @@ function page(index: number, overrides: Partial<ScoredPage> = {}): ScoredPage {
         is_blocked: false,
         canonical_url: null,
         in_sitemap: true,
+        image_count: 0,
         ...overrides,
     };
 }
@@ -407,6 +408,79 @@ describe('appliesTo', () => {
             'page-0',
             'page-1',
         ]);
+    });
+});
+
+describe('the on-page checks', () => {
+    it('apply the image checks to the indexable pages with images, and the rest to the indexable pages', () => {
+        const sitePages = [
+            page(0, { image_count: 3 }),
+            page(1),
+            page(2, { image_count: 1, is_indexable: false }),
+        ];
+
+        expect(
+            appliesTo('img-alt-missing', sitePages).map(({ id }) => id),
+        ).toEqual(['page-0']);
+
+        expect(appliesTo('svg-no-role', sitePages).map(({ id }) => id)).toEqual(
+            ['page-0'],
+        );
+
+        expect(
+            appliesTo('title-missing', sitePages).map(({ id }) => id),
+        ).toEqual(['page-0', 'page-1']);
+    });
+
+    it('count as no data for the image checks on a site with no images', () => {
+        const result = score(['img-alt-missing', 'h1-missing'], pages(3), []);
+
+        expect(result.results.map(({ check }) => check)).toEqual([
+            'h1-missing',
+        ]);
+
+        expect(result.checks_scored).toBe(1);
+    });
+
+    it('compare pages for the title and description duplicates and the boilerplate title, so a stopped audit skips them', () => {
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        for (const check of [
+            'title-duplicate',
+            'title-boilerplate',
+            'description-duplicate',
+        ] as const) {
+            expect(crossPageChecks).toContain(check);
+            expect(stopped).not.toContain(check);
+        }
+
+        expect(stopped).toContain('title-missing');
+        expect(stopped).toContain('img-no-dimensions');
+    });
+
+    it('leave the deferred, rendered and structured data rows out of the checks that run', () => {
+        const complete = checksRun({
+            hasCrossPageChecks: true,
+            hasDiscovered: true,
+            obeyRobots: true,
+        });
+
+        for (const check of [
+            'title-language',
+            'twitter-card',
+            'og-image-bad',
+            'img-heavy',
+            'img-oversized',
+            'title-rendered-only',
+            'jsonld-invalid',
+            'structured-data-format',
+        ] as const) {
+            expect(complete).not.toContain(check);
+        }
     });
 });
 

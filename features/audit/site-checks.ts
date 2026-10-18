@@ -5,8 +5,10 @@ import {
     isNoindexed,
     type ScoredPage,
 } from '@/features/audit/score';
+import type { Tables } from '@/lib/types/database';
 
-export type SiteRow = ScoredPage & { body_hash: string | null };
+export type SiteRow = ScoredPage &
+    Pick<Tables<'site_pages'>, 'body_hash' | 'title' | 'description'>;
 
 export interface SiteContext {
     homes: string[];
@@ -19,13 +21,30 @@ export const duplicatesListed = 10;
 
 export const noindexSiteShare = 0.95;
 
+export const stockTitles = new Set([
+    'home',
+    'homepage',
+    'untitled',
+    'index',
+    'welcome',
+    'new page',
+    'default',
+]);
+
 export function siteChecks(rows: SiteRow[], context: SiteContext) {
     const byUrl = new Map(rows.map((row) => [row.url, row]));
 
     return [
         ...noindexFindings(rows, context),
         ...rows.flatMap((row) => canonicalFindings(row, byUrl, context)),
-        ...duplicateFindings(rows),
+        ...duplicateFindings('duplicate-body', rows, (row) => row.body_hash),
+        ...duplicateFindings('title-duplicate', rows, (row) =>
+            collapsed(row.title),
+        ),
+        ...duplicateFindings('description-duplicate', rows, (row) =>
+            collapsed(row.description),
+        ),
+        ...boilerplateFindings(rows, context),
         ...appliesTo('page-not-in-sitemap', rows)
             .filter((row) => !row.in_sitemap)
             .map((row): Finding => ({
@@ -105,48 +124,124 @@ function canonicalFindings(
     return findings;
 }
 
-function duplicateFindings(rows: SiteRow[]): Finding[] {
+function duplicateFindings(
+    check: 'duplicate-body' | 'title-duplicate' | 'description-duplicate',
+    rows: SiteRow[],
+    valueOf: (row: SiteRow) => string | null,
+): Finding[] {
     const groups = new Map<string, SiteRow[]>();
-    const twins = new Map<SiteRow, string[]>();
 
-    for (const row of rows) {
-        if (row.is_indexable && row.body_hash) {
-            const group = groups.get(row.body_hash) ?? [];
+    const valued = rows.flatMap((row) => {
+        const value = valueOf(row);
 
-            group.push(row);
-            groups.set(row.body_hash, group);
-            twins.set(row, []);
-        }
+        return row.is_indexable && value ? [{ row, value }] : [];
+    });
+
+    for (const { row, value } of valued) {
+        const group = groups.get(value) ?? [];
+
+        group.push(row);
+        groups.set(value, group);
     }
 
     for (const group of groups.values()) {
-        group.forEach((row, index) => {
-            for (const other of group.slice(index + 1)) {
-                if (
-                    other.canonical_url !== row.url &&
-                    row.canonical_url !== other.url
-                ) {
-                    twins.get(row)!.push(other.url);
-                    twins.get(other)!.push(row.url);
-                }
-            }
-        });
+        group.sort((one, other) => (one.url < other.url ? -1 : 1));
     }
 
-    return [...twins].flatMap(([row, urls]) => {
-        urls.sort();
+    return valued.flatMap(({ row, value }): Finding[] => {
+        const duplicates: string[] = [];
 
-        return urls.length > 0
+        for (const other of groups.get(value)!) {
+            if (duplicates.length === duplicatesListed) {
+                break;
+            }
+
+            if (
+                other !== row &&
+                other.canonical_url !== row.url &&
+                row.canonical_url !== other.url
+            ) {
+                duplicates.push(other.url);
+            }
+        }
+
+        return duplicates.length > 0
             ? [
                   {
-                      check: 'duplicate-body',
+                      check,
                       url: row.url,
-                      subject: urls[0],
-                      detail: { duplicates: urls.slice(0, duplicatesListed) },
-                  } as const,
+                      subject: duplicates[0],
+                      detail: { value, duplicates },
+                  },
               ]
             : [];
     });
+}
+
+function boilerplateFindings(
+    rows: SiteRow[],
+    { homes }: SiteContext,
+): Finding[] {
+    const titled = rows.flatMap((row) => {
+        const title = collapsed(row.title);
+
+        return row.is_indexable && title
+            ? [{ row, title, segments: title.split(separator) }]
+            : [];
+    });
+
+    const counts = new Map<string, number>();
+
+    for (const { segments } of titled) {
+        if (segments.length > 1) {
+            for (const end of new Set([
+                segments[0].toLowerCase(),
+                segments.at(-1)!.toLowerCase(),
+            ])) {
+                counts.set(end, (counts.get(end) ?? 0) + 1);
+            }
+        }
+    }
+
+    const [siteName = null] = [...counts]
+        .filter(([, count]) => count >= 2)
+        .sort(([a, one], [b, other]) => other - one || a.localeCompare(b))
+        .map(([name]) => name);
+
+    return titled.flatMap(({ row, title, segments }): Finding[] => {
+        const remainder = withoutSiteName(
+            segments.map((segment) => segment.toLowerCase()),
+            siteName,
+        ).join(' ');
+
+        const isBoilerplate =
+            (remainder === '' && !homes.includes(row.url)) ||
+            stockTitles.has(remainder);
+
+        return isBoilerplate
+            ? [
+                  {
+                      check: 'title-boilerplate',
+                      url: row.url,
+                      detail: { title, siteName },
+                  },
+              ]
+            : [];
+    });
+}
+
+function withoutSiteName(segments: string[], siteName: string | null) {
+    if (segments[0] === siteName) {
+        return segments.slice(1);
+    }
+
+    return segments.at(-1) === siteName ? segments.slice(0, -1) : segments;
+}
+
+const separator = /\s+[|\-\u2013\u2014:\u00b7\u00bb\u00ab]\s+/;
+
+function collapsed(text: string | null) {
+    return text?.replace(/\s+/g, ' ').trim() || null;
 }
 
 function listedFindings(

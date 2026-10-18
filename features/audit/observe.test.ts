@@ -122,6 +122,20 @@ describe('observeRead', () => {
         expect(pageId('https://acme.com/blog/other')).toBeNull();
     });
 
+    it('records the first description and the images the checks list, decorative and header ones included', () => {
+        const url = 'https://acme.com/a';
+
+        const { row } = observe({
+            entry: entry(url),
+            outcome: {
+                ...page(url, []),
+                body: '<html><head><meta name="description" content=" Plans. "><meta name="description" content="Other"></head><body><header><img src="/logo.png" alt="Acme"></header><img src="/line.png" alt=""><img src="/pixel.gif" alt="" width="1" height="1"><svg aria-hidden="true"></svg></body></html>',
+            },
+        });
+
+        expect(row).toMatchObject({ description: 'Plans.', image_count: 2 });
+    });
+
     it('records a blocked or failed read as a URL that did not answer, with what the queue knew', () => {
         const url = 'https://acme.com/private';
 
@@ -138,6 +152,8 @@ describe('observeRead', () => {
                 is_blocked: isBlocked,
                 title: null,
                 body_hash: null,
+                description: null,
+                image_count: 0,
                 click_depth: 1,
                 in_sitemap: true,
             });
