@@ -202,6 +202,37 @@ describe('detailLines', () => {
         expect(detailLines({ items: 1 })).toEqual(['Items: 1']);
     });
 
+    it('shows an AI access finding by its agents, each signal with its agents, its directives and the source of a Bing directive, and leaves the reason out', () => {
+        expect(
+            detailLines({ agents: ['OAI-SearchBot', 'PerplexityBot'] }),
+        ).toEqual(['Agents: OAI-SearchBot, PerplexityBot']);
+
+        expect(
+            detailLines({
+                signals: [
+                    'search=yes,ai-train=no (*)',
+                    'ai-train=no,ai-input=yes,search=yes (Applebot-Extended, Google-Extended)',
+                ],
+            }),
+        ).toEqual([
+            'Signals (agents): search=yes,ai-train=no (*), ai-train=no,ai-input=yes,search=yes (Applebot-Extended, Google-Extended)',
+        ]);
+
+        expect(
+            detailLines({ reason: 'directive', directives: ['nosnippet'] }),
+        ).toEqual(['Directives: nosnippet']);
+
+        expect(detailLines({ reason: 'data-nosnippet' })).toEqual([]);
+
+        expect(detailLines({ meta: ['noarchive'], header: [] })).toEqual([
+            'Meta tag: noarchive',
+        ]);
+
+        expect(
+            detailLines({ meta: ['noarchive'], header: ['nocache'] }),
+        ).toEqual(['Meta tag: noarchive', 'Header: nocache']);
+    });
+
     it('leaves out the attributes an image finding records, whose width may be a percentage', () => {
         expect(
             detailLines({

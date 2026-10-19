@@ -52,6 +52,8 @@ import {
     siteOrigins,
 } from '@/features/audit/queue';
 import {
+    agentsBlocked,
+    aiSearchAgents,
     blockedBy,
     googlebotBlocks,
     type RobotsFile,
@@ -324,6 +326,7 @@ export async function readPages(
     const checks = {
         obeyRobots: site.obeyRobots,
         isDisallowed: googlebotBlocks(files),
+        aiSearchBlocked: agentsBlocked(files, aiSearchAgents),
         locales: site.locales,
         hosts: site.access.hosts,
         homes: site.homes,

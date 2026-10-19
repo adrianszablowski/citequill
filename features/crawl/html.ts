@@ -44,7 +44,7 @@ export function readPage(html: string, url: string): PageData {
         $('meta[name="author"]').attr('content')?.trim() ||
         jsonLdAuthor(jsonLdNodes($));
 
-    const content = mainContent($);
+    const content = mainElement($)?.html() ?? '';
 
     return {
         title: $('title').first().text().trim(),
@@ -101,27 +101,28 @@ export function hreflangAlternates(entries: HreflangEntry[]): Alternate[] {
     return [...alternates.values()];
 }
 
-export function robotsMetaOf($: cheerio.CheerioAPI) {
+export function robotsMetaOf(
+    $: cheerio.CheerioAPI,
+    agent: 'googlebot' | 'bingbot' = 'googlebot',
+) {
+    const names = ['robots', agent];
+
     return $('meta[name][content]')
         .toArray()
         .filter((element) =>
-            robotsMetaNames.has(
+            names.includes(
                 ($(element).attr('name') ?? '').trim().toLowerCase(),
             ),
         )
         .map((element) => $(element).attr('content') ?? '');
 }
 
-export function mainContent($: cheerio.CheerioAPI) {
+export function mainElement($: cheerio.CheerioAPI) {
     $(stripped).remove();
 
-    return (
-        $('main').html() ||
-        $('[role="main"]').html() ||
-        $('article').html() ||
-        $('body').html() ||
-        ''
-    );
+    return (['main', '[role="main"]', 'article', 'body'] as const)
+        .map((selector) => $(selector).first())
+        .find((element) => element.html());
 }
 
 export function absolute(href: string | null | undefined, base: URL) {
@@ -168,8 +169,6 @@ const stripped = [
     '[style*="display:none"]',
     '[style*="display: none"]',
 ].join(', ');
-
-const robotsMetaNames = new Set(['robots', 'googlebot']);
 
 const turndown = new TurndownService({
     headingStyle: 'atx',

@@ -135,7 +135,14 @@ describe('robotsChecks', () => {
                     'User-agent: *\nDisallow: /',
                 ),
             ),
-        ).toEqual(['robots-googlebot-blocked', 'robots-googlebot-blocked']);
+        ).toEqual([
+            'robots-googlebot-blocked',
+            'robots-googlebot-blocked',
+            'ai-training-bots-blocked',
+            'ai-training-bots-blocked',
+            'ai-user-agents-blocked',
+            'ai-user-agents-blocked',
+        ]);
 
         expect(
             checks(
@@ -143,6 +150,232 @@ describe('robotsChecks', () => {
                     'https://acme.com/robots.txt',
                     200,
                     'User-agent: CitequillBot\nDisallow: /',
+                ),
+            ),
+        ).toEqual([]);
+    });
+
+    it('passes the gate when an empty user-agent line starts a group that disallows everything', () => {
+        expect(
+            checks(
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: *\nDisallow: /private\n\nUser-agent:\nDisallow: /',
+                ),
+            ),
+        ).toEqual([]);
+    });
+
+    it('passes the gate and blocks no agent of its own group when that group holds only a Content-Signal line', () => {
+        expect(
+            checks(
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: Googlebot\nUser-agent: GPTBot\nContent-Signal: ai-train=no\n\nUser-agent: *\nDisallow: /',
+                ),
+            ).filter((id) => id !== 'content-signals'),
+        ).toEqual([
+            'ai-training-bots-blocked',
+            'ai-training-bots-blocked',
+            'ai-user-agents-blocked',
+            'ai-user-agents-blocked',
+        ]);
+
+        const [training] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: Googlebot\nUser-agent: GPTBot\nContent-Signal: ai-train=no\n\nUser-agent: *\nDisallow: /',
+                ),
+            ],
+            homes,
+        ).filter(({ check }) => check === 'ai-training-bots-blocked');
+
+        expect(training.detail).toEqual({
+            agents: [
+                'ClaudeBot',
+                'Meta-ExternalAgent',
+                'Applebot-Extended',
+                'MistralAI-Training',
+                'Amazonbot',
+                'CCBot',
+            ],
+        });
+    });
+
+    it('judges each home page by the robots.txt of its own origin', () => {
+        const findings = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: GPTBot\nDisallow: /',
+                ),
+                file(
+                    'https://acme.de/robots.txt',
+                    200,
+                    'User-agent: Perplexity-User\nDisallow: /',
+                ),
+            ],
+            ['https://acme.com/', 'https://acme.de/'],
+        );
+
+        expect(findings).toEqual([
+            {
+                check: 'ai-training-bots-blocked',
+                url: null,
+                subject: 'https://acme.com/',
+                detail: { agents: ['GPTBot'] },
+            },
+            {
+                check: 'ai-user-agents-blocked',
+                url: null,
+                subject: 'https://acme.de/',
+                detail: { agents: ['Perplexity-User'] },
+            },
+        ]);
+    });
+
+    it('hints at AI training and user-fetch agents blocked from a home page, one finding per home naming the agents', () => {
+        const findings = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: GPTBot\nUser-agent: CCBot\nDisallow: /\n\nUser-agent: ChatGPT-User\nDisallow: /de/',
+                ),
+            ],
+            homes,
+        );
+
+        expect(findings).toEqual([
+            {
+                check: 'ai-training-bots-blocked',
+                url: null,
+                subject: 'https://acme.com/',
+                detail: { agents: ['GPTBot', 'CCBot'] },
+            },
+            {
+                check: 'ai-training-bots-blocked',
+                url: null,
+                subject: 'https://acme.com/de/',
+                detail: { agents: ['GPTBot', 'CCBot'] },
+            },
+            {
+                check: 'ai-user-agents-blocked',
+                url: null,
+                subject: 'https://acme.com/de/',
+                detail: { agents: ['ChatGPT-User'] },
+            },
+        ]);
+    });
+
+    it('notes a Content-Signal line with the field in any case, once per file, each value as written with the agents of its groups', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-Agent: *\nContent-signal: search=yes, ai-train=no, use=reference\nAllow: /\n\nUser-agent: Googlebot\nUser-agent: Bingbot\nContent-Signal: ai-input=no',
+                ),
+            ],
+            homes,
+        );
+
+        expect(finding).toEqual({
+            check: 'content-signals',
+            url: null,
+            subject: 'https://acme.com/robots.txt',
+            detail: {
+                signals: [
+                    'search=yes, ai-train=no, use=reference (*)',
+                    'ai-input=no (Googlebot, Bingbot)',
+                ],
+            },
+        });
+    });
+
+    it('pairs each value with the agents of every group that carries it, as Cloudflare writes niebezpiecznik.pl', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    [
+                        'User-agent: *',
+                        'Content-Signal: search=yes,ai-train=no',
+                        'Allow: /',
+                        '',
+                        'User-agent: Applebot-Extended',
+                        'Allow: /',
+                        'Content-Signal: ai-train=no,ai-input=yes,search=yes',
+                        '',
+                        'User-agent: CCBot',
+                        'Disallow: /',
+                        '',
+                        'User-agent: Google-Extended',
+                        'User-agent: Google-InspectionTool',
+                        'Allow: /',
+                        'Content-Signal: ai-train=no,ai-input=yes,search=yes',
+                    ].join('\n'),
+                ),
+            ],
+            homes,
+        );
+
+        expect(finding.detail).toEqual({
+            signals: [
+                'search=yes,ai-train=no (*)',
+                'ai-train=no,ai-input=yes,search=yes (Applebot-Extended, Google-Extended, Google-InspectionTool)',
+            ],
+        });
+    });
+
+    it('shows a Content-Signal line before any User-agent as having no agent', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'Content-Signal: ai-train=no\n\nUser-agent: *\nAllow: /',
+                ),
+            ],
+            homes,
+        );
+
+        expect(finding).toMatchObject({
+            check: 'content-signals',
+            detail: { signals: ['ai-train=no (no User-agent)'] },
+        });
+    });
+
+    it('lists a signal written alike in several groups once', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    'User-agent: *\nContent-Signal: search=yes, ai-train=yes\n\nUser-agent: GPTBot\nContent-Signal: search=yes, ai-train=yes',
+                ),
+            ],
+            homes,
+        );
+
+        expect(finding.detail).toEqual({
+            signals: ['search=yes, ai-train=yes (*, GPTBot)'],
+        });
+    });
+
+    it('reads Content Signals only in the robots.txt of the home origins', () => {
+        expect(
+            checks(
+                file(
+                    'https://www.acme.com/robots.txt',
+                    200,
+                    'User-agent: *\nContent-Signal: ai-train=no',
                 ),
             ),
         ).toEqual([]);

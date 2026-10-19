@@ -17,7 +17,7 @@ import {
     alternateLinks,
     type HreflangEntry,
     hreflangAlternates,
-    mainContent,
+    mainElement,
     robotsMetaOf,
 } from '@/features/crawl/html';
 import { jsonLdBlocks } from '@/features/crawl/signals';
@@ -108,6 +108,7 @@ export interface AuditPage {
     canonical: string | null;
     canonicals: CanonicalTag[];
     robotsMeta: string[];
+    bingbotMeta: string[];
     refresh: string | null;
     alternateTags: AlternateTag[];
     alternates: Alternate[];
@@ -124,6 +125,7 @@ export interface AuditPage {
     hiddenBlocks: HiddenBlock[];
     fragmentLinks: string[];
     mainText: string;
+    nosnippet: string | null;
     bodyHash: string | null;
     simhash: string | null;
     wordCount: number;
@@ -313,6 +315,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         canonical: absolute(canonicals[0]?.href, base),
         canonicals,
         robotsMeta: robotsMetaOf($),
+        bingbotMeta: robotsMetaOf($, 'bingbot'),
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
         alternateTags,
         alternates: hreflangAlternates(alternateTags),
@@ -347,8 +350,13 @@ export function readAuditPage(html: string, url: string): AuditPage {
         ),
     };
 
+    const main = mainElement($);
+
+    const around =
+        main && (main.is(nosnippet) ? main : main.parents(nosnippet)).last()[0];
+
     const mainText = cheerio
-        .load(mainContent($))
+        .load(main?.html() ?? '')
         .text()
         .replace(/\s+/g, ' ')
         .trim();
@@ -356,6 +364,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
     return {
         ...page,
         mainText,
+        nosnippet: mainText && around ? selectorOf(around) : null,
         bodyHash: mainText
             ? createHash('sha256').update(mainText).digest('hex')
             : null,
@@ -404,6 +413,9 @@ const hiddenBlockWords = 50;
 const pageFragment = /#(?:page|strona)=\d+$/i;
 
 const blockControls = 'a, button, input, select, textarea';
+
+const nosnippet =
+    'span[data-nosnippet], div[data-nosnippet], section[data-nosnippet]';
 
 const scriptOrStyle = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 

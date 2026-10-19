@@ -1,3 +1,4 @@
+import { aiAccessChecks } from '@/features/audit/ai-access-checks';
 import type { Finding } from '@/features/audit/finding';
 import { heuristicChecks } from '@/features/audit/heuristic-checks';
 import { hreflangChecks } from '@/features/audit/hreflang-checks';
@@ -11,6 +12,7 @@ import {
     headerCanonical,
     type observeRead,
     type Read,
+    snippetLimit,
 } from '@/features/audit/observe';
 import { onPageChecks } from '@/features/audit/on-page-checks';
 import { type CanonicalTag, thinPageWords } from '@/features/audit/page';
@@ -34,6 +36,7 @@ import type { Json } from '@/lib/types/database';
 export interface PageCheckContext {
     obeyRobots: boolean;
     isDisallowed: (url: string) => boolean;
+    aiSearchBlocked: (url: string) => string[];
     locales: Locale[];
     hosts: string[];
     homes: string[];
@@ -259,6 +262,9 @@ function answerFindings(
         ...(isIndexable && alternates
             ? hreflangChecks(url, page, alternates)
             : []),
+        ...(isIndexable
+            ? aiAccessChecks(url, fetched, page, directives, context)
+            : []),
     ];
 }
 
@@ -433,14 +439,14 @@ function valueOf(directives: string[], name: string) {
 }
 
 function isInvalidDirective(directive: string) {
-    const [name, ...rest] = directive.split(':');
-    const value = rest.join(':').trim();
-
-    if (name.trim() === 'max-snippet') {
-        return !/^-?\d+$/.test(value);
+    if (snippetLimit(directive) === null) {
+        return true;
     }
 
+    const [name, ...rest] = directive.split(':');
+
     return (
-        name.trim() === 'unavailable_after' && Number.isNaN(Date.parse(value))
+        name.trim() === 'unavailable_after' &&
+        Number.isNaN(Date.parse(rest.join(':').trim()))
     );
 }

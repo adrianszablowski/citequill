@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    bingbotDirectives,
     canonicalOf,
     googlebotDirectives,
     headerAlternates,
@@ -10,6 +11,7 @@ import {
     observePage,
     observeRead,
     type Read,
+    snippetLimit,
     type ReadContext,
 } from '@/features/audit/observe';
 import { thinPageWords } from '@/features/audit/page';
@@ -462,6 +464,37 @@ describe('googlebotDirectives', () => {
             'unavailable_after: 25 jun 2030 15:00:00 pst',
             'max-snippet: 50',
         ]);
+    });
+});
+
+describe('bingbotDirectives', () => {
+    it('reads the header lines for Bingbot or every crawler, and never a line scoped to Googlebot', () => {
+        expect(
+            bingbotDirectives(
+                ['noarchive'],
+                'googlebot: nocache, bingbot: nosnippet, otherbot: noindex',
+            ),
+        ).toEqual(['noarchive', 'nosnippet']);
+
+        expect(bingbotDirectives([], 'BINGBOT: noarchive')).toEqual([
+            'noarchive',
+        ]);
+    });
+
+    it('leaves the Googlebot set as it was', () => {
+        expect(googlebotDirectives([], 'bingbot: noarchive')).toEqual([]);
+    });
+});
+
+describe('snippetLimit', () => {
+    it('reads a max-snippet number, no limit as -1, null for a value that is not one, and nothing for another directive', () => {
+        expect(snippetLimit('max-snippet:-1')).toBe(-1);
+        expect(snippetLimit('max-snippet: 0')).toBe(0);
+        expect(snippetLimit('max-snippet:159')).toBe(159);
+        expect(snippetLimit('max-snippet: lots')).toBeNull();
+        expect(snippetLimit('max-snippet:')).toBeNull();
+        expect(snippetLimit('max-image-preview:large')).toBeUndefined();
+        expect(snippetLimit('nosnippet')).toBeUndefined();
     });
 });
 

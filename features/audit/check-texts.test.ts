@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { catalogue, checkOf } from '@/features/audit/catalogue';
-import { checkText, notCounted } from '@/features/audit/check-texts';
+import { checkText, notCounted, notScored } from '@/features/audit/check-texts';
 import { shippedChecks } from '@/features/audit/score';
 
-const hosts = new Set(['developers.google.com', 'www.sitemaps.org']);
+const hosts = new Set([
+    'developers.google.com',
+    'www.sitemaps.org',
+    'www.bing.com',
+    'developers.cloudflare.com',
+    'developers.openai.com',
+]);
 
 describe('checkText', () => {
     it('explains every shipped check with a name, what Google says, a link and how to fix it', () => {
@@ -35,13 +41,18 @@ describe('checkText', () => {
         }
     });
 
-    it('tells the owner a hint is not counted, and asks a question as a question', () => {
+    it('tells the owner a hint is not counted, in AI access without naming Google, and asks a question as a question', () => {
         for (const id of shippedChecks) {
-            const { severity } = checkOf(id);
+            const { area, severity } = checkOf(id);
             const text = checkText(id)!;
+            const isAiAccess = area === 'ai-access';
 
             expect(text.says.endsWith(notCounted), id).toBe(
-                severity === 'hint',
+                severity === 'hint' && !isAiAccess,
+            );
+
+            expect(text.says.endsWith(notScored), id).toBe(
+                severity === 'hint' && isAiAccess,
             );
 
             if (severity === 'question') {

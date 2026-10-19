@@ -99,6 +99,23 @@ describe('catalogue', () => {
         expect(checkOf('html-uncompressed').severity).toBe('2');
     });
 
+    it('holds the 11 rows of the AI access table shipped so far, its robots.txt hints included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'ai-access'),
+        ).toHaveLength(11);
+
+        for (const id of [
+            'ai-training-bots-blocked',
+            'ai-user-agents-blocked',
+            'content-signals',
+        ] as const) {
+            expect(checkOf(id).severity, id).toBe('hint');
+        }
+
+        expect(checkOf('ai-search-bots-blocked').severity).toBe('2');
+        expect(checkOf('nocache').severity).toBe('1');
+    });
+
     it('weighs the seven areas to 100', () => {
         expect(
             Object.values(areaWeights).reduce<number>(

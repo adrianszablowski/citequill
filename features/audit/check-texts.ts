@@ -36,6 +36,8 @@ export const areaNames: Record<Area, string> = {
 
 export const notCounted = 'Google does not count this.';
 
+export const notScored = 'Citequill does not count this in the score.';
+
 export function checkText(id: CheckId) {
     const text = texts[id];
 
@@ -43,8 +45,13 @@ export function checkText(id: CheckId) {
         return null;
     }
 
-    return checkOf(id).severity === 'hint'
-        ? { ...text, says: `${text.says} ${notCounted}` }
+    const { area, severity } = checkOf(id);
+
+    return severity === 'hint'
+        ? {
+              ...text,
+              says: `${text.says} ${area === 'ai-access' ? notScored : notCounted}`,
+          }
         : text;
 }
 
@@ -87,6 +94,13 @@ const links = {
     structuredDataPolicies: `${google}/search/docs/appearance/structured-data/sd-policies`,
     searchUpdates: `${google}/search/updates`,
     protocol: 'https://www.sitemaps.org/protocol.html',
+    openAiBots: 'https://developers.openai.com/api/docs/bots',
+    bingGuidelines:
+        'https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a',
+    bingRobotsMeta:
+        'https://www.bing.com/webmasters/help/robots-meta-tags-and-attributes-that-bing-supports-5198d240',
+    contentSignals:
+        'https://developers.cloudflare.com/bots/additional-configurations/managed-robots-txt/',
 };
 
 const texts: Partial<Record<CheckId, CheckText>> = {
@@ -965,5 +979,53 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Google’s crawl budget guide says it might read more of your site when it can load and render your pages faster.',
         link: links.crawlBudget,
         fix: 'Most tools flag a page with over 1 500 elements, and the audit counts an inline SVG as one element. Remove wrappers that add nothing, and split long lists into pages.',
+    },
+    'ai-search-bots-blocked': {
+        name: 'robots.txt blocks the search crawlers of AI assistants',
+        says: 'OpenAI says a site that blocks OAI-SearchBot is not shown in ChatGPT search answers, and the other assistants, Bing’s Copilot included, find the pages they cite through a search crawler. Google says Google-Extended, a robots.txt token with no crawler of its own, decides whether Gemini Apps and Grounding with Google Search on Vertex AI may use a page to ground their answers, as well as Gemini’s training.',
+        link: links.openAiBots,
+        fix: 'Remove the Disallow rules that match this page from the groups of the agents the finding names, or from the * group they fall back to; Applebot and Amzn-SearchBot follow the Googlebot group when no group names them. If you block an agent on purpose, mark the finding as intended.',
+    },
+    nosnippet: {
+        name: 'A page keeps its text out of snippets and AI answers',
+        says: 'Google says nosnippet and max-snippet:0 keep a page’s text out of its snippets, AI Overviews and AI Mode, and reads data-nosnippet on span, div and section elements. Apple says nosnippet in the robots meta tag also keeps a page out of the answers of Siri and its AI models, and names neither a googlebot tag, max-snippet nor data-nosnippet.',
+        link: links.robotsMeta,
+        fix: 'Remove nosnippet or max-snippet:0 from the robots meta tag or the X-Robots-Tag header, or move data-nosnippet from the element around the main text to the parts you want kept out, such as a sidebar. The finding says which of the two it found.',
+    },
+    'max-snippet-small': {
+        name: 'A page limits its snippet to under 160 characters',
+        says: 'Google says max-snippet limits how much of a page its snippets, AI Overviews and AI Mode may use, and names no length; 160 characters is Citequill’s threshold.',
+        link: links.robotsMeta,
+        fix: 'Set max-snippet to -1 for no limit, or remove it. Keep a short limit only if you want AI answers to quote little of the page.',
+    },
+    noarchive: {
+        name: 'A page tells Bing to keep it out of Copilot',
+        says: 'Bing’s Webmaster Guidelines say noarchive keeps a page’s content out of Copilot responses and grounding results. Google ignores the tag.',
+        link: links.bingGuidelines,
+        fix: 'Remove noarchive from the robots or bingbot meta tag, or from the X-Robots-Tag header, if Copilot may cite the page. Keep it if you chose to keep the page out of Copilot.',
+    },
+    nocache: {
+        name: 'A page lets Bing’s Copilot use only its title and snippet',
+        says: 'Bing says nocache lets Chat and Copilot show only the URL, title and snippet of a page, and treats a page with both nocache and noarchive as nocache. Google ignores the tag.',
+        link: links.bingRobotsMeta,
+        fix: 'Remove nocache from the robots or bingbot meta tag, or from the X-Robots-Tag header, so Copilot can cite the page more fully.',
+    },
+    'ai-training-bots-blocked': {
+        name: 'robots.txt blocks AI training crawlers from the home page',
+        says: 'OpenAI says disallowing GPTBot means a site’s content should not be used to train its AI models, and the other agents gather content to train AI models, or, for CCBot, an open archive of the web.',
+        link: links.openAiBots,
+        fix: 'Nothing breaks: the block costs no visibility in search, and whether to allow training is your choice. Remove the Disallow rules for the agents the finding names only if you want your content used for training.',
+    },
+    'ai-user-agents-blocked': {
+        name: 'robots.txt blocks the agents that open a page for a user',
+        says: 'OpenAI says robots.txt rules may not apply to ChatGPT-User, because a user starts the fetch, and Perplexity, Amazon and Meta say the same of their agents; Anthropic says Claude-User follows robots.txt.',
+        link: links.openAiBots,
+        fix: 'Remove the Disallow rules for the agents the finding names if assistants may open your pages when a user asks them to. Of these agents, only Claude-User is documented to follow the rule.',
+    },
+    'content-signals': {
+        name: 'robots.txt carries Content Signals',
+        says: 'Cloudflare says a Content-Signal line states, with yes or no, whether content may be used for search, as input to AI answers or to train AI models.',
+        link: links.contentSignals,
+        fix: 'No crawler’s documentation says it reads the line, so a line you write yourself is enforced by no one. Cloudflare blocks AI training crawlers at its edge when its Training setting is Disallow with Bot Preference Sync on, which also writes the line; the block comes from the setting, not from the line. To keep an agent out, disallow it in robots.txt or block it at your CDN.',
     },
 };

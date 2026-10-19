@@ -208,12 +208,26 @@ export function googlebotDirectives(
     robotsMeta: string[],
     robotsHeader: string | null,
 ) {
-    return [
-        ...robotsMeta.flatMap((content) => content.split(',')),
-        ...headerDirectives(robotsHeader ?? ''),
-    ]
-        .map((directive) => directive.trim().toLowerCase())
-        .filter(Boolean);
+    return agentDirectives('googlebot', robotsMeta, robotsHeader);
+}
+
+export function bingbotDirectives(
+    robotsMeta: string[],
+    robotsHeader: string | null,
+) {
+    return agentDirectives('bingbot', robotsMeta, robotsHeader);
+}
+
+export function snippetLimit(directive: string) {
+    const [name, ...rest] = directive.split(':');
+
+    if (name.trim() !== 'max-snippet') {
+        return undefined;
+    }
+
+    const value = rest.join(':').trim();
+
+    return /^-?\d+$/.test(value) ? Number(value) : null;
 }
 
 export function canonicalOf(
@@ -315,7 +329,20 @@ const valued = new Set([
     'unavailable_after',
 ]);
 
-function headerDirectives(header: string) {
+function agentDirectives(
+    agent: string,
+    robotsMeta: string[],
+    robotsHeader: string | null,
+) {
+    return [
+        ...robotsMeta.flatMap((content) => content.split(',')),
+        ...headerDirectives(robotsHeader ?? '', agent),
+    ]
+        .map((directive) => directive.trim().toLowerCase())
+        .filter(Boolean);
+}
+
+function headerDirectives(header: string, target: string) {
     const directives: string[] = [];
     let agent: string | null = null;
 
@@ -328,7 +355,7 @@ function headerDirectives(header: string) {
             directive = scoped[2];
         }
 
-        if (agent === null || agent === 'googlebot') {
+        if (agent === null || agent === target) {
             directives.push(directive);
         }
     }

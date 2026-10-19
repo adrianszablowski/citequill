@@ -803,8 +803,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 146 checks, the HTTPS, viewport, performance, hreflang and structured data checks and the phone comparison included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(146);
+    it('ships 154 checks, the HTTPS, viewport, performance, hreflang and structured data checks, the phone comparison and the robots.txt and directive checks of AI access included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(154);
     });
 
     it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {

@@ -519,6 +519,14 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'assets-uncached': 'sampled',
     'assets-heavy': 'answered',
     'dom-size': 'answered',
+    'ai-search-bots-blocked': 'indexable',
+    nosnippet: 'indexable',
+    'max-snippet-small': 'indexable',
+    noarchive: 'indexable',
+    nocache: 'indexable',
+    'ai-training-bots-blocked': 'site',
+    'ai-user-agents-blocked': 'site',
+    'content-signals': 'site',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

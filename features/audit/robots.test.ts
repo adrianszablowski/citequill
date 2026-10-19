@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    agentsBlocked,
+    aiSearchAgents,
+    aiTrainingAgents,
+    aiUserAgents,
     blockedBy,
     googlebotBlocks,
     parseRobots,
@@ -140,6 +144,22 @@ describe('blockedBy', () => {
         ).toBe(false);
     });
 
+    it('applies the rules of a group with an empty user-agent line to no crawler, not to the group before', () => {
+        const robots = [
+            file(
+                'User-agent: *\nDisallow: /private\n\nUser-agent:\nDisallow: /',
+            ),
+        ];
+
+        expect(blockedBy(robots, true)('https://acme.com/')).toBe(false);
+
+        expect(blockedBy(robots, true)('https://acme.com/private/a')).toBe(
+            true,
+        );
+
+        expect(googlebotBlocks(robots)('https://acme.com/')).toBe(false);
+    });
+
     it('applies a file only to its own host', () => {
         const isBlocked = blockedBy([file('User-agent: *\nDisallow: /')], true);
 
@@ -176,5 +196,156 @@ describe('googlebotBlocks', () => {
         expect(isBlocked('https://acme.com/private/a')).toBe(true);
         expect(isBlocked('https://acme.com/cart')).toBe(false);
         expect(isBlocked('https://acme.de/private/a')).toBe(false);
+    });
+});
+
+describe('agentsBlocked', () => {
+    const home = 'https://acme.com/';
+
+    it('reads every agent of the three lists from its own group', () => {
+        for (const agent of [
+            ...aiSearchAgents,
+            ...aiTrainingAgents,
+            ...aiUserAgents,
+        ]) {
+            const blocked = agentsBlocked(
+                [file(`User-agent: ${agent}\nDisallow: /`)],
+                [...aiSearchAgents, ...aiTrainingAgents, ...aiUserAgents],
+            );
+
+            expect(blocked(home), agent).toEqual([agent]);
+        }
+    });
+
+    it('matches a group in any case', () => {
+        expect(
+            agentsBlocked(
+                [file('User-agent: oai-searchbot\nDisallow: /')],
+                aiSearchAgents,
+            )(home),
+        ).toEqual(['OAI-SearchBot']);
+    });
+
+    it('falls back to the * group for an agent with no group of its own', () => {
+        expect(
+            agentsBlocked(
+                [file('User-agent: *\nDisallow: /')],
+                aiTrainingAgents,
+            )(home),
+        ).toEqual(aiTrainingAgents);
+    });
+
+    it('lets a group that allows an agent win over a * group that disallows', () => {
+        const blocked = agentsBlocked(
+            [
+                file(
+                    'User-agent: *\nDisallow: /\n\nUser-agent: OAI-SearchBot\nUser-agent: Bingbot\nAllow: /',
+                ),
+            ],
+            aiSearchAgents,
+        );
+
+        expect(blocked(home)).not.toContain('OAI-SearchBot');
+        expect(blocked(home)).not.toContain('Bingbot');
+        expect(blocked(home)).toContain('PerplexityBot');
+    });
+
+    it('reads Applebot and Amzn-SearchBot through the Googlebot group when no group names them, and through * only when there is no Googlebot group', () => {
+        const followers = ['Applebot', 'Amzn-SearchBot'];
+
+        const withGooglebot = agentsBlocked(
+            [
+                file(
+                    'User-agent: *\nDisallow: /\n\nUser-agent: Googlebot\nAllow: /',
+                ),
+            ],
+            aiSearchAgents,
+        );
+
+        expect(withGooglebot(home)).not.toContain('Applebot');
+        expect(withGooglebot(home)).not.toContain('Amzn-SearchBot');
+        expect(withGooglebot(home)).toContain('OAI-SearchBot');
+
+        const googlebotBlocked = agentsBlocked(
+            [file('User-agent: Googlebot\nDisallow: /')],
+            aiSearchAgents,
+        );
+
+        expect(googlebotBlocked(home)).toEqual(followers);
+
+        const ownGroups = agentsBlocked(
+            [
+                file(
+                    'User-agent: Googlebot\nDisallow: /\n\nUser-agent: Applebot\nUser-agent: amzn-searchbot\nAllow: /',
+                ),
+            ],
+            aiSearchAgents,
+        );
+
+        expect(ownGroups(home)).toEqual([]);
+
+        const starOnly = agentsBlocked(
+            [file('User-agent: *\nDisallow: /')],
+            followers,
+        );
+
+        expect(starOnly(home)).toEqual(followers);
+    });
+
+    it('reads Google-Extended among the search agents, from its own group or *', () => {
+        expect(
+            agentsBlocked(
+                [file('User-agent: Google-Extended\nDisallow: /')],
+                aiSearchAgents,
+            )(home),
+        ).toEqual(['Google-Extended']);
+
+        expect(
+            agentsBlocked(
+                [file('User-agent: Google-Extended\nDisallow: /')],
+                aiTrainingAgents,
+            )(home),
+        ).toEqual([]);
+    });
+
+    it('reads a named group whose only lines Google ignores as allowing everything, not as the * group', () => {
+        const blocked = agentsBlocked(
+            [
+                file(
+                    'User-agent: OAI-SearchBot\nContent-Signal: search=yes\n\nUser-agent: Applebot\nCrawl-delay: 5\n\nUser-agent: *\nDisallow: /',
+                ),
+            ],
+            aiSearchAgents,
+        );
+
+        expect(blocked(home)).not.toContain('OAI-SearchBot');
+        expect(blocked(home)).not.toContain('Applebot');
+        expect(blocked(home)).toContain('PerplexityBot');
+    });
+
+    it('fails only the pages under a partial disallow', () => {
+        const blocked = agentsBlocked(
+            [file('User-agent: PerplexityBot\nDisallow: /private/')],
+            aiSearchAgents,
+        );
+
+        expect(blocked('https://acme.com/private/a')).toEqual([
+            'PerplexityBot',
+        ]);
+
+        expect(blocked('https://acme.com/pricing')).toEqual([]);
+    });
+
+    it('blocks nothing with a file of no groups, or on an origin with no robots.txt', () => {
+        expect(agentsBlocked([file('')], aiSearchAgents)(home)).toEqual([]);
+
+        expect(
+            agentsBlocked(
+                [file('User-agent: *\nDisallow: /')],
+                aiSearchAgents,
+            )('https://acme.de/'),
+        ).toEqual([]);
+
+        expect(agentsBlocked([], aiSearchAgents)(home)).toEqual([]);
     });
 });

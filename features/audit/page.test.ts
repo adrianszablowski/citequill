@@ -19,6 +19,70 @@ const html = `<!doctype html>
 </body>
 </html>`;
 
+describe('readAuditPage, for snippets', () => {
+    const article = 'An article long enough to be the main text. '.repeat(10);
+    const sidebar = 'A short note.';
+
+    const nosnippet = (body: string) =>
+        readAuditPage(`<html><body>${body}</body></html>`, 'https://acme.com/a')
+            .nosnippet;
+
+    it('keeps the robots and bingbot meta tags apart from the robots and googlebot ones', () => {
+        const page = readAuditPage(
+            '<html><head><meta name="robots" content="max-snippet:-1"><meta name="googlebot" content="nosnippet"><meta name="BingBot" content="noarchive"></head></html>',
+            'https://acme.com/a',
+        );
+
+        expect(page.robotsMeta).toEqual(['max-snippet:-1', 'nosnippet']);
+        expect(page.bingbotMeta).toEqual(['max-snippet:-1', 'noarchive']);
+    });
+
+    it('has no data-nosnippet element when no span, div or section is the main element or around it', () => {
+        expect(nosnippet(`<main><p>${article}</p></main>`)).toBeNull();
+
+        expect(
+            nosnippet(`<main data-nosnippet><p>${article}</p></main>`),
+        ).toBeNull();
+
+        expect(
+            nosnippet(`<main><p data-nosnippet>${article}</p></main>`),
+        ).toBeNull();
+
+        expect(
+            nosnippet(
+                `<main><div class="entry" data-nosnippet><p>${article}</p></div><p>${sidebar}</p></main>`,
+            ),
+        ).toBeNull();
+
+        expect(
+            readAuditPage(
+                `<html><body data-nosnippet><main><p>${article}</p></main></body></html>`,
+                'https://acme.com/a',
+            ).nosnippet,
+        ).toBeNull();
+    });
+
+    it('names the outermost data-nosnippet element that is the main element or sits around it', () => {
+        expect(
+            nosnippet(
+                `<div class="wrap" data-nosnippet><div class="inner" data-nosnippet><main>${article}</main></div></div>`,
+            ),
+        ).toBe('div.wrap');
+
+        expect(
+            nosnippet(`<div role="main" data-nosnippet>${article}</div>`),
+        ).toBe('div');
+    });
+
+    it('leaves out a data-nosnippet in a sidebar the main text does not hold', () => {
+        expect(
+            nosnippet(
+                `<main>${article}</main><aside><div data-nosnippet>${article}</div></aside>`,
+            ),
+        ).toBeNull();
+    });
+});
+
 describe('readAuditPage', () => {
     it('reads the head, the alternates and every http link of a page', () => {
         const page = readAuditPage(html, 'https://acme.com/pricing');

@@ -211,6 +211,9 @@ const rows = {
         ['nocache', '1'],
         ['answer-first', '1'],
         ['one-topic', '1'],
+        ['ai-training-bots-blocked', 'hint'],
+        ['ai-user-agents-blocked', 'hint'],
+        ['content-signals', 'hint'],
     ],
 } as const satisfies Record<Area, readonly Row[]>;
 

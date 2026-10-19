@@ -16,6 +16,7 @@ const hosts = siteHosts('acme.com', ['https://acme.com']);
 const context: PageCheckContext = {
     obeyRobots: true,
     isDisallowed: () => false,
+    aiSearchBlocked: () => [],
     locales,
     hosts,
     homes: ['https://acme.com/'],
@@ -319,7 +320,7 @@ describe('checkPage', () => {
                     headers: { 'x-robots-tag': 'noarchive' },
                 }),
             ),
-        ).toEqual([]);
+        ).toEqual(['noarchive']);
     });
 
     it('notes an invalid max-snippet or unavailable_after and the none directive', () => {
@@ -591,6 +592,37 @@ describe('checkPage', () => {
                 }),
             ),
         ).toEqual(['hreflang-code']);
+    });
+});
+
+describe('checkPage, for AI access', () => {
+    it('runs the robots.txt and directive checks of AI access on an indexable page only', () => {
+        const blocked = { aiSearchBlocked: () => ['PerplexityBot'] };
+
+        const page = (robots: string) =>
+            fetched(html(`<meta name="robots" content="${robots}">`));
+
+        expect(checks(page('noarchive, max-snippet:50'), blocked)).toEqual([
+            'ai-search-bots-blocked',
+            'max-snippet-small',
+            'noarchive',
+        ]);
+
+        expect(checks(page('noindex, noarchive'), blocked)).toEqual([]);
+    });
+
+    it('reads max-snippet with a space after the colon as a valid limit, so it is max-snippet-small and not robots-invalid', () => {
+        expect(
+            check(
+                fetched(html('<meta name="robots" content="max-snippet: 50">')),
+            ),
+        ).toEqual([
+            {
+                check: 'max-snippet-small',
+                url,
+                detail: { directives: ['max-snippet: 50'] },
+            },
+        ]);
     });
 });
 

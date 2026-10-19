@@ -103,36 +103,104 @@ export function googlebotBlocks(files: RobotsFile[]) {
         readerOf(readers, url)?.robots.isAllowed(url, 'Googlebot') === false;
 }
 
+export const aiSearchAgents = [
+    'OAI-SearchBot',
+    'Claude-SearchBot',
+    'PerplexityBot',
+    'Bingbot',
+    'Applebot',
+    'MistralAI-Index',
+    'DuckAssistBot',
+    'Amzn-SearchBot',
+    'meta-webindexer',
+    'Google-Extended',
+];
+
+export const aiTrainingAgents = [
+    'GPTBot',
+    'ClaudeBot',
+    'Meta-ExternalAgent',
+    'Applebot-Extended',
+    'MistralAI-Training',
+    'Amazonbot',
+    'CCBot',
+];
+
+export const aiUserAgents = [
+    'ChatGPT-User',
+    'Claude-User',
+    'Perplexity-User',
+    'MistralAI-User',
+    'Amzn-User',
+    'meta-externalfetcher',
+];
+
+export function agentsBlocked(files: RobotsFile[], agents: string[]) {
+    const readers = robotsReaders(files);
+
+    return (url: string) => {
+        const reader = readerOf(readers, url);
+
+        return reader
+            ? agents.filter(
+                  (agent) =>
+                      reader.robots.isAllowed(
+                          url,
+                          groupAgent(reader, agent),
+                      ) === false,
+              )
+            : [];
+    };
+}
+
 const ownAgent = agentToken(userAgent);
 
 type RobotsReader = ReturnType<typeof robotsReaders>[number];
 
 function robotsReaders(files: RobotsFile[]) {
-    return files.map((file) => ({
-        origin: new URL(file.url).origin,
-        robots: robotsParser(file.url, robotsText(file.groups)),
-        hasOwnGroup: ownGroups(file).length > 0,
-    }));
+    return files.map((file) => {
+        const agents = new Set(
+            file.groups.flatMap((group) => group.agents.map(agentToken)),
+        );
+
+        return {
+            origin: new URL(file.url).origin,
+            robots: robotsParser(file.url, robotsText(file.groups)),
+            agents,
+            hasOwnGroup: agents.has(ownAgent),
+        };
+    });
 }
 
 function readerOf(readers: RobotsReader[], url: string) {
     return readers.find((reader) => reader.origin === new URL(url).origin);
 }
 
+// Apple says Applebot, and Amazon says Amzn-SearchBot, follows the rules given
+// to Googlebot when no group names it, before the * group.
+const googlebotFollowers = new Set(['applebot', 'amzn-searchbot']);
+
+function groupAgent(reader: RobotsReader, agent: string) {
+    const token = agentToken(agent);
+
+    return googlebotFollowers.has(token) && !reader.agents.has(token)
+        ? 'Googlebot'
+        : agent;
+}
+
 function agentToken(agent: string) {
     return agent.toLowerCase().split('/')[0].trim();
 }
 
-function ownGroups(file: RobotsFile) {
-    return file.groups.filter((group) =>
-        group.agents.some((agent) => agentToken(agent) === ownAgent),
-    );
-}
-
+// The empty disallow keeps a group of only Content-Signal lines from falling
+// back to *, and an agentless group would join the one before; Google reads the
+// first as allowing everything and the second as applying to no crawler.
 function robotsText(groups: RobotsGroup[]) {
     return groups
+        .filter((group) => group.agents.length > 0)
         .flatMap((group) => [
             ...group.agents.map((agent) => `user-agent: ${agent}`),
+            'disallow:',
             ...group.rules.map((rule) => `${rule.directive}: ${rule.value}`),
         ])
         .join('\n');

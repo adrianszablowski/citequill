@@ -202,4 +202,6 @@ const detailLabels: Record<string, string> = {
     declaredHeight: 'Declared height (px)',
     price: 'Price',
     items: 'Items',
+    agents: 'Agents',
+    signals: 'Signals (agents)',
 };
