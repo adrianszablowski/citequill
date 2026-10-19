@@ -99,20 +99,27 @@ describe('catalogue', () => {
         expect(checkOf('html-uncompressed').severity).toBe('2');
     });
 
-    it('holds the 11 rows of the AI access table shipped so far, its robots.txt hints included', () => {
+    it('holds 176 rows, the tables of the document but the three GEO hints of slice 7 that have not shipped', () => {
+        expect(catalogue).toHaveLength(176);
+    });
+
+    it('holds the 13 rows of the AI access table shipped so far, its robots.txt hints, pay-per-crawl and markdown-alternate included', () => {
         expect(
             catalogue.filter((check) => check.area === 'ai-access'),
-        ).toHaveLength(11);
+        ).toHaveLength(13);
 
         for (const id of [
             'ai-training-bots-blocked',
             'ai-user-agents-blocked',
             'content-signals',
+            'pay-per-crawl',
+            'markdown-alternate',
         ] as const) {
             expect(checkOf(id).severity, id).toBe('hint');
         }
 
         expect(checkOf('ai-search-bots-blocked').severity).toBe('2');
+        expect(checkOf('ai-cdn-blocked').severity).toBe('2');
         expect(checkOf('nocache').severity).toBe('1');
     });
 

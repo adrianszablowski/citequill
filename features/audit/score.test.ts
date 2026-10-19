@@ -5,6 +5,7 @@ import {
     appliesTo,
     auditScore,
     band,
+    cdnTestChecks,
     checksInScope,
     checksRun,
     crossPageChecks,
@@ -411,6 +412,7 @@ describe('checksRun', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: false,
+            hasPassedCdnTest: false,
         });
 
         expect(stopped).toContain('page-4xx');
@@ -424,6 +426,7 @@ describe('checksRun', () => {
             hasCrossPageChecks: true,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         expect(complete).toEqual(expect.arrayContaining([...crossPageChecks]));
@@ -436,6 +439,7 @@ describe('checksRun', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         expect(probeChecks.some((check) => stopped.includes(check))).toBe(
@@ -448,6 +452,7 @@ describe('checksRun', () => {
             hasCrossPageChecks: true,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: true,
         });
 
         expect(complete).toEqual(
@@ -455,11 +460,79 @@ describe('checksRun', () => {
         );
     });
 
+    it('runs ai-cdn-blocked and pay-per-crawl only when the CDN test passed, and markdown-alternate with the other probes', () => {
+        const run = (hasPassedCdnTest: boolean) =>
+            checksRun({
+                hasCrossPageChecks: true,
+                hasDiscovered: true,
+                obeyRobots: true,
+                hasPassedCdnTest,
+            });
+
+        expect(run(true)).toEqual(
+            expect.arrayContaining(['ai-cdn-blocked', 'pay-per-crawl']),
+        );
+
+        for (const check of cdnTestChecks) {
+            expect(run(false)).not.toContain(check);
+        }
+
+        expect(run(false)).toContain('markdown-alternate');
+
+        const stopped = checksRun({
+            hasCrossPageChecks: false,
+            hasDiscovered: true,
+            obeyRobots: true,
+            hasPassedCdnTest: true,
+        });
+
+        for (const check of [
+            'ai-cdn-blocked',
+            'pay-per-crawl',
+            'markdown-alternate',
+        ] as const) {
+            expect(probeChecks).toContain(check);
+            expect(stopped).not.toContain(check);
+        }
+    });
+
+    it('leaves a site check that did not run out of the results and of the checks scored', () => {
+        const run = (hasPassedCdnTest: boolean) =>
+            score(
+                checksRun({
+                    hasCrossPageChecks: true,
+                    hasDiscovered: true,
+                    obeyRobots: true,
+                    hasPassedCdnTest,
+                }),
+                pages(2),
+                [finding('ai-cdn-blocked', null, { severity: '2' })],
+            );
+
+        const passed = run(true);
+        const refused = run(false);
+
+        expect(passed.results).toContainEqual({
+            check: 'ai-cdn-blocked',
+            pages_checked: 1,
+            pages_failed: 1,
+            pages_intended: 0,
+        });
+
+        expect(refused.results.map(({ check }) => check)).not.toContain(
+            'ai-cdn-blocked',
+        );
+
+        expect(refused.checks_scored).toBe(passed.checks_scored - 1);
+        expect(refused.severity_2).toBe(0);
+    });
+
     it('leaves out the robots and sitemap checks when the audit stopped before Discover wrote the robots rules', () => {
         const undiscovered = checksRun({
             hasCrossPageChecks: false,
             hasDiscovered: false,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         expect(undiscovered).toContain('page-4xx');
@@ -644,6 +717,7 @@ describe('the on-page checks', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         for (const check of [
@@ -664,6 +738,7 @@ describe('the on-page checks', () => {
             hasCrossPageChecks: true,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         for (const check of [
@@ -803,8 +878,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 154 checks, the HTTPS, viewport, performance, hreflang and structured data checks, the phone comparison and the robots.txt and directive checks of AI access included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(154);
+    it('ships 157 checks, the HTTPS, viewport, performance, hreflang and structured data checks, the phone comparison, and the robots.txt, directive, CDN test and markdown checks of AI access included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(157);
     });
 
     it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {
@@ -817,6 +892,7 @@ describe('shippedChecks', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         expect(stopped).toContain('https-missing');
@@ -829,6 +905,7 @@ describe('shippedChecks', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         for (const check of [...resourceChecks, 'orphan', 'link-to-redirect']) {
@@ -846,6 +923,7 @@ describe('shippedChecks', () => {
             hasCrossPageChecks: false,
             hasDiscovered: true,
             obeyRobots: true,
+            hasPassedCdnTest: false,
         });
 
         expect(stopped).not.toContain('near-duplicate');

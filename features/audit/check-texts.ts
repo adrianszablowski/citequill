@@ -101,6 +101,12 @@ const links = {
         'https://www.bing.com/webmasters/help/robots-meta-tags-and-attributes-that-bing-supports-5198d240',
     contentSignals:
         'https://developers.cloudflare.com/bots/additional-configurations/managed-robots-txt/',
+    aiCrawlControl:
+        'https://developers.cloudflare.com/ai-crawl-control/features/manage-ai-crawlers/',
+    payPerCrawl:
+        'https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl/',
+    markdownStudy:
+        'https://www.tryprofound.com/blog/does-markdown-increase-ai-bot-traffic',
 };
 
 const texts: Partial<Record<CheckId, CheckText>> = {
@@ -986,6 +992,12 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         link: links.openAiBots,
         fix: 'Remove the Disallow rules that match this page from the groups of the agents the finding names, or from the * group they fall back to; Applebot and Amzn-SearchBot follow the Googlebot group when no group names them. If you block an agent on purpose, mark the finding as intended.',
     },
+    'ai-cdn-blocked': {
+        name: 'The CDN refuses an AI search agent',
+        says: 'Fetched from Citequill’s address as the agents the finding names, without the bot secret, the home page answered with a 4xx status other than 429, such as 403, 406 or a 402 without a crawler-price header. A browser got 200 before and after the agents, as did a neutral bot and a claimed Googlebot and Bingbot. Agents that robots.txt disallows are left out, because the robots.txt finding reports them. A rule that checks the addresses of AI agents but not of Googlebot and Bingbot may still let the real agent through, so check your CDN’s logs for its requests. Cloudflare says that on its free plan AI Crawl Control identifies AI crawlers by their user agent, and that a more thorough detection uses the detection ID of its Bot Management.',
+        link: links.aiCrawlControl,
+        fix: 'Change the setting of the CDN the finding names. On Vercel, check the firewall’s rules. On Cloudflare, check the Search and Agent settings in AI Crawl Control. Elsewhere, check the bot settings of your host or CDN. If you block an agent on purpose, or the logs show the real agent gets through, mark the finding as intended.',
+    },
     nosnippet: {
         name: 'A page keeps its text out of snippets and AI answers',
         says: 'Google says nosnippet and max-snippet:0 keep a page’s text out of its snippets, AI Overviews and AI Mode, and reads data-nosnippet on span, div and section elements. Apple says nosnippet in the robots meta tag also keeps a page out of the answers of Siri and its AI models, and names neither a googlebot tag, max-snippet nor data-nosnippet.',
@@ -1027,5 +1039,17 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Cloudflare says a Content-Signal line states, with yes or no, whether content may be used for search, as input to AI answers or to train AI models.',
         link: links.contentSignals,
         fix: 'No crawler’s documentation says it reads the line, so a line you write yourself is enforced by no one. Cloudflare blocks AI training crawlers at its edge when its Training setting is Disallow with Bot Preference Sync on, which also writes the line; the block comes from the setting, not from the line. To keep an agent out, disallow it in robots.txt or block it at your CDN.',
+    },
+    'pay-per-crawl': {
+        name: 'Cloudflare charges AI agents to read the site',
+        says: 'Cloudflare says Pay Per Crawl answers a crawler that does not pay with a 402 and the price in the crawler-price header, so an agent that does not pay does not read the site.',
+        link: links.payPerCrawl,
+        fix: 'Nothing is broken if you chose to charge. If you want AI search agents to read the site for free, set them to Allow in AI Crawl Control. The finding names each agent and the price it was asked.',
+    },
+    'markdown-alternate': {
+        name: 'The home page offers no markdown, or lets a cache serve the markdown to a browser',
+        says: 'Claude Code, OpenCode and Cursor ask for markdown with Accept: text/markdown, and Cloudflare, February 2026, shows markdown served to OAI-SearchBot, while one site’s logs, March 2026, show it reading .md addresses and never asking by Accept. Profound, February 2026, tested 381 pages on 6 sites over 3 weeks and found about one more median bot visit to a markdown page; Profound sells bot analytics. Markdown helps coding agents, and the evidence that it brings more visits from assistants is weak.',
+        link: links.markdownStudy,
+        fix: 'Offer markdown in one of four ways: answer Accept: text/markdown with markdown, link it with <link rel="alternate" type="text/markdown"> or the same relation in a Link header, serve it at index.md or index.html.md, or publish an /llms.txt that starts with a # title. If the home page already answers markdown, send Vary: Accept with it, so a cache does not serve the markdown to a browser. When Vary is the problem, the finding shows the Vary the markdown came with.',
     },
 };

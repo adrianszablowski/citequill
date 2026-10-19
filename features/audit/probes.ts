@@ -10,6 +10,7 @@ import { readAuditPage } from '@/features/audit/page';
 import {
     domainRoot,
     isHttpUrl,
+    isSiteUrl,
     isUnderDomain,
     type QueueEntry,
     withoutSlash,
@@ -256,7 +257,7 @@ export function linkedHosts(
             break;
         }
 
-        if (!hosts.includes(hostname) && !(hostname in next)) {
+        if (!isSiteUrl(link, hosts) && !(hostname in next)) {
             next[hostname] = link;
         }
     }

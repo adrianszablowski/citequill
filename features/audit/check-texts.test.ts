@@ -10,6 +10,7 @@ const hosts = new Set([
     'www.bing.com',
     'developers.cloudflare.com',
     'developers.openai.com',
+    'www.tryprofound.com',
 ]);
 
 describe('checkText', () => {

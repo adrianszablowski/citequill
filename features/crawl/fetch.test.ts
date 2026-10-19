@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+    bingbotUserAgent,
     botSecretHeader,
+    chromeVersion,
+    desktopUserAgent,
     type FetchDeps,
     fetchPublic,
     fetchText,
+    googlebotUserAgent,
     isHtml,
     isPublicAddress,
     maxBytes,
@@ -32,6 +36,24 @@ describe('userAgent', () => {
             'user-agent': phoneUserAgent,
             'sec-ch-ua-mobile': '?1',
         });
+    });
+
+    it('names CitequillBot in the desktop browser fetch, after the user agent of Chrome on Windows, with the Chrome version of the phone fetch', () => {
+        expect(desktopUserAgent).toBe(
+            `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36 ${userAgent}`,
+        );
+
+        expect(phoneUserAgent).toContain(`Chrome/${chromeVersion} `);
+    });
+
+    it('names CitequillBot after the desktop user agents Google and Bing print for Googlebot and Bingbot', () => {
+        expect(googlebotUserAgent).toBe(
+            `Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html) ${userAgent}`,
+        );
+
+        expect(bingbotUserAgent).toBe(
+            `Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) ${userAgent}`,
+        );
     });
 });
 

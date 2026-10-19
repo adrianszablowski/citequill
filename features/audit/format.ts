@@ -204,4 +204,7 @@ const detailLabels: Record<string, string> = {
     items: 'Items',
     agents: 'Agents',
     signals: 'Signals (agents)',
+    answers: 'Answers',
+    prices: 'Prices',
+    vary: 'Vary',
 };

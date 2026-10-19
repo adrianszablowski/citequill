@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 
+import { cdnTestAgents } from '@/features/audit/robots';
 import { variantPaths } from '@/features/audit/sample';
 import BotContact from '@/features/crawl/components/bot-contact';
 import {
@@ -71,6 +72,14 @@ export default function BotPage() {
                     the site offers.
                 </p>
                 <p>
+                    An audit of your site also looks for a markdown version of
+                    the home page. It asks for the home page with an{' '}
+                    <code>Accept</code> header that prefers{' '}
+                    <code>text/markdown</code>, then for <code>index.md</code>,{' '}
+                    <code>index.html.md</code> and <code>/llms.txt</code>, and
+                    stops at the first it finds.
+                </p>
+                <p>
                     An audit keeps only what its report needs: the status of
                     each page, the headers and tags it checks, and the short
                     pieces of HTML a finding points at. It keeps no copy of a
@@ -103,8 +112,38 @@ export default function BotPage() {
                     sees it.
                 </p>
                 <p>
+                    It also checks whether your CDN refuses the search crawlers
+                    of AI assistants. It asks for the home page of the main
+                    language without the bot secret: first with the user agent
+                    of a desktop browser, its own, Googlebot&apos;s and
+                    Bingbot&apos;s, then once with the user agent of each of
+                    these agents:
+                </p>
+                <ul className="list-disc pl-6">
+                    {cdnTestAgents.map(({ agent }) => (
+                        <li key={agent}>
+                            <code>{agent}</code>
+                        </li>
+                    ))}
+                </ul>
+                <p>
+                    Each of these user agents ends with CitequillBot&apos;s own.
+                    When an agent&apos;s vendor publishes no user agent, the
+                    request starts with the agent&apos;s name alone.
+                </p>
+                <p>
+                    After the agents, it asks once more with the user agent of
+                    the desktop browser. When your server refuses the browser,
+                    CitequillBot, Googlebot or Bingbot request before the
+                    agents, it then does not ask as the agents, because their
+                    answers would say nothing about the real agents.
+                </p>
+                <p>
                     When your server answers 429 or 503, the audit waits and
                     slows down. When your server keeps failing, the audit stops.
+                    The requests that check your CDN are the exception: their
+                    answers add no wait and do not count toward stopping the
+                    audit.
                 </p>
             </section>
             <section className="flex flex-col gap-3">
@@ -126,8 +165,9 @@ export default function BotPage() {
                 </h2>
                 <p>
                     Every request of an audit of your site carries the header{' '}
-                    <code>{botSecretHeader}</code>. Its value is a secret the
-                    owner of the site finds in Citequill, under Settings.
+                    <code>{botSecretHeader}</code>, except the requests that
+                    check your CDN. Its value is a secret the owner of the site
+                    finds in Citequill, under Settings.
                 </p>
                 <p>
                     To let the audit through, add a rule that matches the header

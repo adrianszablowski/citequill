@@ -3,7 +3,15 @@ import { BlockList, isIP } from 'node:net';
 
 export const userAgent = 'CitequillBot/1.0 (+https://citequill.com/bot)';
 
-export const phoneUserAgent = `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36 ${userAgent}`;
+export const chromeVersion = '130.0.0.0';
+
+export const phoneUserAgent = `Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Mobile Safari/537.36 ${userAgent}`;
+
+export const desktopUserAgent = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion} Safari/537.36 ${userAgent}`;
+
+export const googlebotUserAgent = `Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html) ${userAgent}`;
+
+export const bingbotUserAgent = `Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm) ${userAgent}`;
 
 export const phoneHeaders = {
     'user-agent': phoneUserAgent,

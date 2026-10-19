@@ -193,6 +193,45 @@ describe('writeScore', () => {
         expect(checks).not.toContain('sitemap-missing');
     });
 
+    it('scores ai-cdn-blocked and pay-per-crawl only when the audit says the CDN test passed', async () => {
+        const checksOf = async (cdnTest: string | null) => {
+            const fake = database({
+                audits: {
+                    data: {
+                        robots_rules: [],
+                        cdn_test: cdnTest,
+                        created_at: '2026-10-18T10:00:00Z',
+                    },
+                },
+            });
+
+            await writeScore(fake.client as never, request);
+
+            expect(
+                fake.queries.find(({ name }) => name === 'audits')!.calls[0],
+            ).toEqual(['select', 'robots_rules, cdn_test, created_at']);
+
+            return scored(fake).results.map(({ check }) => check);
+        };
+
+        expect(await checksOf('passed')).toEqual(
+            expect.arrayContaining(['ai-cdn-blocked', 'pay-per-crawl']),
+        );
+
+        for (const outcome of [
+            'browser-refused',
+            'bot-refused',
+            'spoof-refused',
+            null,
+        ]) {
+            const checks = await checksOf(outcome);
+
+            expect(checks, String(outcome)).not.toContain('ai-cdn-blocked');
+            expect(checks, String(outcome)).not.toContain('pay-per-crawl');
+            expect(checks, String(outcome)).toContain('markdown-alternate');
+        }
+    });
+
     it("reads the project's marks page by page, so none past the first page is dropped", async () => {
         const fake = database();
 

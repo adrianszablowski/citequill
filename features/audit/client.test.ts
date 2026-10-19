@@ -159,6 +159,96 @@ describe('siteClient', () => {
     });
 });
 
+describe('siteClient, reading without the secret', () => {
+    const unavailable = () =>
+        new Response('', { status: 503, headers: { 'retry-after': '60' } });
+
+    const slowDown = () =>
+        new Response('', { status: 429, headers: { 'retry-after': '60' } });
+
+    it('sends no bot secret to the site and the headers it is given', async () => {
+        const { site, sent } = client([ok]);
+
+        await site.readWithoutSecret('https://acme.com/', {
+            headers: { 'user-agent': 'PerplexityBot' },
+        });
+
+        const headers = new Headers(sent[0].headers);
+
+        expect(headers.get(botSecretHeader)).toBeNull();
+        expect(headers.get('user-agent')).toBe('PerplexityBot');
+    });
+
+    it('asks once on a 503 or a 429 and returns the answer', async () => {
+        const { site, calls } = client([unavailable, ok]);
+
+        expect(await site.readWithoutSecret('https://acme.com/')).toMatchObject(
+            { status: 503 },
+        );
+
+        expect(calls).toHaveLength(1);
+    });
+
+    it('leaves the pause and the streak as they were after a 429, a 503 and no answer, and counts only the requests', async () => {
+        const { site } = client([slowDown, unavailable]);
+
+        const before = site.pace();
+
+        await site.readWithoutSecret('https://acme.com/a');
+        await site.readWithoutSecret('https://acme.com/b');
+
+        expect(
+            await site.readWithoutSecret('https://acme.com/c'),
+        ).toBeInstanceOf(Error);
+
+        expect(site.pace()).toMatchObject({
+            pauseMs: before.pauseMs,
+            streak: before.streak,
+        });
+
+        expect(site.pace().nextAt).toBeLessThan(Date.now() + 1_000);
+
+        expect(site.counts).toEqual({
+            requests: 3,
+            tooMany: 0,
+            serverErrors: 0,
+        });
+    });
+
+    it('takes a turn of the pace for each hop, and leaves a URL unread when its turn comes after the step budget', async () => {
+        const deadline = Date.now() + 1_000;
+
+        const answers = [
+            () =>
+                new Response(null, {
+                    status: 301,
+                    headers: { location: 'https://other.com/' },
+                }),
+            ok,
+        ];
+
+        const site = siteClient({
+            botSecret: 's3cret',
+            hosts: ['acme.com'],
+            pace: firstPace,
+            interval: 600,
+            deadline,
+            deps: {
+                fetch: async () => answers.shift()!(),
+                lookup: async () => ['93.184.216.34'],
+            },
+        });
+
+        expect(await site.readWithoutSecret('https://acme.com/')).toMatchObject(
+            { status: 200, url: 'https://other.com/' },
+        );
+
+        expect(site.counts.requests).toBe(2);
+        expect(await site.readWithoutSecret('https://acme.com/')).toBeNull();
+        expect(site.counts.requests).toBe(2);
+    });
+});
+
 describe('foreignClient', () => {
     function abroad(
         answers: (() => Response)[],

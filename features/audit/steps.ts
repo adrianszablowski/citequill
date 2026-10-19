@@ -6,7 +6,9 @@ import {
     type SiteClient,
     siteClient,
 } from '@/features/audit/client';
+import { runCdnTest } from '@/features/audit/cdn-test';
 import { type Finding, findingRows } from '@/features/audit/finding';
+import { checkMarkdown } from '@/features/audit/markdown-checks';
 import { judgeMobile } from '@/features/audit/mobile-checks';
 import {
     observeRead,
@@ -55,6 +57,7 @@ import {
     agentsBlocked,
     aiSearchAgents,
     blockedBy,
+    cdnTestAgents,
     googlebotBlocks,
     type RobotsFile,
     robotsFile,
@@ -623,7 +626,14 @@ export async function probeSite(
             .from('audit_findings')
             .delete()
             .eq('audit_id', auditId)
-            .in('check', ['soft-404', 'redirect-to-home', 'staging-indexable'])
+            .in('check', [
+                'soft-404',
+                'redirect-to-home',
+                'staging-indexable',
+                'ai-cdn-blocked',
+                'pay-per-crawl',
+                'markdown-alternate',
+            ])
             .is('site_page_id', null),
     );
 
@@ -652,6 +662,26 @@ export async function probeSite(
             .eq('check', 'robots-googlebot-blocked')
             .contains('detail', { reason: 'content-paths' }),
     );
+
+    const files = (audit.robots_rules ?? []) as unknown as RobotsFile[];
+    const isBlocked = blockedBy(files, site.obeyRobots);
+    const [home] = site.homes;
+
+    const cdn = isBlocked(home)
+        ? { outcome: null, findings: [] }
+        : await runCdnTest(
+              home,
+              (agent) =>
+                  client.readWithoutSecret(home, {
+                      headers: { 'user-agent': agent },
+                  }),
+              agentsBlocked(
+                  files,
+                  cdnTestAgents.map(({ agent }) => agent),
+              )(home),
+          );
+
+    const markdown = await checkMarkdown(home, client.read, isBlocked);
 
     const sample = variantSample(
         pages.map((page) => page.url),
@@ -719,15 +749,12 @@ export async function probeSite(
     ];
 
     const findings = [
-        contentPaths(
-            queue.values(),
-            googlebotBlocks(
-                (audit.robots_rules ?? []) as unknown as RobotsFile[],
-            ),
-        ),
+        contentPaths(queue.values(), googlebotBlocks(files)),
+        ...cdn.findings,
+        markdown,
     ];
 
-    for (const probe of probes) {
+    for (const probe of probes.filter(({ url }) => !isBlocked(url))) {
         if (hasStopped(client.pace())) {
             break;
         }
@@ -763,6 +790,7 @@ export async function probeSite(
                 host_429_count: audit.host_429_count + client.counts.tooMany,
                 host_5xx_count:
                     audit.host_5xx_count + client.counts.serverErrors,
+                cdn_test: cdn.outcome,
             })
             .eq('id', auditId),
     );

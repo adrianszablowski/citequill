@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    headerMarkdownLink,
+    isMarkdownType,
     linksFromLlmsText,
     markdownUrlFor,
     pageBodies,
@@ -59,6 +61,35 @@ describe('markdownUrlFor', () => {
                 'https://acme.com/docs/intro.md',
             ]),
         ).toBeNull();
+    });
+});
+
+describe('headerMarkdownLink', () => {
+    it('takes the alternate link whose type is markdown, the type in any case and with parameters', () => {
+        expect(
+            headerMarkdownLink(
+                '</llms.txt>; rel="describedby", </index.md>; REL=Alternate; type="Text/Markdown; charset=utf-8"',
+            ),
+        ).toBe('/index.md');
+    });
+
+    it('is null without an alternate of type markdown', () => {
+        expect(
+            headerMarkdownLink(
+                '</de>; rel="alternate"; hreflang="de", </index.md>; rel="describedby"; type="text/markdown"',
+            ),
+        ).toBeNull();
+
+        expect(headerMarkdownLink(null)).toBeNull();
+    });
+});
+
+describe('isMarkdownType', () => {
+    it('compares the media type in any case, without its parameters', () => {
+        expect(isMarkdownType('Text/Markdown; charset=utf-8')).toBe(true);
+        expect(isMarkdownType(' text/markdown ')).toBe(true);
+        expect(isMarkdownType('text/plain')).toBe(false);
+        expect(isMarkdownType(null)).toBe(false);
     });
 });
 

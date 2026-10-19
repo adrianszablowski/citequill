@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { foreignClient, siteClient } from '@/features/audit/client';
-import { firstPace, stoppedAnswering } from '@/features/audit/pacing';
+import {
+    firstPace,
+    type Pace,
+    stoppedAnswering,
+} from '@/features/audit/pacing';
 import type { QueueEntry } from '@/features/audit/queue';
-import { type RobotsFile, robotsFile } from '@/features/audit/robots';
+import {
+    cdnTestAgents,
+    type RobotsFile,
+    robotsFile,
+} from '@/features/audit/robots';
 import { resourceChecks } from '@/features/audit/score';
 import {
     checkResources,
@@ -13,7 +21,16 @@ import {
     probeSite,
     readPages,
 } from '@/features/audit/steps';
-import { type Fetched, phoneHeaders } from '@/features/crawl/fetch';
+import { markdownAccept } from '@/features/audit/markdown-checks';
+import {
+    bingbotUserAgent,
+    botSecretHeader,
+    desktopUserAgent,
+    type Fetched,
+    googlebotUserAgent,
+    phoneHeaders,
+    userAgent,
+} from '@/features/crawl/fetch';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type FakeQuery, fakeSupabase } from '@/lib/supabase/fake';
@@ -40,6 +57,7 @@ interface Setup {
     sitePages?: object[];
     linkedHosts?: object | null;
     robotsRules?: RobotsFile[];
+    obeyRobots?: boolean;
     audits?: object[];
     resources?: Record<string, unknown>[];
 }
@@ -51,6 +69,7 @@ function database({
     sitePages = [],
     linkedHosts = null,
     robotsRules = [],
+    obeyRobots = true,
     audits = [
         { id: 'audit', runs: { status: 'running' } },
         { id: 'stopped', runs: { status: 'failed' } },
@@ -64,7 +83,7 @@ function database({
             data: {
                 name: 'Acme',
                 domain: 'acme.com',
-                obey_robots: true,
+                obey_robots: obeyRobots,
                 bot_secret: 's',
             },
         }),
@@ -139,6 +158,7 @@ function answering(
 ) {
     const client = {
         read: vi.fn(read),
+        readWithoutSecret: vi.fn(read),
         counts: { requests: 0, tooMany: 0, serverErrors: 0 },
         pace: () => pace,
     };
@@ -837,7 +857,14 @@ describe('probeSite', () => {
                 [
                     'in',
                     'check',
-                    ['soft-404', 'redirect-to-home', 'staging-indexable'],
+                    [
+                        'soft-404',
+                        'redirect-to-home',
+                        'staging-indexable',
+                        'ai-cdn-blocked',
+                        'pay-per-crawl',
+                        'markdown-alternate',
+                    ],
                 ],
                 ['is', 'site_page_id', null],
             ],
@@ -887,7 +914,7 @@ describe('probeSite', () => {
         expect(markProgress).toHaveBeenCalledWith('run');
     });
 
-    it('sends GET to the missing paths, the host variants with the http twin, the desktop and phone fetch of the sample and the staging host, and adds its requests to the counts', async () => {
+    it('asks for markdown, then sends GET to the missing paths, the host variants with the http twin, the desktop and phone fetch of the sample and the staging host, and adds its requests to the counts', async () => {
         const fake = probedSite();
         const client = answerProbes();
 
@@ -904,6 +931,7 @@ describe('probeSite', () => {
         ]);
 
         expect(methods).toEqual([
+            [home, undefined, { accept: markdownAccept }],
             ['https://acme.com/<random>', 'GET', undefined],
             ['https://www.acme.com/<random>', 'GET', undefined],
             ['https://acme.de/<random>', 'GET', undefined],
@@ -925,6 +953,7 @@ describe('probeSite', () => {
             request_count: 13,
             host_429_count: 2,
             host_5xx_count: 4,
+            cdn_test: 'browser-refused',
         });
     });
 
@@ -965,18 +994,20 @@ describe('probeSite', () => {
             ]),
         ).toEqual([
             ['robots-googlebot-blocked', null, 'content-paths'],
+            ['markdown-alternate', null, home],
             ['https-missing', 'id of pricing', 'http://acme.com/pricing'],
             ['mobile-content-differs', 'id of pricing', pricing],
         ]);
     });
 
-    it('stops probing when the step budget runs out and keeps what it found', async () => {
+    it('stops the CDN test, the markdown asks and the probes when the step budget runs out, and keeps what it found', async () => {
         const fake = probedSite();
         const client = answering(async () => null);
 
         await probeSite('project', 'run', 'audit', firstPace);
 
-        expect(client.read).toHaveBeenCalledTimes(1);
+        expect(client.readWithoutSecret).toHaveBeenCalledTimes(1);
+        expect(client.read).toHaveBeenCalledTimes(2);
 
         expect(
             inserted(fake, 'audit_findings').map((row) => row.check),
@@ -1003,6 +1034,427 @@ describe('probeSite', () => {
 
         expect(fake.writes()).toEqual([]);
         expect(siteClient).not.toHaveBeenCalled();
+    });
+});
+
+describe('probeSite, for the CDN test and markdown', () => {
+    const home = 'https://acme.com/';
+    const agents = cdnTestAgents.map(({ userAgent: sent }) => sent);
+
+    const controls = [
+        desktopUserAgent,
+        userAgent,
+        googlebotUserAgent,
+        bingbotUserAgent,
+    ];
+
+    interface Sent {
+        url: string;
+        userAgent: string | null;
+        accept: string | null;
+        secret: string | null;
+    }
+
+    async function siteAnswering(
+        answer: (url: string, sent: Sent) => Response,
+    ) {
+        const actual = await vi.importActual<{
+            siteClient: typeof siteClient;
+        }>('@/features/audit/client');
+
+        const sent: Sent[] = [];
+        const pacesAfterCdnTest: Pace[] = [];
+
+        vi.mocked(siteClient).mockImplementation((options) => {
+            const client = actual.siteClient({
+                ...options,
+                interval: 1,
+                deadline: Date.now() + 5_000,
+                deps: {
+                    fetch: async (input, init) => {
+                        const headers = new Headers(init?.headers);
+
+                        const request = {
+                            url: String(input),
+                            userAgent: headers.get('user-agent'),
+                            accept: headers.get('accept'),
+                            secret: headers.get(botSecretHeader),
+                        };
+
+                        sent.push(request);
+
+                        return answer(request.url, request);
+                    },
+                    lookup: async () => ['93.184.216.34'],
+                },
+            });
+
+            return {
+                ...client,
+                read: async (url, readOptions) => {
+                    pacesAfterCdnTest.push(client.pace());
+
+                    return client.read(url, readOptions);
+                },
+            };
+        });
+
+        return { sent, pacesAfterCdnTest };
+    }
+
+    const cdnRequests = (sent: Sent[]) =>
+        sent.filter(({ url, secret }) => url === home && secret === null);
+
+    const notFound = () => new Response('', { status: 404 });
+
+    function cdnSite(
+        cdnAnswer: (userAgent: string | null) => Response | 'throw',
+    ) {
+        return (url: string, request: Sent) => {
+            if (url !== home) {
+                return notFound();
+            }
+
+            if (request.secret !== null) {
+                return ok();
+            }
+
+            const answer = cdnAnswer(request.userAgent);
+
+            if (answer === 'throw') {
+                throw new Error('connect ETIMEDOUT');
+            }
+
+            return answer;
+        };
+    }
+
+    const ok = () => new Response('<h1>Acme</h1>', { status: 200 });
+
+    function updated(fake: ReturnType<typeof database>) {
+        return call(fake, 'audits', 'update').at(-1)!.calls[0][1] as Record<
+            string,
+            unknown
+        >;
+    }
+
+    it('writes each outcome of the CDN test on the audit, and none when a control gets no answer', async () => {
+        const cases: [
+            (userAgent: string | null) => Response | 'throw',
+            string | null,
+        ][] = [
+            [() => ok(), 'passed'],
+            [() => new Response('', { status: 403 }), 'browser-refused'],
+            [
+                (agent) =>
+                    agent === desktopUserAgent
+                        ? ok()
+                        : new Response('', { status: 403 }),
+                'bot-refused',
+            ],
+            [
+                (agent) =>
+                    agent === bingbotUserAgent
+                        ? new Response('', {
+                              status: 403,
+                              headers: { 'cf-mitigated': 'challenge' },
+                          })
+                        : ok(),
+                'spoof-refused',
+            ],
+            [(agent) => (agent === desktopUserAgent ? 'throw' : ok()), null],
+            [(agent) => (agent === userAgent ? 'throw' : ok()), null],
+            [(agent) => (agent === googlebotUserAgent ? 'throw' : ok()), null],
+        ];
+
+        for (const [cdnAnswer, outcome] of cases) {
+            const fake = database();
+
+            await siteAnswering(cdnSite(cdnAnswer));
+            await probeSite('project', 'run', 'audit', firstPace);
+
+            expect(updated(fake).cdn_test, String(outcome)).toBe(outcome);
+        }
+    });
+
+    it('asks no agent after a control that failed, writes spoof-refused when the claimed Googlebot is refused, and asks the four controls before the 8 agents and the browser again after them', async () => {
+        const refusedBot = await siteAnswering(
+            cdnSite((agent) =>
+                agent === desktopUserAgent
+                    ? ok()
+                    : new Response('', { status: 403 }),
+            ),
+        );
+
+        database();
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(
+            cdnRequests(refusedBot.sent).map(({ userAgent: sent }) => sent),
+        ).toEqual([desktopUserAgent, userAgent]);
+
+        const refusedSpoof = await siteAnswering(
+            cdnSite((agent) =>
+                agent === googlebotUserAgent
+                    ? new Response('', { status: 403 })
+                    : ok(),
+            ),
+        );
+
+        const fake = database();
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(updated(fake).cdn_test).toBe('spoof-refused');
+
+        expect(
+            cdnRequests(refusedSpoof.sent).map(({ userAgent: sent }) => sent),
+        ).toEqual([desktopUserAgent, userAgent, googlebotUserAgent]);
+
+        expect(
+            refusedSpoof.sent.filter(({ userAgent: sent }) =>
+                agents.includes(sent!),
+            ),
+        ).toEqual([]);
+
+        const passed = await siteAnswering(cdnSite(() => ok()));
+
+        database();
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(
+            cdnRequests(passed.sent).map(({ userAgent: sent }) => sent),
+        ).toEqual([...controls, ...agents, desktopUserAgent]);
+
+        expect(
+            [...refusedBot.sent, ...passed.sent].filter(
+                ({ userAgent: sent, secret }) =>
+                    agents.includes(sent!) && secret !== null,
+            ),
+        ).toEqual([]);
+    });
+
+    it('sends the CDN test without the bot secret and the markdown asks and the other probes with it', async () => {
+        const { sent } = await siteAnswering(cdnSite(() => ok()));
+
+        database();
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        const signed = sent.filter(({ secret }) => secret !== null);
+
+        expect(cdnRequests(sent)).toHaveLength(13);
+        expect(signed.every(({ secret }) => secret === 's')).toBe(true);
+
+        expect(
+            signed.slice(0, 4).map(({ url, accept }) => [url, accept]),
+        ).toEqual([
+            [home, markdownAccept],
+            ['https://acme.com/index.md', 'text/html,*/*'],
+            ['https://acme.com/index.html.md', 'text/html,*/*'],
+            ['https://acme.com/llms.txt', 'text/html,*/*'],
+        ]);
+
+        expect(signed.some(({ url }) => /\/[a-z0-9]{24}$/.test(url))).toBe(
+            true,
+        );
+
+        expect(
+            sent.filter(
+                ({ secret, url }) =>
+                    secret === null &&
+                    new URL(url).hostname.endsWith('acme.com') &&
+                    url !== home,
+            ),
+        ).toEqual([]);
+    });
+
+    it('takes no pause and no streak from the CDN test’s 429 and 503 answers, so the probes after it go at once', async () => {
+        const { sent, pacesAfterCdnTest } = await siteAnswering(
+            cdnSite((agent) => {
+                if (controls.includes(agent!)) {
+                    return ok();
+                }
+
+                return new Response('', {
+                    status: agents.indexOf(agent!) % 2 === 0 ? 429 : 503,
+                    headers: { 'retry-after': '60' },
+                });
+            }),
+        );
+
+        const fake = database();
+
+        await probeSite('project', 'run', 'audit', {
+            ...firstPace,
+            streak: 19,
+        });
+
+        expect(pacesAfterCdnTest[0]).toMatchObject({ pauseMs: 0, streak: 19 });
+        expect(pacesAfterCdnTest[0].nextAt).toBeLessThan(Date.now() + 1_000);
+        expect(cdnRequests(sent)).toHaveLength(13);
+
+        expect(sent.some(({ url }) => /\/[a-z0-9]{24}$/.test(url))).toBe(true);
+
+        expect(updated(fake)).toMatchObject({
+            cdn_test: 'passed',
+            host_429_count: 1,
+            host_5xx_count: 2,
+        });
+    });
+
+    it('writes its own outcome and findings over those of an earlier try of the step', async () => {
+        const first = database();
+
+        await siteAnswering(
+            cdnSite((agent) =>
+                agent === agents[2]
+                    ? new Response('', {
+                          status: 403,
+                          headers: { 'cf-ray': '1' },
+                      })
+                    : ok(),
+            ),
+        );
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(updated(first).cdn_test).toBe('passed');
+
+        expect(
+            inserted(first, 'audit_findings').find(
+                ({ check }) => check === 'ai-cdn-blocked',
+            ),
+        ).toMatchObject({ site_page_id: null, subject: home });
+
+        const retried = database();
+
+        await siteAnswering(cdnSite(() => new Response('', { status: 403 })));
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(updated(retried).cdn_test).toBe('browser-refused');
+
+        expect(
+            inserted(retried, 'audit_findings').map(({ check }) => check),
+        ).not.toContain('ai-cdn-blocked');
+
+        expect(
+            call(retried, 'audit_findings', 'delete')[0].calls,
+        ).toContainEqual([
+            'in',
+            'check',
+            expect.arrayContaining(['ai-cdn-blocked', 'pay-per-crawl']),
+        ]);
+    });
+
+    it('leaves the agents robots.txt disallows on the home page out of ai-cdn-blocked, by the Googlebot fallback too, when the audit ignores robots.txt', async () => {
+        const fake = database({
+            obeyRobots: false,
+            robotsRules: [
+                robotsFile('https://acme.com/robots.txt', {
+                    ok: true,
+                    status: 200,
+                    hops: [],
+                    body: 'User-agent: Googlebot\nDisallow: /\n\nUser-agent: PerplexityBot\nDisallow: /',
+                }),
+            ],
+        });
+
+        const refused = ['OAI-SearchBot', 'PerplexityBot', 'Applebot'].map(
+            (name) => cdnTestAgents.find(({ agent }) => agent === name)!,
+        );
+
+        await siteAnswering(
+            cdnSite((sent) =>
+                refused.some(({ userAgent: value }) => value === sent)
+                    ? new Response('', { status: 403 })
+                    : ok(),
+            ),
+        );
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(updated(fake).cdn_test).toBe('passed');
+
+        expect(
+            inserted(fake, 'audit_findings').find(
+                ({ check }) => check === 'ai-cdn-blocked',
+            ),
+        ).toMatchObject({
+            detail: {
+                agents: ['OAI-SearchBot'],
+                answers: {
+                    'OAI-SearchBot': '403',
+                    PerplexityBot: '403',
+                    Applebot: '403',
+                },
+            },
+        });
+    });
+
+    it('sends no probe at all when a CitequillBot group disallows everything, and leaves the CDN test without an outcome', async () => {
+        const fake = database({
+            robotsRules: [
+                'https://acme.com',
+                'https://www.acme.com',
+                'http://acme.com',
+                'http://www.acme.com',
+                'https://acme.de',
+                'https://www.acme.de',
+                'http://acme.de',
+                'http://www.acme.de',
+            ].map((origin) =>
+                robotsFile(`${origin}/robots.txt`, {
+                    ok: true,
+                    status: 200,
+                    hops: [],
+                    body: 'User-agent: CitequillBot\nDisallow: /',
+                }),
+            ),
+            sitePages: [{ id: 'id of home', url: home }],
+        });
+
+        const { sent } = await siteAnswering(cdnSite(() => ok()));
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(sent).toEqual([]);
+        expect(updated(fake).cdn_test).toBeNull();
+        expect(inserted(fake, 'audit_findings')).toEqual([]);
+    });
+
+    it('sends neither the CDN test nor the markdown asks when robots.txt blocks the home page for the audit', async () => {
+        const fake = database({
+            robotsRules: [
+                robotsFile('https://acme.com/robots.txt', {
+                    ok: true,
+                    status: 200,
+                    hops: [],
+                    body: 'User-agent: Googlebot\nDisallow: /$',
+                }),
+            ],
+        });
+
+        const { sent } = await siteAnswering(cdnSite(() => ok()));
+
+        await probeSite('project', 'run', 'audit', firstPace);
+
+        expect(sent.filter(({ url }) => url === home)).toEqual([]);
+
+        expect(
+            sent.filter(({ url }) =>
+                ['index.md', 'index.html.md', 'llms.txt'].some((name) =>
+                    url.endsWith(name),
+                ),
+            ),
+        ).toEqual([]);
+
+        expect(sent.length).toBeGreaterThan(0);
+        expect(updated(fake).cdn_test).toBeNull();
+
+        expect(
+            inserted(fake, 'audit_findings').map(({ check }) => check),
+        ).not.toContain('markdown-alternate');
     });
 });
 

@@ -420,21 +420,29 @@ describe('headerAlternates', () => {
 });
 
 describe('linkHeaderEntries', () => {
-    it('reads the URL, the relations and the language of every link of the header', () => {
+    it('reads the URL, the relations, the language and the type of every link of the header', () => {
         expect(
             linkHeaderEntries(
-                '<https://acme.com/a.css>; rel=preload, </pricing>; REL="Canonical Alternate"; hreflang="en-GB"',
+                '<https://acme.com/a.css>; rel=preload, </pricing>; REL="Canonical Alternate"; hreflang="en-GB", </index.md>; rel="alternate"; Type="text/markdown"',
             ),
         ).toEqual([
             {
                 href: 'https://acme.com/a.css',
                 rel: ['preload'],
                 hreflang: null,
+                type: null,
             },
             {
                 href: '/pricing',
                 rel: ['canonical', 'alternate'],
                 hreflang: 'en-GB',
+                type: null,
+            },
+            {
+                href: '/index.md',
+                rel: ['alternate'],
+                hreflang: null,
+                type: 'text/markdown',
             },
         ]);
 

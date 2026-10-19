@@ -214,6 +214,8 @@ const rows = {
         ['ai-training-bots-blocked', 'hint'],
         ['ai-user-agents-blocked', 'hint'],
         ['content-signals', 'hint'],
+        ['pay-per-crawl', 'hint'],
+        ['markdown-alternate', 'hint'],
     ],
 } as const satisfies Record<Area, readonly Row[]>;
 

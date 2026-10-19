@@ -82,6 +82,14 @@ export const probeChecks = [
     'host-variants',
     'staging-indexable',
     'mobile-content-differs',
+    'ai-cdn-blocked',
+    'pay-per-crawl',
+    'markdown-alternate',
+] as const satisfies readonly CheckId[];
+
+export const cdnTestChecks = [
+    'ai-cdn-blocked',
+    'pay-per-crawl',
 ] as const satisfies readonly CheckId[];
 
 export const resourceChecks = [
@@ -118,16 +126,19 @@ export function checksRun({
     hasCrossPageChecks,
     hasDiscovered,
     obeyRobots,
+    hasPassedCdnTest,
 }: {
     hasCrossPageChecks: boolean;
     hasDiscovered: boolean;
     obeyRobots: boolean;
+    hasPassedCdnTest: boolean;
 }) {
     const skipped = new Set<CheckId>([
         ...(hasCrossPageChecks
             ? []
             : [...crossPageChecks, ...probeChecks, ...resourceChecks]),
         ...(obeyRobots ? ['noindex-blocked' as const] : []),
+        ...(hasPassedCdnTest ? [] : cdnTestChecks),
     ]);
 
     return shippedChecks.filter(
@@ -527,6 +538,9 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'ai-training-bots-blocked': 'site',
     'ai-user-agents-blocked': 'site',
     'content-signals': 'site',
+    'ai-cdn-blocked': 'site',
+    'pay-per-crawl': 'site',
+    'markdown-alternate': 'site',
 };
 
 export const shippedChecks = Object.keys(scopes) as CheckId[];

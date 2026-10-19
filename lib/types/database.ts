@@ -284,6 +284,7 @@ export type Database = {
             };
             audits: {
                 Row: {
+                    cdn_test: string | null;
                     checks_scored: number;
                     checks_total: number;
                     created_at: string;
@@ -316,6 +317,7 @@ export type Database = {
                     severity_3: number;
                 };
                 Insert: {
+                    cdn_test?: string | null;
                     checks_scored?: number;
                     checks_total?: number;
                     created_at?: string;
@@ -348,6 +350,7 @@ export type Database = {
                     severity_3?: number;
                 };
                 Update: {
+                    cdn_test?: string | null;
                     checks_scored?: number;
                     checks_total?: number;
                     created_at?: string;

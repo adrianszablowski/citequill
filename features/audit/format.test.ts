@@ -118,6 +118,32 @@ describe('detailLines', () => {
         ).toEqual(['Final URL: http://acme.com/']);
     });
 
+    it('shows the agents the CDN refused with every agent’s answer, the price of each charged agent, and the Vary the markdown came with', () => {
+        expect(
+            detailLines({
+                agents: ['PerplexityBot'],
+                answers: {
+                    'OAI-SearchBot': '200',
+                    PerplexityBot: '403 (Cloudflare challenge)',
+                    DuckAssistBot: 'no answer',
+                },
+            }),
+        ).toEqual([
+            'Agents: PerplexityBot',
+            'Answers: OAI-SearchBot 200, PerplexityBot 403 (Cloudflare challenge), DuckAssistBot no answer',
+        ]);
+
+        expect(detailLines({ prices: { PerplexityBot: 'USD 0.01' } })).toEqual([
+            'Prices: PerplexityBot USD 0.01',
+        ]);
+
+        expect(
+            detailLines({ reason: 'vary', vary: 'accept-encoding' }),
+        ).toEqual(['Vary: accept-encoding']);
+
+        expect(detailLines({ reason: 'missing' })).toEqual([]);
+    });
+
     it('shows both times of a slow page with the region it was read from, and the half of assets-heavy by its count alone', () => {
         expect(detailLines({ ms: [1240, 1810], region: 'fra1' })).toEqual([
             'Time (ms): 1,240, 1,810',

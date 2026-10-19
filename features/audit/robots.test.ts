@@ -6,10 +6,12 @@ import {
     aiTrainingAgents,
     aiUserAgents,
     blockedBy,
+    cdnTestAgents,
     googlebotBlocks,
     parseRobots,
     robotsFile,
 } from '@/features/audit/robots';
+import { chromeVersion, userAgent } from '@/features/crawl/fetch';
 
 const robotsUrl = 'https://acme.com/robots.txt';
 
@@ -347,5 +349,38 @@ describe('agentsBlocked', () => {
         ).toEqual([]);
 
         expect(agentsBlocked([], aiSearchAgents)(home)).toEqual([]);
+    });
+});
+
+describe('cdnTestAgents', () => {
+    it('sends every AI search agent but Bingbot and Google-Extended, in the order of the search agents', () => {
+        expect(cdnTestAgents.map(({ agent }) => agent)).toEqual(
+            aiSearchAgents.filter(
+                (agent) => agent !== 'Bingbot' && agent !== 'Google-Extended',
+            ),
+        );
+    });
+
+    it("names each agent's own token and ends with the bot's name", () => {
+        for (const { agent, userAgent: sent } of cdnTestAgents) {
+            expect(sent, agent).toContain(agent);
+            expect(sent.endsWith(` ${userAgent}`), agent).toBe(true);
+        }
+    });
+
+    it("sends Claude-SearchBot's token alone, and the Chrome version of the browser control where Amazon writes W.X.Y.Z", () => {
+        const sent = new Map(
+            cdnTestAgents.map(({ agent, userAgent: value }) => [agent, value]),
+        );
+
+        expect(sent.get('Claude-SearchBot')).toBe(
+            `Claude-SearchBot ${userAgent}`,
+        );
+
+        expect(sent.get('Amzn-SearchBot')).toContain(
+            `Chrome/${chromeVersion} Safari/537.36`,
+        );
+
+        expect(sent.get('Amzn-SearchBot')).not.toContain('W.X.Y.Z');
     });
 });

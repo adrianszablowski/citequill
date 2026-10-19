@@ -52,7 +52,9 @@ export function siteClient({
     let pace = firstPace;
     const counts: SiteRequests = { requests: 0, tooMany: 0, serverErrors: 0 };
 
-    function pacedDeps(): FetchDeps {
+    function pacedDeps(
+        onAnswer: (response: Response) => void = () => {},
+    ): FetchDeps {
         let isFirstHop = true;
 
         return {
@@ -67,20 +69,37 @@ export function siteClient({
 
                 const response = await deps.fetch(input, init);
 
-                counts.tooMany += Number(response.status === 429);
-                counts.serverErrors += Number(response.status >= 500);
-
-                pace = afterAnswer(
-                    pace,
-                    response.status,
-                    response.headers.get('retry-after'),
-                    interval,
-                    Date.now(),
-                );
+                onAnswer(response);
 
                 return response;
             },
         };
+    }
+
+    function recordAnswer(response: Response) {
+        counts.tooMany += Number(response.status === 429);
+        counts.serverErrors += Number(response.status >= 500);
+
+        pace = afterAnswer(
+            pace,
+            response.status,
+            response.headers.get('retry-after'),
+            interval,
+            Date.now(),
+        );
+    }
+
+    async function waitForSlot() {
+        const slot = takeSlot(pace, interval, Date.now());
+
+        if (slot.at > deadline) {
+            return false;
+        }
+
+        pace = slot.pace;
+        await sleep(slot.at - Date.now());
+
+        return true;
     }
 
     async function read(
@@ -91,21 +110,20 @@ export function siteClient({
         }: Pick<FetchOptions, 'method' | 'headers'> = {},
     ): Promise<Fetched | Error | null> {
         for (let attempt = 1; ; attempt += 1) {
-            const slot = takeSlot(pace, interval, Date.now());
-
-            if (slot.at > deadline) {
+            if (!(await waitForSlot())) {
                 return null;
             }
 
-            pace = slot.pace;
-            await sleep(slot.at - Date.now());
-
             try {
-                const fetched = await fetchPublic(url, pacedDeps(), {
-                    method,
-                    headers,
-                    botSecret: { value: botSecret, hosts },
-                });
+                const fetched = await fetchPublic(
+                    url,
+                    pacedDeps(recordAnswer),
+                    {
+                        method,
+                        headers,
+                        botSecret: { value: botSecret, hosts },
+                    },
+                );
 
                 if (!isRateLimit(fetched.status) || attempt >= attemptsPerUrl) {
                     return fetched;
@@ -115,14 +133,29 @@ export function siteClient({
                     pace = afterAnswer(pace, null, null, interval, Date.now());
                 }
 
-                return error instanceof Error
-                    ? error
-                    : new Error(String(error));
+                return asError(error);
             }
         }
     }
 
-    return { read, counts, pace: () => pace };
+    // The CDN test's answers come to a request without the secret, so they say
+    // nothing about the audit's own requests: no retry, no pause, no streak.
+    async function readWithoutSecret(
+        url: string,
+        { headers }: Pick<FetchOptions, 'headers'> = {},
+    ): Promise<Fetched | Error | null> {
+        if (!(await waitForSlot())) {
+            return null;
+        }
+
+        try {
+            return await fetchPublic(url, pacedDeps(), { headers });
+        } catch (error) {
+            return asError(error);
+        }
+    }
+
+    return { read, readWithoutSecret, counts, pace: () => pace };
 }
 
 export function foreignClient({
@@ -177,13 +210,15 @@ export function foreignClient({
                 return await fetchPublic(url, pacedDeps(), { method });
             } catch (error) {
                 if (attempt >= foreignAttempts) {
-                    return error instanceof Error
-                        ? error
-                        : new Error(String(error));
+                    return asError(error);
                 }
             }
         }
     }
 
     return { read, counts };
+}
+
+function asError(error: unknown) {
+    return error instanceof Error ? error : new Error(String(error));
 }

@@ -1,6 +1,11 @@
 import robotsParser from 'robots-parser';
 
-import { type Fetched, type Hop, userAgent } from '@/features/crawl/fetch';
+import {
+    chromeVersion,
+    type Fetched,
+    type Hop,
+    userAgent,
+} from '@/features/crawl/fetch';
 import { sitemapsFromRobots } from '@/features/crawl/sitemap';
 
 export interface RobotsRule {
@@ -115,6 +120,38 @@ export const aiSearchAgents = [
     'meta-webindexer',
     'Google-Extended',
 ];
+
+// Anthropic prints no user agent for Claude-SearchBot and third-party lists
+// disagree, so the test sends its token alone, which a rule matching the token
+// meets as it meets the real agent.
+export const cdnTestAgents = [
+    [
+        'OAI-SearchBot',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36; compatible; OAI-SearchBot/1.4; +https://openai.com/searchbot',
+    ],
+    ['Claude-SearchBot', 'Claude-SearchBot'],
+    [
+        'PerplexityBot',
+        'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)',
+    ],
+    [
+        'Applebot',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15 (Applebot/0.1; +http://www.apple.com/go/applebot)',
+    ],
+    [
+        'MistralAI-Index',
+        'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; MistralAI-Index/1.0; +https://docs.mistral.ai/robots)',
+    ],
+    [
+        'DuckAssistBot',
+        'DuckAssistBot/1.2; (+http://duckduckgo.com/duckassistbot.html)',
+    ],
+    [
+        'Amzn-SearchBot',
+        `Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amzn-SearchBot/0.1) Chrome/${chromeVersion} Safari/537.36`,
+    ],
+    ['meta-webindexer', 'meta-webindexer/1.1'],
+].map(([agent, printed]) => ({ agent, userAgent: `${printed} ${userAgent}` }));
 
 export const aiTrainingAgents = [
     'GPTBot',

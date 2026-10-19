@@ -266,6 +266,7 @@ export function linkHeaderEntries(header: string | null) {
             href: href.trim(),
             rel: (linkParam(params, 'rel') ?? '').toLowerCase().split(/\s+/),
             hreflang: linkParam(params, 'hreflang'),
+            type: linkParam(params, 'type'),
         }),
     );
 }
@@ -305,6 +306,7 @@ export function storedAlternates(json: Json | null | undefined) {
 const linkParams = {
     rel: /;\s*rel\s*=\s*"?([^";,]*)/i,
     hreflang: /;\s*hreflang\s*=\s*"?([^";,]*)/i,
+    type: /;\s*type\s*=\s*"?([^";,]*)/i,
 };
 
 function linkParam(params: string, name: keyof typeof linkParams) {

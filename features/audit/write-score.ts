@@ -32,7 +32,7 @@ export async function writeScore(
             one(
                 supabase
                     .from('audits')
-                    .select('robots_rules, created_at')
+                    .select('robots_rules, cdn_test, created_at')
                     .eq('id', auditId)
                     .single(),
             ),
@@ -76,6 +76,7 @@ export async function writeScore(
             hasCrossPageChecks,
             hasDiscovered: audit.robots_rules !== null,
             obeyRobots: project.obey_robots,
+            hasPassedCdnTest: audit.cdn_test === 'passed',
         }),
         pages,
         findings,
