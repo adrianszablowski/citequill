@@ -1,4 +1,8 @@
-import { readAuditPage, thinPageWords } from '@/features/audit/page';
+import {
+    type AuditPage,
+    readAuditPage,
+    thinPageWords,
+} from '@/features/audit/page';
 import {
     type Candidate,
     linkDepth,
@@ -8,7 +12,12 @@ import {
 } from '@/features/audit/queue';
 import { externalLinks, pageResources } from '@/features/audit/resources';
 import { type Fetched, type Hop, isHtml } from '@/features/crawl/fetch';
-import { absolute } from '@/features/crawl/html';
+import {
+    absolute,
+    type Alternate,
+    type HreflangEntry,
+    hreflangAlternates,
+} from '@/features/crawl/html';
 import { type Locale, localeOf } from '@/features/crawl/locales';
 import type { Json, TablesInsert } from '@/lib/types/database';
 
@@ -50,9 +59,11 @@ export function observeRead(
     const fetched =
         outcome === 'blocked' || outcome instanceof Error ? null : outcome;
 
+    const answer = fetched?.ok && fetched.hops.length === 1 ? fetched : null;
+
     const page =
-        fetched?.ok && fetched.hops.length === 1 && isHtml(fetched.headers)
-            ? readAuditPage(fetched.body, fetched.url)
+        answer && isHtml(answer.headers)
+            ? readAuditPage(answer.body, answer.url)
             : null;
 
     const directives = googlebotDirectives(
@@ -73,6 +84,10 @@ export function observeRead(
         },
     );
 
+    const alternates = answer
+        ? alternateSets(page, answer.headers, entry)
+        : null;
+
     const row: TablesInsert<'site_pages'> = {
         project_id: projectId,
         url: entry.url,
@@ -87,7 +102,13 @@ export function observeRead(
         external_link_count: page
             ? externalLinks(entry.url, page, hosts).length
             : 0,
-        hreflang: page ? (page.alternates as unknown as Json) : null,
+        hreflang: alternates
+            ? (hreflangAlternates([
+                  ...alternates.tags,
+                  ...alternates.header,
+              ]) as unknown as Json)
+            : null,
+        hreflang_count: alternates ? alternateCount(alternates) : 0,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,
         page_id: pageIds.get(withoutSlash(entry.url)) ?? null,
@@ -114,15 +135,29 @@ export function observeRead(
             ? linkTarget(observation.final_url, hosts)
             : null;
 
+    const alternateCandidates = [
+        ...new Set(
+            (alternates ? Object.values(alternates).flat() : []).flatMap(
+                ({ url }) => (url ? (linkTarget(url, hosts) ?? []) : []),
+            ),
+        ),
+    ]
+        .filter((url) => url !== entry.url)
+        .map((url) => ({ url, depth: null }));
+
     return {
         row,
         page,
         directives,
+        alternates,
         resources: page ? pageResources(entry.url, page, hosts, domain) : [],
-        candidates:
-            landing && landing !== entry.url
-                ? [...links, { url: landing, depth: entry.depth }]
-                : links,
+        candidates: [
+            ...links,
+            ...(landing && landing !== entry.url
+                ? [{ url: landing, depth: entry.depth }]
+                : []),
+            ...alternateCandidates,
+        ],
     };
 }
 
@@ -180,17 +215,76 @@ export function canonicalOf(
 }
 
 export function headerCanonical(header: string | null, url: string) {
-    for (const [, href, params] of (header ?? '').matchAll(
-        /<([^>]*)>([^<]*)/g,
-    )) {
-        const rel = /rel\s*=\s*"?([^";,]*)/i.exec(params)?.[1] ?? '';
+    const canonical = linkHeaderEntries(header).find(({ rel }) =>
+        rel.includes('canonical'),
+    );
 
-        if (rel.toLowerCase().split(/\s+/).includes('canonical')) {
-            return absolute(href, new URL(url));
-        }
-    }
+    return canonical ? absolute(canonical.href, new URL(url)) : null;
+}
 
-    return null;
+export function headerAlternates(
+    header: string | null,
+    url: string,
+): HreflangEntry[] {
+    return linkHeaderEntries(header).flatMap(({ href, rel, hreflang }) =>
+        rel.includes('alternate') &&
+        !rel.includes('stylesheet') &&
+        hreflang !== null &&
+        href !== ''
+            ? [{ lang: hreflang, href, url: absolute(href, new URL(url)) }]
+            : [],
+    );
+}
+
+export function linkHeaderEntries(header: string | null) {
+    return [...(header ?? '').matchAll(/<([^>]*)>([^<]*)/g)].map(
+        ([, href, params]) => ({
+            href: href.trim(),
+            rel: (linkParam(params, 'rel') ?? '').toLowerCase().split(/\s+/),
+            hreflang: linkParam(params, 'hreflang'),
+        }),
+    );
+}
+
+export function alternateSets(
+    page: Pick<AuditPage, 'alternateTags'> | null,
+    headers: Headers,
+    { url, alternates }: Pick<QueueEntry, 'url' | 'alternates'>,
+) {
+    return {
+        tags: page?.alternateTags ?? [],
+        header: headerAlternates(headers.get('link'), url),
+        sitemap: storedAlternates(alternates).map(
+            ({ lang, href }): HreflangEntry => ({
+                lang,
+                href,
+                url: absolute(href, new URL(url)),
+            }),
+        ),
+    };
+}
+
+export type AlternateSets = ReturnType<typeof alternateSets>;
+
+export function alternateCount(alternates: AlternateSets) {
+    return new Set(
+        Object.values(alternates)
+            .flat()
+            .map(({ url, href }) => url ?? href),
+    ).size;
+}
+
+export function storedAlternates(json: Json | null | undefined) {
+    return Array.isArray(json) ? (json as unknown as Alternate[]) : [];
+}
+
+const linkParams = {
+    rel: /;\s*rel\s*=\s*"?([^";,]*)/i,
+    hreflang: /;\s*hreflang\s*=\s*"?([^";,]*)/i,
+};
+
+function linkParam(params: string, name: keyof typeof linkParams) {
+    return linkParams[name].exec(params)?.[1].trim() ?? null;
 }
 
 const unanswered: Observation = {

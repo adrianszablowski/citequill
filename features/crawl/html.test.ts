@@ -40,6 +40,17 @@ describe('readPage', () => {
         expect(data.author).toBe('Jane Doe');
     });
 
+    it('reads the alternates by the rule the audit reads them: any case of rel, never a stylesheet, each language and URL once', () => {
+        const data = readPage(
+            '<html><head><link rel="Alternate" hreflang="de" href="/de"><link rel="alternate" hreflang="DE" href="https://acme.com/de"><link rel="alternate stylesheet" hreflang="fr" href="/fr.css"><link rel="alternate" hreflang="it"></head></html>',
+            'https://acme.com/',
+        );
+
+        expect(data.alternates).toEqual([
+            { lang: 'de', href: 'https://acme.com/de' },
+        ]);
+    });
+
     it('keeps links to the same site only, absolute and without repeats', () => {
         expect(readPage(page, 'https://www.acme.com/').links).toEqual([
             'https://www.acme.com/',

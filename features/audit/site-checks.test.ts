@@ -15,6 +15,7 @@ const context: SiteContext = {
     isDisallowed: () => false,
     isHttpsSite: true,
     linkedFrom: new Map(),
+    sitemapAlternates: new Map(),
 };
 
 function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
@@ -31,6 +32,8 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         in_sitemap: true,
         image_count: 0,
         external_link_count: 0,
+        hreflang_count: 0,
+        hreflang: [],
         click_depth: 1,
         inbound_links: 2,
         body_hash: `hash of ${path}`,

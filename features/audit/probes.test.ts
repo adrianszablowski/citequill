@@ -61,6 +61,7 @@ function entry(
         in_sitemap: false,
         inbound_links: 1,
         linked_from: [],
+        alternates: null,
     };
 }
 

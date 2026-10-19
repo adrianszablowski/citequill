@@ -10,7 +10,9 @@ import { simhash } from '@/features/audit/simhash';
 import {
     absolute,
     type Alternate,
-    alternatesOf,
+    alternateLinks,
+    type HreflangEntry,
+    hreflangAlternates,
     mainContent,
     robotsMetaOf,
 } from '@/features/crawl/html';
@@ -18,6 +20,7 @@ import {
 export interface CanonicalTag {
     href: string;
     isInHead: boolean;
+    hasHreflang: boolean;
     selector: string;
     snippet: string;
 }
@@ -26,6 +29,8 @@ export interface PageElement {
     selector: string;
     snippet: string;
 }
+
+export type AlternateTag = HreflangEntry & PageElement;
 
 export interface TitleTag extends PageElement {
     text: string;
@@ -93,6 +98,7 @@ export interface AuditPage {
     canonicals: CanonicalTag[];
     robotsMeta: string[];
     refresh: string | null;
+    alternateTags: AlternateTag[];
     alternates: Alternate[];
     anchors: Anchor[];
     links: string[];
@@ -189,8 +195,16 @@ export function readAuditPage(html: string, url: string): AuditPage {
         .map((element) => ({
             href: $(element).attr('href')?.trim() ?? '',
             isInHead: isInHead($, element),
+            hasHreflang: $(element).attr('hreflang') !== undefined,
             selector: selectorOf(element),
             snippet: $.html(element),
+        }));
+
+    const alternateTags = alternateLinks($, base)
+        .filter(({ element }) => isInDocument($, element))
+        .map(({ element, entry }): AlternateTag => ({
+            ...located(element),
+            ...entry,
         }));
 
     const refresh = $('meta[http-equiv]')
@@ -276,7 +290,8 @@ export function readAuditPage(html: string, url: string): AuditPage {
         canonicals,
         robotsMeta: robotsMetaOf($),
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
-        alternates: alternatesOf($, base),
+        alternateTags,
+        alternates: hreflangAlternates(alternateTags),
         anchors,
         links: [...new Set(anchors.flatMap((anchor) => anchor.url ?? []))],
         resources,
@@ -369,11 +384,13 @@ function documentElements($: cheerio.CheerioAPI) {
     return (selector: cheerio.SelectorType) =>
         $(selector)
             .toArray()
-            .filter(
-                (tag) =>
-                    $(tag).parents('html').length > 0 &&
-                    $(tag).parents('svg').length === 0,
-            );
+            .filter((tag) => isInDocument($, tag));
+}
+
+function isInDocument($: cheerio.CheerioAPI, tag: Element) {
+    return (
+        $(tag).parents('html').length > 0 && $(tag).parents('svg').length === 0
+    );
 }
 
 function srcsetUrls(srcset: string) {

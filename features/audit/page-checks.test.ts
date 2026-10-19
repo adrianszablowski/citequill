@@ -35,6 +35,7 @@ function entry(inSitemap = false): QueueEntry {
         in_sitemap: inSitemap,
         inbound_links: 0,
         linked_from: [],
+        alternates: null,
     };
 }
 
@@ -555,6 +556,40 @@ describe('checkPage', () => {
         expect(
             checks(fetched(bare, { headers: { 'x-robots-tag': 'noindex' } })),
         ).toEqual([]);
+    });
+
+    it('runs the hreflang checks on an indexable page only, over its tags and its Link header', () => {
+        const page = (headers: Record<string, string> = {}) =>
+            fetched(
+                html(`<link rel="alternate" hreflang="en-UK" href="${url}">`),
+                {
+                    headers: {
+                        link: '<http://acme.com/de>; rel="alternate"; hreflang="de"',
+                        ...headers,
+                    },
+                },
+            );
+
+        expect(checks(page())).toEqual([
+            'hreflang-code',
+            'hreflang-http',
+            'hreflang-methods',
+        ]);
+
+        expect(checks(page({ 'x-robots-tag': 'noindex' }))).toEqual([]);
+    });
+
+    it('runs the hreflang checks on an indexable answer that is not HTML, over its Link header', () => {
+        expect(
+            checks(
+                fetched('%PDF-1.7', {
+                    headers: {
+                        'content-type': 'application/pdf',
+                        link: '<https://acme.com/xx/file.pdf>; rel="alternate"; hreflang="xx"',
+                    },
+                }),
+            ),
+        ).toEqual(['hreflang-code']);
     });
 });
 

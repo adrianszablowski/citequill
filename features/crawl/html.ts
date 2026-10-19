@@ -13,6 +13,12 @@ export interface Alternate {
     href: string;
 }
 
+export interface HreflangEntry {
+    lang: string;
+    href: string;
+    url: string | null;
+}
+
 export interface PageData {
     title: string;
     lang: string | null;
@@ -54,14 +60,45 @@ export function readPage(html: string, url: string): PageData {
 }
 
 export function alternatesOf($: cheerio.CheerioAPI, base: URL): Alternate[] {
-    return $('link[rel="alternate"][hreflang]')
+    return hreflangAlternates(
+        alternateLinks($, base).map(({ entry }) => entry),
+    );
+}
+
+export function alternateLinks($: cheerio.CheerioAPI, base: URL) {
+    return $('link[rel~="alternate" i][hreflang]')
         .toArray()
         .flatMap((element) => {
-            const lang = $(element).attr('hreflang')?.trim().toLowerCase();
-            const href = absolute($(element).attr('href'), base);
+            const rel = (element.attribs.rel ?? '').toLowerCase().split(/\s+/);
+            const href = element.attribs.href?.trim() ?? '';
 
-            return lang && href ? [{ lang, href }] : [];
+            return rel.includes('stylesheet') || href === ''
+                ? []
+                : [
+                      {
+                          element,
+                          entry: {
+                              lang: element.attribs.hreflang.trim(),
+                              href,
+                              url: absolute(href, base),
+                          },
+                      },
+                  ];
         });
+}
+
+export function hreflangAlternates(entries: HreflangEntry[]): Alternate[] {
+    const alternates = new Map<string, Alternate>();
+
+    for (const { lang, url } of entries) {
+        const code = lang.toLowerCase();
+
+        if (code && url) {
+            alternates.set(`${code} ${url}`, { lang: code, href: url });
+        }
+    }
+
+    return [...alternates.values()];
 }
 
 export function robotsMetaOf($: cheerio.CheerioAPI) {

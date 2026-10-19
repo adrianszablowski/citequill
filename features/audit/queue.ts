@@ -1,4 +1,5 @@
-import type { Tables } from '@/lib/types/database';
+import type { Alternate } from '@/features/crawl/html';
+import type { Json, Tables } from '@/lib/types/database';
 
 export type QueueEntry = Omit<Tables<'audit_queue'>, 'audit_id'>;
 
@@ -10,6 +11,7 @@ export interface Candidate {
     inSitemap?: boolean;
     inbound?: number;
     from?: string;
+    alternates?: Alternate[];
 }
 
 export const queueCap = 5_000;
@@ -117,8 +119,10 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
         inSitemap = false,
         inbound = 0,
         from,
+        alternates,
     } of candidates) {
         const known = next.get(url);
+        const stored = (alternates as unknown as Json) ?? null;
 
         if (known) {
             const updated = {
@@ -130,13 +134,15 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
                 in_sitemap: known.in_sitemap || inSitemap,
                 inbound_links: known.inbound_links + inbound,
                 linked_from: withLinkingPage(known.linked_from, from),
+                alternates: known.alternates ?? stored,
             };
 
             if (
                 updated.depth !== known.depth ||
                 updated.in_sitemap !== known.in_sitemap ||
                 updated.inbound_links !== known.inbound_links ||
-                updated.linked_from !== known.linked_from
+                updated.linked_from !== known.linked_from ||
+                updated.alternates !== known.alternates
             ) {
                 next.set(url, updated);
                 touched.add(url);
@@ -170,6 +176,7 @@ export function addToQueue(queue: Queue, candidates: Candidate[]) {
             in_sitemap: inSitemap,
             inbound_links: inbound,
             linked_from: withLinkingPage([], from),
+            alternates: stored,
         });
 
         touched.add(url);

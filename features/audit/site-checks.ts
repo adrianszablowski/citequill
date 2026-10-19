@@ -1,4 +1,5 @@
 import type { Finding } from '@/features/audit/finding';
+import { hreflangSiteChecks } from '@/features/audit/hreflang-checks';
 import {
     appliesTo,
     isAnswered,
@@ -12,6 +13,7 @@ import {
     simhashBits,
 } from '@/features/audit/simhash';
 import { facetPath, facetVolume } from '@/features/audit/url-patterns';
+import type { Alternate } from '@/features/crawl/html';
 import type { Tables } from '@/lib/types/database';
 
 export type SiteRow = ScoredPage &
@@ -23,6 +25,7 @@ export type SiteRow = ScoredPage &
         | 'description'
         | 'click_depth'
         | 'inbound_links'
+        | 'hreflang'
     >;
 
 export interface SiteContext {
@@ -31,6 +34,7 @@ export interface SiteContext {
     isDisallowed: (url: string) => boolean;
     isHttpsSite: boolean;
     linkedFrom: ReadonlyMap<string, string[]>;
+    sitemapAlternates: ReadonlyMap<string, Alternate[]>;
 }
 
 export const duplicatesListed = 10;
@@ -87,6 +91,7 @@ export function siteChecks(rows: SiteRow[], context: SiteContext) {
             .flatMap((row) => listedFindings(row, context)),
         ...rows.flatMap((row) => reachFindings(row, context)),
         ...rows.flatMap((row) => linkedFindings(row, context)),
+        ...hreflangSiteChecks(rows, context),
     ];
 }
 

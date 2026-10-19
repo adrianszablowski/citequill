@@ -363,6 +363,58 @@ describe('discoverSite', () => {
         ).toContainEqual(['robots-5xx', failed]);
     });
 
+    it("keeps a sitemap entry's hreflang children on its queue entry, and queues each alternate on the site's hosts without a click depth", async () => {
+        const fake = database();
+
+        answering(async (url) =>
+            url === 'https://acme.com/sitemap.xml'
+                ? answered(
+                      [{ url, status: 200 }],
+                      `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+<url><loc>https://acme.com/en</loc>
+<xhtml:link rel="alternate" hreflang="en" href="https://acme.com/en"/>
+<xhtml:link rel="alternate" hreflang="de" href="https://acme.de/de"/>
+<xhtml:link rel="alternate" hreflang="fr" href="https://other.com/fr"/>
+</url>
+<url><loc>https://acme.com/plain</loc></url>
+</urlset>`,
+                  )
+                : notFound(url),
+        );
+
+        await discoverSite('project', 'run', 'audit');
+
+        const rows = call(fake, 'audit_queue', 'upsert')[0].calls[0][1] as {
+            url: string;
+            depth: number | null;
+            in_sitemap: boolean;
+            alternates: unknown;
+        }[];
+
+        const byUrl = new Map(rows.map((row) => [row.url, row]));
+
+        expect(byUrl.get('https://acme.com/en')).toMatchObject({
+            depth: null,
+            in_sitemap: true,
+            alternates: [
+                { lang: 'en', href: 'https://acme.com/en' },
+                { lang: 'de', href: 'https://acme.de/de' },
+                { lang: 'fr', href: 'https://other.com/fr' },
+            ],
+        });
+
+        expect(byUrl.get('https://acme.de/de')).toMatchObject({
+            depth: null,
+            in_sitemap: false,
+            inbound_links: 0,
+            alternates: null,
+        });
+
+        expect(byUrl.get('https://acme.com/plain')?.alternates).toBeNull();
+        expect(byUrl.has('https://other.com/fr')).toBe(false);
+    });
+
     it('leaves an audit whose run has ended as it is, without asking the site', async () => {
         const fake = database({ runStatus: 'failed' });
 
@@ -387,6 +439,7 @@ describe('readPages', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 },
             ],
         });
@@ -427,6 +480,7 @@ describe('readPages, for html-slow', () => {
             in_sitemap: false,
             inbound_links: 1,
             linked_from: [],
+            alternates: null,
         },
     ];
 
@@ -524,6 +578,7 @@ describe('readPages, for the resources', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 },
             ],
             resources: [
@@ -608,6 +663,7 @@ describe('readPages, in read order', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 })),
             });
 
@@ -657,6 +713,7 @@ describe('readPages, for the probes', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 },
             ],
             linkedHosts: { 'old.com': 'https://old.com/' },
@@ -716,6 +773,7 @@ describe('probeSite', () => {
                     in_sitemap: false,
                     inbound_links: 0,
                     linked_from: [],
+                    alternates: null,
                 },
                 {
                     url: 'https://acme.com/shop/1',
@@ -724,6 +782,7 @@ describe('probeSite', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 },
             ],
         });
@@ -952,6 +1011,7 @@ describe('readPages, before it writes the batch', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [],
+                    alternates: null,
                 },
             ],
             sitePages: [{ url, redirect_to: target }],
@@ -1138,6 +1198,65 @@ describe('checkSite', () => {
     });
 });
 
+describe('checkSite, for hreflang', () => {
+    it("reads each page's hreflang column and the sitemap sets the queue keeps, and rewrites the hreflang findings that compare pages", async () => {
+        const page = (path: string) => ({
+            id: `id of ${path}`,
+            url: `https://acme.com${path}`,
+            status_code: 200,
+            redirect_to: null,
+            is_indexable: true,
+            is_blocked: false,
+            canonical_url: null,
+            in_sitemap: true,
+            image_count: 0,
+            external_link_count: 0,
+            hreflang_count: 2,
+            hreflang: [],
+        });
+
+        const listed = (path: string, alternates: string[]) => ({
+            url: `https://acme.com${path}`,
+            depth: null,
+            state: 'read' as const,
+            in_sitemap: true,
+            inbound_links: 0,
+            linked_from: [],
+            alternates: alternates.map((href, i) => ({
+                lang: ['en', 'de'][i],
+                href: `https://acme.com${href}`,
+            })),
+        });
+
+        const fake = database({
+            queue: [listed('/en', ['/en', '/de']), listed('/de', ['/de'])],
+            sitePages: [page('/en'), page('/de')],
+        });
+
+        await checkSite('project', 'run', 'audit');
+
+        expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
+            'hreflang_count',
+        );
+
+        expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
+            ', hreflang',
+        );
+
+        expect(call(fake, 'audit_findings', 'delete')[0].calls).toContainEqual([
+            'in',
+            'check',
+            expect.arrayContaining(['sitemap-hreflang', 'hreflang-return']),
+        ]);
+
+        expect(
+            inserted(fake, 'audit_findings')
+                .filter((row) => row.check === 'sitemap-hreflang')
+                .map((row) => [row.site_page_id, row.subject]),
+        ).toEqual([['id of /en', 'https://acme.com/de']]);
+    });
+});
+
 describe('checkSite, for the links', () => {
     it("writes the queue's inbound counts into the pages before it reads them, and puts a broken link on the pages linking to it", async () => {
         const gone = 'https://acme.com/gone';
@@ -1152,6 +1271,7 @@ describe('checkSite, for the links', () => {
                     in_sitemap: false,
                     inbound_links: 3,
                     linked_from: [linking],
+                    alternates: null,
                 },
                 {
                     url: 'https://acme.com/later',
@@ -1160,6 +1280,7 @@ describe('checkSite, for the links', () => {
                     in_sitemap: false,
                     inbound_links: 1,
                     linked_from: [gone],
+                    alternates: null,
                 },
             ],
             sitePages: [
@@ -1654,6 +1775,7 @@ describe('closeAudit', () => {
                         in_sitemap: false,
                         inbound_links: 1,
                         linked_from: [],
+                        alternates: null,
                     },
                 ],
             },

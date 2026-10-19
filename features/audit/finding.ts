@@ -58,6 +58,42 @@ export function findingRows(
     );
 }
 
+export function cappedPerPage(findings: Finding[]): Finding[] {
+    const seen = new Set<string>();
+    const groups = new Map<string, Finding[]>();
+
+    for (const finding of findings) {
+        const key = [
+            finding.check,
+            finding.url,
+            finding.subject,
+            finding.selector,
+        ].join('\n');
+
+        if (!seen.has(key)) {
+            seen.add(key);
+
+            const group = `${finding.check}\n${finding.url}`;
+
+            groups.set(group, [...(groups.get(group) ?? []), finding]);
+        }
+    }
+
+    return [...groups.values()].flatMap((group) =>
+        group.slice(0, findingsPerPage).map((finding) =>
+            group.length > findingsPerPage
+                ? {
+                      ...finding,
+                      detail: {
+                          ...(finding.detail as Record<string, Json>),
+                          total: group.length,
+                      },
+                  }
+                : finding,
+        ),
+    );
+}
+
 export function fingerprint(
     check: string,
     sitePageId: string | null,

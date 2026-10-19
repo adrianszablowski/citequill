@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
     canonicalOf,
     googlebotDirectives,
+    headerAlternates,
     headerCanonical,
     isIndexable,
+    linkHeaderEntries,
     observePage,
     observeRead,
     type Read,
@@ -31,6 +33,7 @@ function entry(url: string, depth: number | null = 1): QueueEntry {
         in_sitemap: true,
         inbound_links: 0,
         linked_from: [],
+        alternates: null,
     };
 }
 
@@ -214,6 +217,169 @@ describe('observeRead', () => {
 
             expect(candidates).toEqual([]);
         }
+    });
+});
+
+describe('observeRead, for hreflang', () => {
+    const url = 'https://acme.com/a';
+
+    const alternates = [
+        { lang: 'de', href: 'https://acme.de/a' },
+        { lang: 'x-default', href: 'https://acme.com/a' },
+        { lang: 'fr', href: 'https://acme.com/fr/a' },
+        { lang: 'es', href: 'https://other.com/es/a' },
+    ];
+
+    function hreflangRead(sitemap: typeof alternates | null = alternates) {
+        return observe({
+            entry: {
+                ...entry(url),
+                alternates: sitemap,
+            },
+            outcome: {
+                ...page(url, []),
+                headers: new Headers({
+                    'content-type': 'text/html',
+                    link: '<https://acme.de/a>; rel="alternate"; hreflang="de", <https://acme.com/it/a>; rel="alternate"; hreflang="it"',
+                }),
+                body: '<html><head><link rel="alternate" hreflang="EN" href="/a"><link rel="alternate" hreflang="de" href="https://acme.de/a"></head><body></body></html>',
+            },
+        });
+    }
+
+    it('records the union of the tags and the Link header, each language and URL once, and leaves the sitemap set on the queue', () => {
+        expect(hreflangRead().row.hreflang).toEqual([
+            { lang: 'en', href: url },
+            { lang: 'de', href: 'https://acme.de/a' },
+            { lang: 'it', href: 'https://acme.com/it/a' },
+        ]);
+    });
+
+    it('counts the distinct alternate URLs of the tags, the header and the sitemap entry together, x-default included', () => {
+        expect(hreflangRead().row.hreflang_count).toBe(5);
+        expect(hreflangRead(null).row.hreflang_count).toBe(3);
+    });
+
+    it("queues every alternate on the site's hosts, of every method, without a click depth and without counting it as a link, and none on another host", () => {
+        expect(hreflangRead().candidates).toEqual([
+            { url: 'https://acme.com/it/a', depth: null },
+            { url: 'https://acme.com/fr/a', depth: null },
+        ]);
+    });
+
+    it('counts an href that does not resolve by its text, and a tag without href as no alternate', () => {
+        const count = (head: string) =>
+            observe({
+                entry: entry(url),
+                outcome: {
+                    ...page(url, []),
+                    body: `<html><head>${head}</head><body></body></html>`,
+                },
+            }).row.hreflang_count;
+
+        expect(
+            count(
+                '<link rel="alternate" hreflang="fr" href="javascript:void(0)">',
+            ),
+        ).toBe(1);
+
+        expect(count('<link rel="alternate" hreflang="fr">')).toBe(0);
+    });
+
+    it('reads the Link header alternates of an answer that is not HTML', () => {
+        const pdf = 'https://acme.com/file.pdf';
+
+        const { row, candidates } = observe({
+            entry: entry(pdf),
+            outcome: {
+                ...page(pdf, []),
+                headers: new Headers({
+                    'content-type': 'application/pdf',
+                    link: '<https://acme.com/de/file.pdf>; rel="alternate"; hreflang="de"',
+                }),
+                body: '%PDF-1.7',
+            },
+        });
+
+        expect(row).toMatchObject({
+            hreflang: [{ lang: 'de', href: 'https://acme.com/de/file.pdf' }],
+            hreflang_count: 1,
+        });
+
+        expect(candidates).toEqual([
+            { url: 'https://acme.com/de/file.pdf', depth: null },
+        ]);
+    });
+
+    it('records no alternates and no count for a page it could not read', () => {
+        const { row, alternates: sets } = observe({
+            entry: { ...entry(url), alternates },
+            outcome: new Error('timeout'),
+        });
+
+        expect(row).toMatchObject({ hreflang: null, hreflang_count: 0 });
+        expect(sets).toBeNull();
+    });
+});
+
+describe('headerAlternates', () => {
+    it("reads Google's example header, each code as written, each URL absolute", () => {
+        expect(
+            headerAlternates(
+                '<https://example.com/file.pdf>; rel="alternate"; hreflang="en", <https://de-ch.example.com/file.pdf>; rel="alternate"; hreflang="de-CH", <https://de.example.com/file.pdf>; rel="alternate"; hreflang="de"',
+                'https://example.com/file.pdf',
+            ),
+        ).toEqual([
+            {
+                lang: 'en',
+                href: 'https://example.com/file.pdf',
+                url: 'https://example.com/file.pdf',
+            },
+            {
+                lang: 'de-CH',
+                href: 'https://de-ch.example.com/file.pdf',
+                url: 'https://de-ch.example.com/file.pdf',
+            },
+            {
+                lang: 'de',
+                href: 'https://de.example.com/file.pdf',
+                url: 'https://de.example.com/file.pdf',
+            },
+        ]);
+    });
+
+    it('keeps a relative URL as written beside its absolute form, and skips links that are not alternates with a language, an alternative stylesheet and an empty URL', () => {
+        expect(
+            headerAlternates(
+                '</de>; rel=alternate; hreflang=de, </feed>; rel="alternate", </b>; rel="canonical"; hreflang="en", </s.css>; rel="alternate stylesheet"; hreflang="fr", <>; rel="alternate"; hreflang="it"',
+                'https://acme.com/a',
+            ),
+        ).toEqual([{ lang: 'de', href: '/de', url: 'https://acme.com/de' }]);
+
+        expect(headerAlternates(null, 'https://acme.com/')).toEqual([]);
+    });
+});
+
+describe('linkHeaderEntries', () => {
+    it('reads the URL, the relations and the language of every link of the header', () => {
+        expect(
+            linkHeaderEntries(
+                '<https://acme.com/a.css>; rel=preload, </pricing>; REL="Canonical Alternate"; hreflang="en-GB"',
+            ),
+        ).toEqual([
+            {
+                href: 'https://acme.com/a.css',
+                rel: ['preload'],
+                hreflang: null,
+            },
+            {
+                href: '/pricing',
+                rel: ['canonical', 'alternate'],
+                hreflang: 'en-GB',
+            },
+        ]);
+
+        expect(linkHeaderEntries(null)).toEqual([]);
     });
 });
 

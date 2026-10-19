@@ -80,16 +80,68 @@ describe('readAuditPage', () => {
             {
                 href: '/a',
                 isInHead: true,
+                hasHreflang: false,
                 selector: 'link',
                 snippet: '<link rel="canonical" href="/a">',
             },
             {
                 href: 'https://acme.com/b',
                 isInHead: false,
+                hasHreflang: false,
                 selector: 'link.seo',
                 snippet:
                     '<link rel="canonical" class="seo" href="https://acme.com/b">',
             },
+        ]);
+    });
+
+    it('tells a canonical tag that carries an hreflang attribute, even an empty one', () => {
+        const page = readAuditPage(
+            '<html><head><link rel="canonical" hreflang="en" href="/a"><link rel="canonical" hreflang href="/b"></head></html>',
+            'https://acme.com/a',
+        );
+
+        expect(page.canonicals.map(({ hasHreflang }) => hasHreflang)).toEqual([
+            true,
+            true,
+        ]);
+    });
+
+    it('keeps every hreflang tag as written in document order, with its absolute URL, skips an alternative stylesheet and a tag without href, and derives the alternates from the ones that resolve', () => {
+        const page = readAuditPage(
+            `<html><head>
+<link rel="alternate" hreflang=" en-GB " href=" https://acme.com/uk ">
+<link rel="Alternate Stylesheet" hreflang="de" href="/de">
+<link rel="alternate" hreflang="EN-gb" href="https://acme.com/uk#top">
+<link rel="alternate" hreflang="fr" href="javascript:void(0)">
+<link rel="alternate" href="https://acme.com/feed">
+<link rel="alternate" type="application/rss+xml" hreflang="pl">
+</head><body><svg><link rel="alternate" hreflang="it" href="/it"></svg></body></html>`,
+            'https://acme.com/a',
+        );
+
+        expect(page.alternateTags).toEqual([
+            {
+                lang: 'en-GB',
+                href: 'https://acme.com/uk',
+                url: 'https://acme.com/uk',
+                selector: 'link',
+                snippet:
+                    '<link rel="alternate" hreflang=" en-GB " href=" https://acme.com/uk ">',
+            },
+            expect.objectContaining({
+                lang: 'EN-gb',
+                url: 'https://acme.com/uk',
+            }),
+            expect.objectContaining({
+                lang: 'fr',
+                href: 'javascript:void(0)',
+                url: null,
+            }),
+        ]);
+
+        expect(page.alternates).toEqual([
+            { lang: 'en-gb', href: 'https://acme.com/uk' },
         ]);
     });
 

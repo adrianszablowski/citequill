@@ -129,6 +129,34 @@ describe('detailLines', () => {
         ).toEqual(['Bytes: 2,400,000', 'Files: 38']);
     });
 
+    it('shows a bad hreflang entry by its code and method, a cluster by its languages and methods, a missing return link by the URL, and a one-sided set by both lists', () => {
+        expect(
+            detailLines({ lang: 'en-UK', reason: 'region', method: 'tags' }),
+        ).toEqual(['Lang: en-UK', 'Method: tags']);
+
+        expect(
+            detailLines({
+                languages: ['en', 'de'],
+                methods: ['tags', 'sitemap'],
+            }),
+        ).toEqual(['Languages: en, de', 'Methods: tags, sitemap']);
+
+        expect(
+            detailLines({ reason: 'return', notListed: 'https://acme.com/' }),
+        ).toEqual(['Not listed back: https://acme.com/']);
+
+        expect(
+            detailLines({
+                reason: 'differs',
+                listed: ['https://acme.com/', 'https://acme.de/'],
+                listedBack: ['https://acme.de/'],
+            }),
+        ).toEqual([
+            'This page lists: https://acme.com/, https://acme.de/',
+            'The alternate lists: https://acme.de/',
+        ]);
+    });
+
     it('spells out the counts of a nested record', () => {
         expect(
             detailLines({

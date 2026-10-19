@@ -1,5 +1,6 @@
 import type { Finding } from '@/features/audit/finding';
 import { heuristicChecks } from '@/features/audit/heuristic-checks';
+import { hreflangChecks } from '@/features/audit/hreflang-checks';
 import { httpsChecks } from '@/features/audit/https-checks';
 import { imageChecks } from '@/features/audit/image-checks';
 import { linkChecks } from '@/features/audit/link-checks';
@@ -41,7 +42,7 @@ export interface PageCheckContext {
 
 export type Observed = Pick<
     ReturnType<typeof observeRead>,
-    'row' | 'page' | 'directives'
+    'row' | 'page' | 'directives' | 'alternates'
 >;
 
 export function checkPage(
@@ -163,7 +164,7 @@ function temporaryFindings(
 function answerFindings(
     url: string,
     fetched: Fetched,
-    { row, page, directives }: Observed,
+    { row, page, directives, alternates }: Observed,
     context: PageCheckContext,
     secondReadMs: number | undefined,
 ): Finding[] {
@@ -234,23 +235,28 @@ function answerFindings(
 
     findings.push(...httpsChecks(url, fetched, page, context));
 
-    return page
-        ? [
-              ...findings,
-              ...canonicalFindings(url, fetched, page, locales),
-              ...contentFindings(url, page, isIndexable),
-              ...heuristicChecks(url, row, page, directives, context),
-              ...performanceChecks(url, fetched, page, secondReadMs),
-              ...(isIndexable
-                  ? [
-                        ...onPageChecks(url, page, fetched, now),
-                        ...imageChecks(url, page.images),
-                        ...linkChecks(url, page, context),
-                        ...viewportChecks(url, page),
-                    ]
-                  : []),
-          ]
-        : findings;
+    return [
+        ...findings,
+        ...(page
+            ? [
+                  ...canonicalFindings(url, fetched, page, locales),
+                  ...contentFindings(url, page, isIndexable),
+                  ...heuristicChecks(url, row, page, directives, context),
+                  ...performanceChecks(url, fetched, page, secondReadMs),
+                  ...(isIndexable
+                      ? [
+                            ...onPageChecks(url, page, fetched, now),
+                            ...imageChecks(url, page.images),
+                            ...linkChecks(url, page, context),
+                            ...viewportChecks(url, page),
+                        ]
+                      : []),
+              ]
+            : []),
+        ...(isIndexable && alternates
+            ? hreflangChecks(url, page, alternates)
+            : []),
+    ];
 }
 
 function canonicalFindings(

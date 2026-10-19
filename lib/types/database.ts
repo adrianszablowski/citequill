@@ -163,6 +163,7 @@ export type Database = {
             };
             audit_queue: {
                 Row: {
+                    alternates: Json | null;
                     audit_id: string;
                     depth: number | null;
                     in_sitemap: boolean;
@@ -172,6 +173,7 @@ export type Database = {
                     url: string;
                 };
                 Insert: {
+                    alternates?: Json | null;
                     audit_id: string;
                     depth?: number | null;
                     in_sitemap?: boolean;
@@ -181,6 +183,7 @@ export type Database = {
                     url: string;
                 };
                 Update: {
+                    alternates?: Json | null;
                     audit_id?: string;
                     depth?: number | null;
                     in_sitemap?: boolean;
@@ -779,6 +782,7 @@ export type Database = {
                     final_url: string | null;
                     first_seen_at: string;
                     hreflang: Json | null;
+                    hreflang_count: number;
                     id: string;
                     image_count: number;
                     in_sitemap: boolean;
@@ -807,6 +811,7 @@ export type Database = {
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
+                    hreflang_count?: number;
                     id?: string;
                     image_count?: number;
                     in_sitemap?: boolean;
@@ -835,6 +840,7 @@ export type Database = {
                     final_url?: string | null;
                     first_seen_at?: string;
                     hreflang?: Json | null;
+                    hreflang_count?: number;
                     id?: string;
                     image_count?: number;
                     in_sitemap?: boolean;

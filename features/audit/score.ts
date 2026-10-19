@@ -21,10 +21,11 @@ export type ScoredPage = Pick<
     | 'in_sitemap'
     | 'image_count'
     | 'external_link_count'
+    | 'hreflang_count'
 >;
 
 export const scoredPageColumns =
-    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count';
+    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count, hreflang_count';
 
 export type ScoredFinding = Pick<
     Tables<'audit_findings'>,
@@ -69,6 +70,10 @@ export const crossPageChecks = [
     'link-depth',
     'link-broken-internal',
     'link-to-redirect',
+    'sitemap-hreflang',
+    'hreflang-return',
+    'hreflang-target',
+    'hreflang-target-canonical',
 ] as const satisfies readonly CheckId[];
 
 export const probeChecks = [
@@ -351,6 +356,8 @@ const pageScopes = {
                 (page.image_count > 0 || sampled.has(page)),
         );
     },
+    hreflang: (pages: ScoredPage[]) =>
+        pages.filter((page) => page.is_indexable && page.hreflang_count > 0),
     'external-links': (pages: ScoredPage[]) =>
         pages.filter(
             (page) => page.is_indexable && page.external_link_count > 0,
@@ -417,6 +424,15 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'page-not-in-sitemap': 'self-canonical',
     'sitemap-url-error': 'listed',
     'sitemap-url-noncanonical': 'listed',
+    'sitemap-hreflang': 'hreflang',
+    'hreflang-return': 'hreflang',
+    'hreflang-code': 'hreflang',
+    'hreflang-target': 'hreflang',
+    'hreflang-target-canonical': 'hreflang',
+    'hreflang-http': 'hreflang',
+    'hreflang-x-default': 'hreflang',
+    'hreflang-methods': 'hreflang',
+    'hreflang-on-canonical': 'hreflang',
     'html-lang': 'indexable',
     'thin-page': 'indexable',
     'title-missing': 'indexable',

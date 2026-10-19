@@ -8,7 +8,11 @@ import {
 } from '@/features/audit/client';
 import { type Finding, findingRows } from '@/features/audit/finding';
 import { judgeMobile } from '@/features/audit/mobile-checks';
-import { observeRead, type Read } from '@/features/audit/observe';
+import {
+    observeRead,
+    type Read,
+    storedAlternates,
+} from '@/features/audit/observe';
 import { checkPage } from '@/features/audit/page-checks';
 import {
     assetWeightChecks,
@@ -164,10 +168,29 @@ export async function discoverSite(
         ...site.homes.map((url) => ({ url, depth: 0 })),
         ...sitemaps
             .flatMap((file) => file.sitemap.urls)
-            .flatMap(({ loc }) => {
+            .flatMap(({ loc, alternates }) => {
                 const url = linkTarget(loc, site.access.hosts);
 
-                return url ? [{ url, depth: null, inSitemap: true }] : [];
+                return url
+                    ? [
+                          {
+                              url,
+                              depth: null,
+                              inSitemap: true,
+                              ...(alternates.length > 0 && { alternates }),
+                          },
+                          ...alternates.flatMap(({ href }) => {
+                              const target = linkTarget(
+                                  href,
+                                  site.access.hosts,
+                              );
+
+                              return target && target !== url
+                                  ? [{ url: target, depth: null }]
+                                  : [];
+                          }),
+                      ]
+                    : [];
             }),
     ]);
 
@@ -788,7 +811,7 @@ export async function checkSite(
             supabase
                 .from('site_pages')
                 .select(
-                    `${scoredPageColumns}, body_hash, body_simhash, title, description, click_depth, inbound_links` as const,
+                    `${scoredPageColumns}, body_hash, body_simhash, title, description, click_depth, inbound_links, hreflang` as const,
                 )
                 .eq('last_audit_id', auditId)
                 .order('id')
@@ -818,6 +841,12 @@ export async function checkSite(
                 [...queue.values()].map((entry) => [
                     entry.url,
                     entry.linked_from,
+                ]),
+            ),
+            sitemapAlternates: new Map(
+                [...queue.values()].map((entry) => [
+                    entry.url,
+                    storedAlternates(entry.alternates),
                 ]),
             ),
         }),
@@ -976,7 +1005,9 @@ async function loadQueue(auditId: string) {
     const entries: QueueEntry[] = await all((from, to) =>
         supabase
             .from('audit_queue')
-            .select('url, depth, state, in_sitemap, inbound_links, linked_from')
+            .select(
+                'url, depth, state, in_sitemap, inbound_links, linked_from, alternates',
+            )
             .eq('audit_id', auditId)
             .order('url')
             .range(from, to),

@@ -37,6 +37,7 @@ function page(index: number, overrides: Partial<ScoredPage> = {}): ScoredPage {
         in_sitemap: true,
         image_count: 0,
         external_link_count: 0,
+        hreflang_count: 0,
         ...overrides,
     };
 }
@@ -489,6 +490,20 @@ describe('appliesTo', () => {
         ).toEqual(['page-1', 'page-3']);
     });
 
+    it('applies the hreflang checks to the indexable pages with alternates', () => {
+        expect(
+            appliesTo(
+                'hreflang-return',
+                [
+                    page(1, { hreflang_count: 2 }),
+                    page(2),
+                    page(3, { hreflang_count: 2, is_indexable: false }),
+                ],
+                [home],
+            ).map(({ id }) => id),
+        ).toEqual(['page-1']);
+    });
+
     it('applies a redirect check to the URLs that redirected and page-5xx to every URL read', () => {
         const sitePages = [
             page(0),
@@ -730,11 +745,25 @@ describe('checksInScope', () => {
         expect(checksInScope('site')).toContain('sitemap-missing');
         expect(checksInScope('site').every(isSiteCheck)).toBe(true);
     });
+
+    it('lists the nine hreflang checks for the hreflang scope', () => {
+        expect(checksInScope('hreflang')).toEqual([
+            'sitemap-hreflang',
+            'hreflang-return',
+            'hreflang-code',
+            'hreflang-target',
+            'hreflang-target-canonical',
+            'hreflang-http',
+            'hreflang-x-default',
+            'hreflang-methods',
+            'hreflang-on-canonical',
+        ]);
+    });
 });
 
 describe('shippedChecks', () => {
-    it('ships 124 checks, the HTTPS, viewport and performance checks and the phone comparison included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(124);
+    it('ships 133 checks, the HTTPS, viewport, performance and hreflang checks and the phone comparison included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(133);
     });
 
     it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {

@@ -1,5 +1,5 @@
 import { isGenericAnchor } from '@/features/audit/anchors';
-import { type Finding, findingsPerPage } from '@/features/audit/finding';
+import { cappedPerPage, type Finding } from '@/features/audit/finding';
 import type { Anchor, AuditPage } from '@/features/audit/page';
 import { isSiteUrl, withoutSlash } from '@/features/audit/queue';
 
@@ -91,20 +91,15 @@ function anchorFindings(
     url: string,
     anchors: Anchor[],
 ): Finding[] {
-    const distinct = new Map<string, Anchor>();
-
-    for (const anchor of anchors) {
-        distinct.set(`${anchor.href}\n${anchor.selector}`, anchor);
-    }
-
-    return [...distinct.values()].slice(0, findingsPerPage).map((anchor) => ({
-        check,
-        url,
-        subject: anchor.href,
-        selector: anchor.selector,
-        snippet: anchor.snippet,
-        detail: { total: distinct.size },
-    }));
+    return cappedPerPage(
+        anchors.map((anchor) => ({
+            check,
+            url,
+            subject: anchor.href,
+            selector: anchor.selector,
+            snippet: anchor.snippet,
+        })),
+    );
 }
 
 function linkCountFindings(url: string, anchors: Anchor[]): Finding[] {

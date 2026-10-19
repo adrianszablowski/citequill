@@ -182,9 +182,83 @@ describe('addToQueue', () => {
             in_sitemap: true,
             inbound_links: 2,
             linked_from: [home, deep],
+            alternates: null,
         });
 
         expect(touched).toEqual(['https://acme.com/a', 'https://acme.com/b']);
+    });
+
+    it('keeps the click depth of a known URL when an hreflang alternate names it, and queues an unknown one with none, after every URL a click reaches', () => {
+        const seeded = addToQueue(new Map(), [
+            { url: 'https://acme.com/', depth: 0 },
+            { url: 'https://acme.com/a', depth: 1, inbound: 1, from: home },
+        ]).queue;
+
+        const { queue, touched } = addToQueue(seeded, [
+            { url: 'https://acme.com/a', depth: null },
+            { url: 'https://acme.de/', depth: null },
+        ]);
+
+        expect(queue.get('https://acme.com/a')).toMatchObject({
+            depth: 1,
+            inbound_links: 1,
+        });
+
+        expect(queue.get('https://acme.de/')).toMatchObject({
+            depth: null,
+            inbound_links: 0,
+            linked_from: [],
+        });
+
+        expect(touched).toEqual(['https://acme.de/']);
+
+        expect(nextBatch(queue).map((entry) => entry.url)).toEqual([
+            'https://acme.com/',
+        ]);
+    });
+
+    it('leaves a URL already read alone when an hreflang alternate names it', () => {
+        const queued = addToQueue(new Map(), [
+            { url: 'https://acme.com/a', depth: 1 },
+        ]).queue;
+
+        const read = new Map(queued);
+
+        read.set('https://acme.com/a', {
+            ...read.get('https://acme.com/a')!,
+            state: 'read',
+        });
+
+        const { queue, touched } = addToQueue(read, [
+            { url: 'https://acme.com/a', depth: null },
+        ]);
+
+        expect(queue.get('https://acme.com/a')).toEqual(
+            read.get('https://acme.com/a'),
+        );
+
+        expect(touched).toEqual([]);
+    });
+
+    it('keeps the first hreflang set a sitemap gives a URL, and none when no entry has one', () => {
+        const first = [{ lang: 'de', href: 'https://acme.de/' }];
+        const second = [{ lang: 'fr', href: 'https://acme.com/fr' }];
+
+        const seeded = addToQueue(new Map(), [
+            { url: 'https://acme.de/', depth: null },
+            { url: 'https://acme.com/', depth: 0 },
+        ]).queue;
+
+        const { queue, touched } = addToQueue(seeded, [
+            { url: 'https://acme.de/', depth: null, alternates: first },
+            { url: 'https://acme.de/', depth: null, alternates: second },
+            { url: 'https://acme.com/fr', depth: null, alternates: second },
+        ]);
+
+        expect(queue.get('https://acme.de/')?.alternates).toEqual(first);
+        expect(queue.get('https://acme.com/fr')?.alternates).toEqual(second);
+        expect(queue.get('https://acme.com/')?.alternates).toBeNull();
+        expect(touched).toEqual(['https://acme.de/', 'https://acme.com/fr']);
     });
 
     it(`keeps the first ${linkedFromCap} pages linking to a URL, each once, and counts them all`, () => {
@@ -244,6 +318,7 @@ describe('addToQueue', () => {
                     in_sitemap: false,
                     inbound_links: 0,
                     linked_from: [],
+                    alternates: null,
                 },
             ]),
         );
