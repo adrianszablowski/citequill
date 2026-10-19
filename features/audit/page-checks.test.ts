@@ -19,6 +19,7 @@ const context: PageCheckContext = {
     locales,
     hosts,
     homes: ['https://acme.com/'],
+    projectName: 'Acme',
     previousRedirects: new Map(),
     now: Date.parse('2026-10-17T12:00:00Z'),
 };
@@ -590,6 +591,34 @@ describe('checkPage', () => {
                 }),
             ),
         ).toEqual(['hreflang-code']);
+    });
+});
+
+describe('checkPage, for structured data', () => {
+    it('runs the structured data checks on an indexable page only, with the project name for a self review', () => {
+        const page = (head = '') =>
+            fetched(
+                html(
+                    `${head}<script type="application/ld+json">{"@context":"https://schema.org","@type":"LocalBusiness","name":"Pricing","address":"Main St 1","aggregateRating":{"@type":"AggregateRating","ratingValue":5,"ratingCount":9}}</script>`,
+                ),
+            );
+
+        expect(checks(page(), { projectName: 'Pricing' })).toEqual([
+            'jsonld-self-review',
+            'jsonld-recommended-missing',
+        ]);
+
+        expect(checks(page())).toEqual(['jsonld-recommended-missing']);
+
+        expect(checks(page('<meta name="robots" content="noindex">'))).toEqual(
+            [],
+        );
+    });
+
+    it('hints at JSON-LD on an indexable page with microdata and no JSON-LD block', () => {
+        expect(
+            checks(fetched(html('', `<main itemscope>${words}</main>`))),
+        ).toEqual(['structured-data-format']);
     });
 });
 

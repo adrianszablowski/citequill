@@ -19,29 +19,29 @@ Every response has `ETag` and `Cache-Control: public, s-maxage=60, stale-while-r
 
 ## Page object
 
-| Field                      | Content                                                                                                                    |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | identifier                                                                                                                 |
-| `kind`                     | name of the kind from the project                                                                                          |
-| `locale`                   | locale                                                                                                                     |
-| `slug`                     | last segment of the URL                                                                                                    |
-| `path`                     | full path on the customer's site, from the locale's base URL                                                               |
-| `url`                      | full URL                                                                                                                   |
-| `translations`             | list of `{ locale, slug, url }` of other language versions, for hreflang                                                   |
-| `title`                    | H1                                                                                                                         |
-| `metaTitle`                | `<title>`                                                                                                                  |
-| `metaDescription`          | meta description                                                                                                           |
-| `canonical`                | the same as `url`                                                                                                          |
-| `excerpt`                  | one paragraph for lists and Open Graph                                                                                     |
-| `body`                     | `{ markdown, html }`, both from the same source                                                                            |
-| `faq`                      | list of `{ question, answer }`                                                                                             |
-| `author`                   | `{ name, title, url }`                                                                                                     |
-| `publishedAt`, `updatedAt` | ISO 8601                                                                                                                   |
-| `readingMinutes`           | number                                                                                                                     |
-| `tags`                     | list                                                                                                                       |
-| `sources`                  | list of `{ title, url }` from the research                                                                                 |
-| `related`                  | list of `{ title, url }` of Citequill pages in this locale, for internal linking                                           |
-| `jsonLd`                   | ready JSON-LD: `Article`, `FAQPage` when there is a FAQ, `BreadcrumbList`; author and organisation from the project fields |
+| Field                      | Content                                                                                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | identifier                                                                                                                                                             |
+| `kind`                     | name of the kind from the project                                                                                                                                      |
+| `locale`                   | locale                                                                                                                                                                 |
+| `slug`                     | last segment of the URL                                                                                                                                                |
+| `path`                     | full path on the customer's site, from the locale's base URL                                                                                                           |
+| `url`                      | full URL                                                                                                                                                               |
+| `translations`             | list of `{ locale, slug, url }` of other language versions, for hreflang                                                                                               |
+| `title`                    | H1                                                                                                                                                                     |
+| `metaTitle`                | `<title>`                                                                                                                                                              |
+| `metaDescription`          | meta description                                                                                                                                                       |
+| `canonical`                | the same as `url`                                                                                                                                                      |
+| `excerpt`                  | one paragraph for lists and Open Graph                                                                                                                                 |
+| `body`                     | `{ markdown, html }`, both from the same source                                                                                                                        |
+| `faq`                      | list of `{ question, answer }`                                                                                                                                         |
+| `author`                   | `{ name, title, url }`                                                                                                                                                 |
+| `publishedAt`, `updatedAt` | ISO 8601                                                                                                                                                               |
+| `readingMinutes`           | number                                                                                                                                                                 |
+| `tags`                     | list                                                                                                                                                                   |
+| `sources`                  | list of `{ title, url }` from the research                                                                                                                             |
+| `related`                  | list of `{ title, url }` of Citequill pages in this locale, for internal linking                                                                                       |
+| `jsonLd`                   | ready JSON-LD: `Article` and `BreadcrumbList`, author and organisation from the project fields; no `FAQPage`, because Google stopped showing FAQ results on 7 May 2026 |
 
 The customer inserts `body.html` or renders `body.markdown`, renders `faq` and `sources` after it where the template wants them, because the body holds neither, puts `jsonLd` in `<script type="application/ld+json">` and builds `<link rel="alternate" hreflang>` from `translations`. They do not have to compute anything themselves.
 

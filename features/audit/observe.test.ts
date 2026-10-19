@@ -322,6 +322,63 @@ describe('observeRead, for hreflang', () => {
     });
 });
 
+describe('observeRead, for structured data', () => {
+    const url = 'https://acme.com/shop';
+
+    const read = (body: string) =>
+        observe({
+            entry: entry(url),
+            outcome: { ...page(url, []), body },
+        }).row;
+
+    it('counts every JSON-LD block that is not blank, one that does not parse included, so a page whose only block is broken is in the scope of the structured data checks', () => {
+        expect(
+            read(
+                '<script type="application/ld+json">{"@type": "Product",}</script>',
+            ),
+        ).toMatchObject({ jsonld_count: 1, has_microdata: false });
+
+        expect(
+            read(
+                '<script type="application/ld+json">{}</script><script type="application/ld+json">[</script>',
+            ).jsonld_count,
+        ).toBe(2);
+
+        expect(
+            read(
+                '<script type="application/ld+json"> \n </script><script type="application/ld+json"></script>',
+            ).jsonld_count,
+        ).toBe(0);
+    });
+
+    it('queues the JSON-LD images of an indexable page only', () => {
+        const images = (head: string) =>
+            observe({
+                entry: entry(url),
+                outcome: {
+                    ...page(url, []),
+                    body: `<html><head>${head}</head><body><script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","image":"/hero.png"}</script></body></html>`,
+                },
+            }).resources.map(({ kind, url }) => [kind, url]);
+
+        expect(images('')).toEqual([
+            ['jsonld_image', 'https://acme.com/hero.png'],
+        ]);
+
+        expect(images('<meta name="robots" content="noindex">')).toEqual([]);
+    });
+
+    it('records microdata or RDFa, and nothing for a page it could not read', () => {
+        expect(
+            read('<div itemscope itemtype="https://schema.org/Product"></div>'),
+        ).toMatchObject({ jsonld_count: 0, has_microdata: true });
+
+        expect(
+            observe({ entry: entry(url), outcome: new Error('timeout') }).row,
+        ).toMatchObject({ jsonld_count: 0, has_microdata: false });
+    });
+});
+
 describe('headerAlternates', () => {
     it("reads Google's example header, each code as written, each URL absolute", () => {
         expect(

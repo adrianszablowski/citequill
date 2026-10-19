@@ -781,6 +781,7 @@ export type Database = {
                     external_link_count: number;
                     final_url: string | null;
                     first_seen_at: string;
+                    has_microdata: boolean;
                     hreflang: Json | null;
                     hreflang_count: number;
                     id: string;
@@ -790,6 +791,7 @@ export type Database = {
                     is_blocked: boolean;
                     is_gone: boolean;
                     is_indexable: boolean;
+                    jsonld_count: number;
                     last_audit_id: string | null;
                     last_seen_at: string;
                     locale: string | null;
@@ -810,6 +812,7 @@ export type Database = {
                     external_link_count?: number;
                     final_url?: string | null;
                     first_seen_at?: string;
+                    has_microdata?: boolean;
                     hreflang?: Json | null;
                     hreflang_count?: number;
                     id?: string;
@@ -819,6 +822,7 @@ export type Database = {
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;
+                    jsonld_count?: number;
                     last_audit_id?: string | null;
                     last_seen_at?: string;
                     locale?: string | null;
@@ -839,6 +843,7 @@ export type Database = {
                     external_link_count?: number;
                     final_url?: string | null;
                     first_seen_at?: string;
+                    has_microdata?: boolean;
                     hreflang?: Json | null;
                     hreflang_count?: number;
                     id?: string;
@@ -848,6 +853,7 @@ export type Database = {
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;
+                    jsonld_count?: number;
                     last_audit_id?: string | null;
                     last_seen_at?: string;
                     locale?: string | null;
@@ -1001,7 +1007,8 @@ export type Database = {
         };
         Enums: {
             audit_queue_state: 'queued' | 'read' | 'blocked';
-            audit_resource_kind: 'image' | 'og_image' | 'asset' | 'external';
+            audit_resource_kind:
+                'image' | 'og_image' | 'jsonld_image' | 'asset' | 'external';
             audit_resource_state: 'queued' | 'checked';
             page_status: 'draft' | 'published' | 'unpublished';
             run_status: 'running' | 'finished' | 'failed';
@@ -1137,7 +1144,13 @@ export const Constants = {
     public: {
         Enums: {
             audit_queue_state: ['queued', 'read', 'blocked'],
-            audit_resource_kind: ['image', 'og_image', 'asset', 'external'],
+            audit_resource_kind: [
+                'image',
+                'og_image',
+                'jsonld_image',
+                'asset',
+                'external',
+            ],
             audit_resource_state: ['queued', 'checked'],
             page_status: ['draft', 'published', 'unpublished'],
             run_status: ['running', 'finished', 'failed'],

@@ -109,6 +109,8 @@ export function observeRead(
               ]) as unknown as Json)
             : null,
         hreflang_count: alternates ? alternateCount(alternates) : 0,
+        jsonld_count: page?.jsonLd.length ?? 0,
+        has_microdata: page?.hasMicrodata ?? false,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,
         page_id: pageIds.get(withoutSlash(entry.url)) ?? null,
@@ -150,7 +152,15 @@ export function observeRead(
         page,
         directives,
         alternates,
-        resources: page ? pageResources(entry.url, page, hosts, domain) : [],
+        resources: page
+            ? pageResources(
+                  entry.url,
+                  page,
+                  hosts,
+                  domain,
+                  observation.is_indexable,
+              )
+            : [],
         candidates: [
             ...links,
             ...(landing && landing !== entry.url

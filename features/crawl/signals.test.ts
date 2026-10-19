@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
     footerChars,
+    jsonLdBlocks,
     jsonLdChars,
+    jsonLdNodes,
     readSignals,
 } from '@/features/crawl/signals';
 
@@ -97,5 +99,34 @@ describe('readSignals', () => {
             socialLinks: [],
             footer: '',
         });
+    });
+});
+
+describe('jsonLdBlocks', () => {
+    it('gives every JSON-LD script with its element and either its value or the reason it does not parse', () => {
+        const blocks = jsonLdBlocks(cheerio.load(html));
+
+        expect(blocks).toHaveLength(2);
+        expect(blocks[0]).toMatchObject({ error: null });
+        expect(blocks[0].value).toHaveProperty('@graph');
+        expect(blocks[1]).toMatchObject({ value: null });
+        expect(blocks[1].error).toEqual(expect.any(String));
+
+        expect(blocks.map(({ element }) => element.name)).toEqual([
+            'script',
+            'script',
+        ]);
+    });
+
+    it('holds no blank block, and leaves the crawl’s nodes as they were', () => {
+        const $ = cheerio.load(
+            html.replace(
+                '</head>',
+                '<script type="application/ld+json">\n  </script></head>',
+            ),
+        );
+
+        expect(jsonLdBlocks($)).toHaveLength(2);
+        expect(jsonLdNodes($)).toEqual(jsonLdNodes(cheerio.load(html)));
     });
 });

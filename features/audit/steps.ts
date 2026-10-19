@@ -327,6 +327,7 @@ export async function readPages(
         locales: site.locales,
         hosts: site.access.hosts,
         homes: site.homes,
+        projectName: site.name,
         previousRedirects: new Map(
             previous.flatMap(({ url, redirect_to }) =>
                 redirect_to ? [[url, redirect_to] as const] : [],
@@ -431,7 +432,8 @@ export async function checkResources(
                 .eq('audit_id', auditId)
                 .eq('state', 'queued')
                 // Postgres orders an enum by its declaration order, image,
-                // og_image, asset, external in the migration: images first.
+                // og_image, jsonld_image, asset, external in the migrations:
+                // images first.
                 .order('kind')
                 .order('url')
                 .limit(batchSize),
@@ -811,7 +813,7 @@ export async function checkSite(
             supabase
                 .from('site_pages')
                 .select(
-                    `${scoredPageColumns}, body_hash, body_simhash, title, description, click_depth, inbound_links, hreflang` as const,
+                    `${scoredPageColumns}, body_hash, body_simhash, title, description, click_depth, inbound_links, hreflang, has_microdata` as const,
                 )
                 .eq('last_audit_id', auditId)
                 .order('id')
@@ -971,7 +973,7 @@ async function loadSite(projectId: string) {
         one(
             supabase
                 .from('projects')
-                .select('domain, obey_robots, bot_secret')
+                .select('name, domain, obey_robots, bot_secret')
                 .eq('id', projectId)
                 .single(),
         ),
@@ -987,6 +989,7 @@ async function loadSite(projectId: string) {
     const baseUrls = siteBaseUrls(project.domain, locales);
 
     return {
+        name: project.name,
         domain: project.domain,
         locales,
         obeyRobots: project.obey_robots,

@@ -22,10 +22,11 @@ export type ScoredPage = Pick<
     | 'image_count'
     | 'external_link_count'
     | 'hreflang_count'
+    | 'jsonld_count'
 >;
 
 export const scoredPageColumns =
-    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count, hreflang_count';
+    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count, hreflang_count, jsonld_count';
 
 export type ScoredFinding = Pick<
     Tables<'audit_findings'>,
@@ -89,6 +90,7 @@ export const resourceChecks = [
     'resource-broken',
     'img-heavy',
     'assets-uncached',
+    'jsonld-image-unreachable',
 ] as const satisfies readonly CheckId[];
 
 export function scoreAudit({ checks, pages, findings, marks, homes }: Audited) {
@@ -358,6 +360,8 @@ const pageScopes = {
     },
     hreflang: (pages: ScoredPage[]) =>
         pages.filter((page) => page.is_indexable && page.hreflang_count > 0),
+    jsonld: (pages: ScoredPage[]) =>
+        pages.filter((page) => page.is_indexable && page.jsonld_count > 0),
     'external-links': (pages: ScoredPage[]) =>
         pages.filter(
             (page) => page.is_indexable && page.external_link_count > 0,
@@ -471,6 +475,19 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'img-no-dimensions': 'images',
     'img-filename-generic': 'images',
     'img-heavy': 'images',
+    'jsonld-invalid': 'jsonld',
+    'jsonld-unknown-type': 'jsonld',
+    'jsonld-dropped-feature': 'jsonld',
+    'jsonld-required-missing': 'jsonld',
+    'jsonld-recommended-missing': 'jsonld',
+    'jsonld-mismatch': 'jsonld',
+    'jsonld-self-review': 'jsonld',
+    'jsonld-image-unreachable': 'jsonld',
+    'jsonld-image-small': 'jsonld',
+    'jsonld-logo-small': 'jsonld',
+    'merchant-price-zero': 'jsonld',
+    'breadcrumb-short': 'jsonld',
+    'structured-data-format': 'indexable',
     'og-image-bad': 'indexable',
     'link-broken-internal': 'indexable',
     'link-broken-external': 'external-links',

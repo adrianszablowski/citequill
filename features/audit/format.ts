@@ -193,4 +193,13 @@ const detailLabels: Record<string, string> = {
     ms: 'Time (ms)',
     region: 'Region',
     files: 'Files',
+    type: 'Type',
+    types: 'Types',
+    guides: 'Google’s guides',
+    notInText: 'Not in the text',
+    properties: 'Properties',
+    declaredWidth: 'Declared width (px)',
+    declaredHeight: 'Declared height (px)',
+    price: 'Price',
+    items: 'Items',
 };

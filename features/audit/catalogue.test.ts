@@ -8,8 +8,8 @@ import {
 } from '@/features/audit/catalogue';
 
 describe('catalogue', () => {
-    it('scores 116 checks, as the score header counts them', () => {
-        expect(scoredChecks).toHaveLength(116);
+    it('scores 115 checks, as the score header counts them', () => {
+        expect(scoredChecks).toHaveLength(115);
     });
 
     it('gates the score on the nine checks the Severity section names, every one of severity 3', () => {
@@ -38,17 +38,17 @@ describe('catalogue', () => {
         expect(new Set(ids).size).toBe(ids.length);
     });
 
-    it('holds the 57 rows of the On-page table, hints included', () => {
+    it('holds the 56 rows of the On-page table, hints included', () => {
         expect(
             catalogue.filter((check) => check.area === 'on-page'),
-        ).toHaveLength(57);
+        ).toHaveLength(56);
 
         expect(checkOf('title-rendered-only')).toMatchObject({
             severity: 'hint',
             needs: 'rendered',
         });
 
-        expect(checkOf('structured-data-format').needs).toBe('slice-6');
+        expect(checkOf('structured-data-format').needs).toBe('raw');
         expect(checkOf('og-missing').needs).toBe('raw');
     });
 
@@ -117,7 +117,11 @@ describe('catalogue', () => {
         });
 
         expect(checkOf('mobile-content-differs').needs).toBe('sample');
-        expect(checkOf('jsonld-mismatch').needs).toBe('slice-6');
+
+        expect(checkOf('jsonld-mismatch')).toMatchObject({
+            severity: '2',
+            needs: 'raw',
+        });
 
         expect(checkOf('page-5xx')).toMatchObject({
             isGate: true,

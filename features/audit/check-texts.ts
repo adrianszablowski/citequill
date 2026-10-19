@@ -4,6 +4,10 @@ import {
     checkOf,
     type Severity,
 } from '@/features/audit/catalogue';
+import {
+    googleDevelopers as google,
+    richResultUrl,
+} from '@/features/audit/rich-results';
 
 export interface CheckText {
     name: string;
@@ -44,8 +48,6 @@ export function checkText(id: CheckId) {
         : text;
 }
 
-const google = 'https://developers.google.com';
-
 const links = {
     robotsIntro: `${google}/search/docs/crawling-indexing/robots/intro`,
     robotsSpec: `${google}/crawling/docs/robots-txt/robots-txt-spec`,
@@ -81,6 +83,9 @@ const links = {
     pageExperience: `${google}/search/docs/appearance/page-experience`,
     httpsSignal: `${google}/search/blog/2014/08/https-as-ranking-signal`,
     mobileFirst: `${google}/search/docs/crawling-indexing/mobile/mobile-sites-mobile-first-indexing`,
+    structuredData: `${google}/search/docs/appearance/structured-data/intro-structured-data`,
+    structuredDataPolicies: `${google}/search/docs/appearance/structured-data/sd-policies`,
+    searchUpdates: `${google}/search/updates`,
     protocol: 'https://www.sitemaps.org/protocol.html',
 };
 
@@ -582,6 +587,84 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Google recommends hyphens rather than underscores between words and as few parameters as you can, and treats URLs as case sensitive.',
         link: links.urlStructure,
         fix: 'Use lowercase words joined by hyphens, one slash between segments and only the parameters that change the content; most tools also advise under 115 characters. Redirect the old URL with a 301 when you change it.',
+    },
+    'jsonld-invalid': {
+        name: 'A JSON-LD block cannot be read',
+        says: 'Google reads structured data written in the schema.org vocabulary, so a block that is not valid JSON, or does not name schema.org in its @context, earns no rich result.',
+        link: links.structuredData,
+        fix: 'Fix the JSON the finding’s error names, such as a trailing comma or an unescaped quote, and set "@context": "https://schema.org" on the object that holds the items.',
+    },
+    'jsonld-unknown-type': {
+        name: 'A JSON-LD type is not in schema.org',
+        says: 'Google asks for the most specific type and property names schema.org defines, and ignores a type it does not know.',
+        link: links.structuredDataPolicies,
+        fix: 'Correct the spelling of the type the finding names, such as Product rather than Prodcut, or replace it with the schema.org type that fits.',
+    },
+    'jsonld-dropped-feature': {
+        name: 'Markup for a result Google has dropped or is phasing out',
+        says: 'Google no longer shows how-to, FAQ and special announcement results, so their markup causes no error and earns no result. Google is also phasing out support for ClaimReview markup in Search.',
+        link: links.searchUpdates,
+        fix: 'Remove the markup if nothing else reads it. Keep the questions, steps or announcement on the page as text.',
+    },
+    'jsonld-required-missing': {
+        name: 'The markup lacks a property Google requires',
+        says: 'Items that are missing required properties are not eligible for rich results.',
+        link: links.structuredDataPolicies,
+        fix: 'Add the properties the finding lists, with values the page shows. The finding links Google’s page for each type of the item.',
+    },
+    'jsonld-recommended-missing': {
+        name: 'The markup lacks a property Google recommends',
+        says: 'Google says the more recommended properties you provide, the higher quality the result is to users.',
+        link: links.structuredDataPolicies,
+        fix: 'Add the properties the finding lists when the page has the information, and leave out what it does not show.',
+    },
+    'jsonld-mismatch': {
+        name: 'The markup names something the page does not show',
+        says: 'Structured data must be a true representation of the page and mark up only content readers can see; a manual action takes away the page’s rich results, not its ranking.',
+        link: links.structuredDataPolicies,
+        fix: 'Make the headline, name or price in the markup match the text on the page. A price a script writes after the page loads counts as missing, because the audit reads the HTML the server sends.',
+    },
+    'jsonld-self-review': {
+        name: 'The site marks up reviews of itself',
+        says: 'When a business controls the reviews about itself, its pages with LocalBusiness or any other Organization markup are ineligible for review stars.',
+        link: richResultUrl('review-snippet'),
+        fix: 'Remove aggregateRating and review from the markup of your own organization or business. The reviews can stay on the page as text.',
+    },
+    'jsonld-image-unreachable': {
+        name: 'An image in the markup does not load',
+        says: 'Every image URL in structured data must be crawlable and indexable.',
+        link: links.structuredDataPolicies,
+        fix: 'Point the image, logo or thumbnailUrl at a file that answers 200, or restore the file. The finding names the pages the audit saw using it.',
+    },
+    'jsonld-image-small': {
+        name: 'An article image in the markup is small',
+        says: 'Google asks for article images of at least 50 000 pixels, width multiplied by height.',
+        link: richResultUrl('article'),
+        fix: 'Give the article an image of at least 50 000 pixels in a 16x9, 4x3 or 1x1 ratio, and declare its real width and height.',
+    },
+    'jsonld-logo-small': {
+        name: 'The logo in the markup is small',
+        says: 'Google asks for an organization logo of at least 112 by 112 pixels.',
+        link: richResultUrl('organization'),
+        fix: 'Use a logo of at least 112 by 112 pixels that looks right on a white background, and declare its real width and height.',
+    },
+    'merchant-price-zero': {
+        name: 'A product for sale lacks an Offer priced above zero',
+        says: 'A merchant listing needs an Offer with a price greater than zero. Google accepts an AggregateOffer in a product snippet only.',
+        link: richResultUrl('merchant-listing'),
+        fix: 'The common cause is a variable product written as one AggregateOffer, as WooCommerce does. Write a ProductGroup with its variants, or an Offer for each variant, each with its price above zero and its currency.',
+    },
+    'breadcrumb-short': {
+        name: 'A breadcrumb trail has fewer than two items',
+        says: 'Google asks for a BreadcrumbList that contains at least two ListItems.',
+        link: richResultUrl('breadcrumb'),
+        fix: 'List the trail from the home page to this page, with a position, a name and a URL for each item.',
+    },
+    'structured-data-format': {
+        name: 'Structured data in microdata or RDFa, or none on the site',
+        says: 'Google reads JSON-LD, microdata and RDFa, and recommends JSON-LD as the easiest to set up and maintain.',
+        link: links.structuredData,
+        fix: 'Move the markup into a JSON-LD block. On a site with none, start with Organization on the home page and the type that fits each kind of page.',
     },
     'og-missing': {
         name: 'A page lacks Open Graph tags',

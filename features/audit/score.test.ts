@@ -38,6 +38,7 @@ function page(index: number, overrides: Partial<ScoredPage> = {}): ScoredPage {
         image_count: 0,
         external_link_count: 0,
         hreflang_count: 0,
+        jsonld_count: 0,
         ...overrides,
     };
 }
@@ -93,7 +94,7 @@ describe('scoreAudit', () => {
             score: 100,
             is_gated: false,
             checks_scored: 2,
-            checks_total: 116,
+            checks_total: 115,
             severity_3: 0,
             intended: [],
             results: [
@@ -504,6 +505,29 @@ describe('appliesTo', () => {
         ).toEqual(['page-1']);
     });
 
+    it('applies the structured data checks to the indexable pages with a JSON-LD block, parsed or not, and structured-data-format to every indexable page', () => {
+        const sitePages = [
+            page(1, { jsonld_count: 1 }),
+            page(2),
+            page(3, { jsonld_count: 2, is_indexable: false }),
+        ];
+
+        for (const check of [
+            'jsonld-invalid',
+            'jsonld-image-unreachable',
+        ] as const) {
+            expect(
+                appliesTo(check, sitePages, [home]).map(({ id }) => id),
+            ).toEqual(['page-1']);
+        }
+
+        expect(
+            appliesTo('structured-data-format', sitePages, [home]).map(
+                ({ id }) => id,
+            ),
+        ).toEqual(['page-1', 'page-2']);
+    });
+
     it('applies a redirect check to the URLs that redirected and page-5xx to every URL read', () => {
         const sitePages = [
             page(0),
@@ -650,8 +674,6 @@ describe('the on-page checks', () => {
             'link-scripted',
             'link-rendered-only',
             'title-rendered-only',
-            'jsonld-invalid',
-            'structured-data-format',
         ] as const) {
             expect(complete).not.toContain(check);
         }
@@ -746,6 +768,25 @@ describe('checksInScope', () => {
         expect(checksInScope('site').every(isSiteCheck)).toBe(true);
     });
 
+    it('lists the twelve structured data checks for the jsonld scope, structured-data-format left to the indexable pages', () => {
+        expect(checksInScope('jsonld')).toEqual([
+            'jsonld-invalid',
+            'jsonld-unknown-type',
+            'jsonld-dropped-feature',
+            'jsonld-required-missing',
+            'jsonld-recommended-missing',
+            'jsonld-mismatch',
+            'jsonld-self-review',
+            'jsonld-image-unreachable',
+            'jsonld-image-small',
+            'jsonld-logo-small',
+            'merchant-price-zero',
+            'breadcrumb-short',
+        ]);
+
+        expect(checksInScope('indexable')).toContain('structured-data-format');
+    });
+
     it('lists the nine hreflang checks for the hreflang scope', () => {
         expect(checksInScope('hreflang')).toEqual([
             'sitemap-hreflang',
@@ -762,8 +803,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 133 checks, the HTTPS, viewport, performance and hreflang checks and the phone comparison included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(133);
+    it('ships 146 checks, the HTTPS, viewport, performance, hreflang and structured data checks and the phone comparison included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(146);
     });
 
     it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {
@@ -795,6 +836,8 @@ describe('shippedChecks', () => {
         }
 
         expect(stopped).toContain('og-image-bad');
+        expect(stopped).not.toContain('jsonld-image-unreachable');
+        expect(stopped).toContain('jsonld-invalid');
         expect(stopped).toContain('anchor-generic');
     });
 

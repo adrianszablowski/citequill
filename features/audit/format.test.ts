@@ -157,6 +157,62 @@ describe('detailLines', () => {
         ]);
     });
 
+    it('shows a structured data finding by its missing properties and guides, each mismatched field with its value, its declared sizes and its count, and leaves the reason out', () => {
+        expect(
+            detailLines({
+                missing: ['offers', 'brand.name'],
+                guides: [
+                    'https://developers.google.com/search/docs/appearance/structured-data/merchant-listing',
+                ],
+            }),
+        ).toEqual([
+            'Missing: offers, brand.name',
+            'Google’s guides: https://developers.google.com/search/docs/appearance/structured-data/merchant-listing',
+        ]);
+
+        expect(
+            detailLines({
+                notInText: { name: 'Air Max 90 – Black', price: '1299.00' },
+            }),
+        ).toEqual(['Not in the text: name Air Max 90 – Black, price 1299.00']);
+
+        expect(
+            detailLines({ reason: 'parse', error: 'Unexpected token' }),
+        ).toEqual(['Error: Unexpected token']);
+
+        expect(
+            detailLines({
+                reason: 'context',
+                error: 'The block names no schema.org @context.',
+            }),
+        ).toEqual(['Error: The block names no schema.org @context.']);
+
+        expect(detailLines({ types: ['Prodcut'] })).toEqual(['Types: Prodcut']);
+        expect(detailLines({ type: 'FAQPage' })).toEqual(['Type: FAQPage']);
+
+        expect(
+            detailLines({ declaredWidth: 200, declaredHeight: null }),
+        ).toEqual(['Declared width (px): 200']);
+
+        expect(detailLines({ properties: ['aggregateRating'] })).toEqual([
+            'Properties: aggregateRating',
+        ]);
+
+        expect(detailLines({ price: 0 })).toEqual(['Price: 0']);
+        expect(detailLines({ items: 1 })).toEqual(['Items: 1']);
+    });
+
+    it('leaves out the attributes an image finding records, whose width may be a percentage', () => {
+        expect(
+            detailLines({
+                alt: 'absent',
+                ancestor: null,
+                width: '100%',
+                height: '50',
+            }),
+        ).toEqual([]);
+    });
+
     it('spells out the counts of a nested record', () => {
         expect(
             detailLines({

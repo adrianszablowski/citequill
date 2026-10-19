@@ -14,7 +14,8 @@
         "verify": "pnpm type-check && pnpm lint && pnpm format:check && pnpm test",
         "verify:deep": "pnpm verify && pnpm build",
         "lint:fix": "eslint . --max-warnings 0 --fix && prettier --write .",
-        "db:types": "supabase gen types typescript --linked --schema public > lib/types/database.ts && prettier --write lib/types/database.ts"
+        "db:types": "supabase gen types typescript --linked --schema public > lib/types/database.ts && prettier --write lib/types/database.ts",
+        "schema:types": "node scripts/schema-org-types.mjs"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.135.0",

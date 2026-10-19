@@ -1,6 +1,6 @@
 export type Severity = '3' | '2' | '1' | 'hint' | 'question';
 
-export type Need = 'raw' | 'rendered' | 'sample' | 'slice-6';
+export type Need = 'raw' | 'rendered' | 'sample';
 
 export type Area = keyof typeof areaWeights;
 
@@ -141,20 +141,19 @@ const rows = {
         ['img-heavy', 'hint'],
         ['img-oversized', 'hint', 'rendered'],
         ['img-filename-generic', 'hint'],
-        ['jsonld-invalid', '2', 'slice-6'],
-        ['jsonld-unknown-type', '2', 'slice-6'],
-        ['jsonld-dropped-feature', 'hint', 'slice-6'],
-        ['jsonld-required-missing', '2', 'slice-6'],
-        ['jsonld-recommended-missing', 'hint', 'slice-6'],
-        ['jsonld-mismatch', '3', 'slice-6'],
-        ['jsonld-self-review', '3', 'slice-6'],
-        ['jsonld-image-unreachable', '2', 'slice-6'],
-        ['jsonld-image-small', 'hint', 'slice-6'],
-        ['jsonld-logo-small', 'hint', 'slice-6'],
-        ['jobposting-expired', '3', 'slice-6'],
-        ['merchant-price-zero', '3', 'slice-6'],
-        ['breadcrumb-short', '2', 'slice-6'],
-        ['structured-data-format', 'hint', 'slice-6'],
+        ['jsonld-invalid', '2'],
+        ['jsonld-unknown-type', '2'],
+        ['jsonld-dropped-feature', 'hint'],
+        ['jsonld-required-missing', '2'],
+        ['jsonld-recommended-missing', 'hint'],
+        ['jsonld-mismatch', '2'],
+        ['jsonld-self-review', '2'],
+        ['jsonld-image-unreachable', '2'],
+        ['jsonld-image-small', 'hint'],
+        ['jsonld-logo-small', 'hint'],
+        ['merchant-price-zero', '2'],
+        ['breadcrumb-short', '2'],
+        ['structured-data-format', 'hint'],
         ['og-missing', 'hint'],
         ['og-image-bad', 'hint'],
         ['twitter-card', 'hint'],

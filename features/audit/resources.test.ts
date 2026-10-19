@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { readAuditPage } from '@/features/audit/page';
 import { linkedFromCap, siteHosts } from '@/features/audit/queue';
 import {
     addResources,
@@ -23,6 +24,8 @@ import type { Fetched } from '@/features/crawl/fetch';
 const page = 'https://acme.com/a';
 
 const hosts = siteHosts('acme.com', ['https://acme.com']);
+
+const jsonLdHtml = `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Article","image":"/hero.png","publisher":{"@type":"Organization","logo":"https://img.other.com/logo.png"}}</script>`;
 
 const sample = new Set([page]);
 
@@ -90,12 +93,18 @@ function frontierOf(count: number, kind: Resource['kind']): Frontier {
 }
 
 describe('pageResources', () => {
-    it('lists the og:images, the internal images, the assets and the external links of a page once each, the first role winning', () => {
+    it('lists the JSON-LD images, the og:images, the internal images, the assets and the external links of a page once each, the first role winning', () => {
+        const { structuredData } = readAuditPage(jsonLdHtml, page);
+
         expect(
             pageResources(
                 page,
                 {
-                    ogImages: ['https://acme.com/hero.png'],
+                    structuredData,
+                    ogImages: [
+                        'https://acme.com/hero.png',
+                        'https://acme.com/og.png',
+                    ],
                     images: [
                         { tag: 'img', src: 'https://acme.com/hero.png' },
                         { tag: 'img', src: 'https://other.com/b.png' },
@@ -111,14 +120,37 @@ describe('pageResources', () => {
                 },
                 hosts,
                 'acme.com',
+                true,
             ).map(({ url, kind, from }) => [kind, url, from]),
         ).toEqual([
-            ['og_image', 'https://acme.com/hero.png', page],
+            ['jsonld_image', 'https://acme.com/hero.png', page],
+            ['jsonld_image', 'https://img.other.com/logo.png', page],
+            ['og_image', 'https://acme.com/og.png', page],
             ['image', 'https://cdn.acme.com/c.png', page],
             ['asset', 'https://cdn.other.com/app.js', page],
             ['external', 'https://other.com/x', page],
             ['external', 'https://blog.acme.com/y', page],
         ]);
+    });
+
+    it('lists no JSON-LD image of a page that is not indexable, the structured data checks’ scope', () => {
+        const { structuredData } = readAuditPage(jsonLdHtml, page);
+
+        expect(
+            pageResources(
+                page,
+                {
+                    structuredData,
+                    ogImages: ['https://acme.com/hero.png'],
+                    images: [],
+                    assets: [],
+                    anchors: [],
+                },
+                hosts,
+                'acme.com',
+                false,
+            ).map(({ url, kind }) => [kind, url]),
+        ).toEqual([['og_image', 'https://acme.com/hero.png']]);
     });
 });
 
@@ -399,7 +431,12 @@ describe('judgeResource', () => {
     });
 
     it("calls a 403 or 429 from a foreign host a refusal whatever the resource's kind, and one from the site's own host a fault", () => {
-        for (const kind of ['image', 'og_image', 'asset'] as const) {
+        for (const kind of [
+            'image',
+            'og_image',
+            'jsonld_image',
+            'asset',
+        ] as const) {
             expect(
                 judgeResource(row(kind), answer(403), true, sample).map(
                     ({ check }) => check,
@@ -497,6 +534,31 @@ describe('judgeResource', () => {
                 },
             },
         ]);
+    });
+
+    it('calls a JSON-LD image that is not 200 unreachable, on every page linking to it, a foreign one included, and never heavy', () => {
+        const pages = ['https://acme.com/a', 'https://acme.com/b'];
+
+        for (const status of [404, 500, 301, null]) {
+            expect(
+                judgeResource(
+                    row('jsonld_image', pages),
+                    answer(status),
+                    true,
+                    sample,
+                ).map(({ check, url, subject }) => [check, url, subject]),
+            ).toEqual(
+                pages.map((url) => [
+                    'jsonld-image-unreachable',
+                    url,
+                    'https://acme.com/r.png',
+                ]),
+            );
+        }
+
+        expect(
+            checks(row('jsonld_image'), answer(200, imgHeavyBytes * 9)),
+        ).toEqual([]);
     });
 
     it('puts one finding on each page recorded as linking to the resource', () => {

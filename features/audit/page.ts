@@ -1,12 +1,16 @@
 import { createHash } from 'node:crypto';
 
 import * as cheerio from 'cheerio';
-import type { Element } from 'domhandler';
+import { type AnyNode, type Element, hasChildren, isText } from 'domhandler';
 
 import { selectorOf } from '@/features/audit/finding';
 import { hidingStyle } from '@/features/audit/hidden';
 import { imagesOf, type PageImage } from '@/features/audit/images';
 import { simhash } from '@/features/audit/simhash';
+import {
+    type StructuredData,
+    structuredData,
+} from '@/features/audit/structured-data';
 import {
     absolute,
     type Alternate,
@@ -16,6 +20,7 @@ import {
     mainContent,
     robotsMetaOf,
 } from '@/features/crawl/html';
+import { jsonLdBlocks } from '@/features/crawl/signals';
 
 export interface CanonicalTag {
     href: string;
@@ -70,6 +75,11 @@ export interface ResourceRef extends PageElement {
     url: string | null;
 }
 
+export interface JsonLdBlock extends PageElement {
+    value: unknown;
+    error: string | null;
+}
+
 export interface PageForm extends PageElement {
     action: string | null;
     hasPassword: boolean;
@@ -87,6 +97,7 @@ export interface AuditPage {
     openGraph: string[];
     ogImages: string[];
     ogUrl: string | null;
+    siteName: string | null;
     modifiedTime: string | null;
     plugins: Plugin[];
     visibleText: string;
@@ -100,6 +111,9 @@ export interface AuditPage {
     refresh: string | null;
     alternateTags: AlternateTag[];
     alternates: Alternate[];
+    jsonLd: JsonLdBlock[];
+    structuredData: StructuredData;
+    hasMicrodata: boolean;
     anchors: Anchor[];
     links: string[];
     resources: ResourceRef[];
@@ -207,6 +221,12 @@ export function readAuditPage(html: string, url: string): AuditPage {
             ...entry,
         }));
 
+    const jsonLd = jsonLdBlocks($).map(({ element, value, error }) => ({
+        ...located(element),
+        value,
+        error,
+    }));
+
     const refresh = $('meta[http-equiv]')
         .toArray()
         .find(
@@ -275,13 +295,17 @@ export function readAuditPage(html: string, url: string): AuditPage {
             ),
         ],
         ogUrl: absolute(ogContents('og:url')[0], base),
+        siteName: ogContents('og:site_name')[0] ?? null,
         modifiedTime:
             metas.find(({ keys }) => keys.includes('article:modified_time'))
                 ?.content || null,
         plugins: inDocument('frame, frameset, applet, object, embed')
             .filter(isPlugin)
             .map((tag) => ({ ...located(tag), name: tag.name })),
-        visibleText: body.text().replace(/\s+/g, ' ').trim(),
+        visibleText: textsOf(body.toArray())
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
         markupLength: html.replace(scriptOrStyle, '').length,
         elementCount: inDocument('*' as cheerio.SelectorType).length,
         images: imagesOf($, base),
@@ -292,6 +316,9 @@ export function readAuditPage(html: string, url: string): AuditPage {
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
         alternateTags,
         alternates: hreflangAlternates(alternateTags),
+        jsonLd,
+        structuredData: structuredData(jsonLd),
+        hasMicrodata: $('[itemscope], [typeof], [vocab]').length > 0,
         anchors,
         links: [...new Set(anchors.flatMap((anchor) => anchor.url ?? []))],
         resources,
@@ -431,6 +458,16 @@ function hiddenBlocksOf(
             };
         })
         .filter(({ words }) => words >= hiddenBlockWords);
+}
+
+function textsOf(nodes: AnyNode[]): string[] {
+    return nodes.flatMap((node) => {
+        if (isText(node)) {
+            return [node.data];
+        }
+
+        return hasChildren(node) ? textsOf(node.children) : [];
+    });
 }
 
 function isOffscreen(element: Element) {

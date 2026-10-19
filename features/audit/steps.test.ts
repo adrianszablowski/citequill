@@ -61,7 +61,12 @@ function database({
     const answers: Record<string, (query: FakeQuery) => object> = {
         runs: () => ({ data: { status: runStatus, started_at: startedAt } }),
         projects: () => ({
-            data: { domain: 'acme.com', obey_robots: true, bot_secret: 's' },
+            data: {
+                name: 'Acme',
+                domain: 'acme.com',
+                obey_robots: true,
+                bot_secret: 's',
+            },
         }),
         project_locales: () => ({
             data: [
@@ -466,6 +471,10 @@ describe('readPages', () => {
         ]);
 
         expect(markProgress).toHaveBeenCalledWith('run');
+
+        expect(call(fake, 'projects', 'select')[0].calls[0][1]).toContain(
+            'name',
+        );
     });
 });
 
@@ -1105,7 +1114,7 @@ describe('checkSite', () => {
         expect(markProgress).toHaveBeenCalledWith('run');
     });
 
-    it('deletes only its own halves of param-duplicates and facets-indexable, told apart by their reason', async () => {
+    it('deletes only its own halves of the checks with a page half, told apart by their reason', async () => {
         const fake = database();
 
         await checkSite('project', 'run', 'audit');
@@ -1132,6 +1141,12 @@ describe('checkSite', () => {
                 ['eq', 'audit_id', 'audit'],
                 ['eq', 'check', 'assets-heavy'],
                 ['contains', 'detail', { reason: 'bytes' }],
+            ],
+            [
+                ['delete'],
+                ['eq', 'audit_id', 'audit'],
+                ['eq', 'check', 'structured-data-format'],
+                ['contains', 'detail', { reason: 'none' }],
             ],
         ]);
     });
@@ -1241,6 +1256,14 @@ describe('checkSite, for hreflang', () => {
 
         expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
             ', hreflang',
+        );
+
+        expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
+            'jsonld_count',
+        );
+
+        expect(call(fake, 'site_pages', 'select')[0].calls[0][1]).toContain(
+            'has_microdata',
         );
 
         expect(call(fake, 'audit_findings', 'delete')[0].calls).toContainEqual([

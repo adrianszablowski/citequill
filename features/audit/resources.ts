@@ -6,6 +6,7 @@ import {
     isSiteUrl,
     withLinkingPage,
 } from '@/features/audit/queue';
+import { jsonLdImages } from '@/features/audit/structured-data';
 import type { Fetched, FetchOptions } from '@/features/crawl/fetch';
 import type { Enums, Tables } from '@/lib/types/database';
 
@@ -63,11 +64,19 @@ export function externalLinks(
 
 export function pageResources(
     url: string,
-    page: Pick<AuditPage, 'ogImages' | 'images' | 'assets' | 'anchors'>,
+    page: Pick<
+        AuditPage,
+        'structuredData' | 'ogImages' | 'images' | 'assets' | 'anchors'
+    >,
     hosts: string[],
     domain: string,
+    isIndexable: boolean,
 ): ResourceCandidate[] {
     const kinds: [ResourceKind, string[]][] = [
+        [
+            'jsonld_image',
+            isIndexable ? jsonLdImages(page.structuredData, url) : [],
+        ],
         ['og_image', page.ogImages],
         [
             'image',
@@ -298,6 +307,10 @@ function verdictOf(
         return status === 200
             ? null
             : { check: 'og-image-bad', reason: 'image' };
+    }
+
+    if (kind === 'jsonld_image') {
+        return status === 200 ? null : { check: 'jsonld-image-unreachable' };
     }
 
     if (status !== 200) {

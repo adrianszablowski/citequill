@@ -33,6 +33,8 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         image_count: 0,
         external_link_count: 0,
         hreflang_count: 0,
+        jsonld_count: 0,
+        has_microdata: false,
         hreflang: [],
         click_depth: 1,
         inbound_links: 2,
@@ -557,7 +559,13 @@ describe('siteChecks', () => {
 
     it('finds no shared or boilerplate title or description on a site of one page', () => {
         expect(
-            checks([row('/', { title: 'Acme', description: 'Plans.' })]),
+            checks([
+                row('/', {
+                    title: 'Acme',
+                    description: 'Plans.',
+                    jsonld_count: 1,
+                }),
+            ]),
         ).toEqual([]);
 
         expect(
@@ -622,6 +630,43 @@ describe('siteChecks', () => {
                 detail: { title: 'Welcome', siteName: null },
             },
         ]);
+    });
+});
+
+describe('siteChecks, for structured data', () => {
+    const format = (rows: SiteRow[]) =>
+        siteChecks(rows, {
+            ...context,
+            homes: ['https://acme.com/', 'https://acme.com/de/'],
+        }).filter(({ check }) => check === 'structured-data-format');
+
+    it('hints at structured data on each indexable home page when no indexable page has JSON-LD, microdata or RDFa', () => {
+        expect(
+            format([
+                row('/'),
+                row('/de/'),
+                row('/a'),
+                row('/b', { is_indexable: false, jsonld_count: 2 }),
+            ]),
+        ).toEqual(
+            ['https://acme.com/', 'https://acme.com/de/'].map((url) => ({
+                check: 'structured-data-format',
+                url,
+                detail: { reason: 'none' },
+            })),
+        );
+
+        expect(format([row('/', { is_indexable: false }), row('/a')])).toEqual(
+            [],
+        );
+    });
+
+    it('stays silent when one indexable page has a JSON-LD block or microdata', () => {
+        expect(format([row('/'), row('/a', { jsonld_count: 1 })])).toEqual([]);
+
+        expect(format([row('/'), row('/a', { has_microdata: true })])).toEqual(
+            [],
+        );
     });
 });
 

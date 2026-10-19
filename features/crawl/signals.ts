@@ -55,13 +55,28 @@ export function readSignals($: cheerio.CheerioAPI, base: URL): Signals {
 }
 
 export function jsonLdNodes($: cheerio.CheerioAPI): unknown[] {
+    return jsonLdBlocks($).flatMap(({ value, error }) =>
+        error === null ? flatten(value) : [],
+    );
+}
+
+export function jsonLdBlocks($: cheerio.CheerioAPI) {
     return $('script[type="application/ld+json"]')
         .toArray()
-        .flatMap((element) => {
+        .filter((element) => $(element).text().trim() !== '')
+        .map((element) => {
             try {
-                return flatten(JSON.parse($(element).text()));
-            } catch {
-                return [];
+                return {
+                    element,
+                    value: JSON.parse($(element).text()) as unknown,
+                    error: null,
+                };
+            } catch (error) {
+                return {
+                    element,
+                    value: null,
+                    error: (error as SyntaxError).message,
+                };
             }
         });
 }

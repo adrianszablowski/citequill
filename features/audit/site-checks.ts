@@ -26,6 +26,7 @@ export type SiteRow = ScoredPage &
         | 'click_depth'
         | 'inbound_links'
         | 'hreflang'
+        | 'has_microdata'
     >;
 
 export interface SiteContext {
@@ -47,6 +48,7 @@ export const siteHalves = [
     ['param-duplicates', 'variants'],
     ['facets-indexable', 'volume'],
     ['assets-heavy', 'bytes'],
+    ['structured-data-format', 'none'],
 ] as const;
 
 export const stockTitles = new Set([
@@ -92,7 +94,22 @@ export function siteChecks(rows: SiteRow[], context: SiteContext) {
         ...rows.flatMap((row) => reachFindings(row, context)),
         ...rows.flatMap((row) => linkedFindings(row, context)),
         ...hreflangSiteChecks(rows, context),
+        ...formatFindings(rows, context),
     ];
+}
+
+function formatFindings(rows: SiteRow[], { homes }: SiteContext): Finding[] {
+    const indexable = rows.filter((row) => row.is_indexable);
+
+    return indexable.some((row) => row.jsonld_count > 0 || row.has_microdata)
+        ? []
+        : indexable
+              .filter((row) => homes.includes(row.url))
+              .map((row) => ({
+                  check: 'structured-data-format',
+                  url: row.url,
+                  detail: { reason: 'none' },
+              }));
 }
 
 function reachFindings(row: SiteRow, { homes }: SiteContext): Finding[] {

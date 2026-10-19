@@ -314,6 +314,8 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         image_count: 0,
         external_link_count: 0,
         hreflang_count: 0,
+        jsonld_count: 0,
+        has_microdata: false,
         hreflang: [],
         click_depth: 1,
         inbound_links: 1,

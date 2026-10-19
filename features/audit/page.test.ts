@@ -280,6 +280,15 @@ describe('readAuditPage', () => {
         ]);
     });
 
+    it('puts a space between the texts of two elements in the visible text, so minified HTML keeps its numbers apart', () => {
+        expect(
+            readAuditPage(
+                '<html><body><h1>Air Max 90</h1><p>149 zł</p></body></html>',
+                'https://acme.com/',
+            ).visibleText,
+        ).toBe('Air Max 90 149 zł');
+    });
+
     it('reads the images before the main text is cut out, so a logo in the header is listed', () => {
         const page = readAuditPage(
             '<html><body><header><img src="/logo.png" alt="Acme"><svg role="img"><title>Menu</title></svg></header><main><p>Text</p></main></body></html>',
@@ -386,6 +395,36 @@ describe('readAuditPage', () => {
                 'https://acme.com/',
             ).viewport,
         ).toBeNull();
+    });
+
+    it('keeps every JSON-LD block with its element, parsed or with its error, the og:site_name and whether the page holds microdata or RDFa', () => {
+        const page = readAuditPage(
+            `<html><head><meta property="og:site_name" content=" Acme &amp; Co "><script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@type":"Thing"}</script></head><body><script type="application/ld+json">{oops}</script><p vocab="https://schema.org/">Text</p></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(page.jsonLd).toEqual([
+            {
+                selector: 'script.yoast-schema-graph',
+                snippet:
+                    '<script type="application/ld+json" class="yoast-schema-graph">{"@context":"https://schema.org","@type":"Thing"}</script>',
+                value: { '@context': 'https://schema.org', '@type': 'Thing' },
+                error: null,
+            },
+            {
+                selector: 'script',
+                snippet: '<script type="application/ld+json">{oops}</script>',
+                value: null,
+                error: expect.any(String),
+            },
+        ]);
+
+        expect(page.siteName).toBe('Acme & Co');
+        expect(page.hasMicrodata).toBe(true);
+
+        expect(readAuditPage('<p>Text</p>', 'https://acme.com/')).toMatchObject(
+            { jsonLd: [], siteName: null, hasMicrodata: false },
+        );
     });
 
     it('keeps the raw links whose fragment is a page number', () => {
