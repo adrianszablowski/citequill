@@ -809,6 +809,14 @@ The owner asked to fix every fault and every audit line of the backlog, so that 
 - The features that are not faults stay in the backlog: `twitter-card`, `link-blank-noopener`, `protocol-relative`, `title-language`, the same H1 on several pages, the robots.txt switch, the public link, the prompt for an AI agent, PageSpeed, the operator route, and the wording of Cloudflare's plans in `ai-cdn-blocked`. The audit closes without them; each waits for an owner who asks.
 - Reason: the owner's acceptance of the recommendations, 20 October 2026, after a check of the backlog against the code, of Vercel Sandbox's documentation and of reddit.com's robots.txt the same day.
 
+## 2026-10-20: a page that fails to load shows an error card, and a read is not sent again after a 502
+
+On the owner's test audit of 20 October, one of the refreshes the Audit section makes every 3 seconds while an audit runs got a 502 from the Cloudflare gateway in front of Supabase. `getAudits()` in `features/audit/queries.ts` threw the `PostgrestError`, no `error.tsx` stood under `app/`, so Next's default boundary replaced the page and the refreshes stopped. The audit itself finished: 134 pages in 122 seconds. The database was idle, 15 MB with a cache hit rate of 1.00, and Supabase's status page showed no incident.
+
+- `app/projects/[id]/error.tsx` catches a section that throws, so the sidebar and header stay. `app/error.tsx` catches the project layout, whose sidebar reads the database on every refresh too and which the boundary of its own segment does not wrap, and every other route. Both render one card from `components/`; Try again calls `retry()`, which fetches the segment again.
+- Rejected for now: a `fetch` on the Supabase clients that sends a read answered with 502 again. postgrest-js sends a read again only after 503 and 520, one 502 in about 40 refreshes is no rate, and the card makes the failure one click to recover. The backlog keeps it with its trigger. Rejected: a boundary that tries again by itself, because a fault that stays would loop.
+- Reason: the owner's report of the crash, 20 October 2026, after a read of the dev server's log, of the latest audit and of the database's statistics the same day.
+
 ## Backlog
 
 Things put off for later, with a date and a reason.
@@ -867,3 +875,4 @@ Things put off for later, with a date and a reason.
 - 2026-10-19: the crawl reads the JSON-LD of a page twice, once for its signals in `readSignals()` and once for the author in `features/crawl/html.ts`; one read could serve both.
 - 2026-10-19: the report does not say why `ai-cdn-blocked` and `pay-per-crawl` did not run, though `audits.cdn_test` keeps the reason: the site refused a browser from Citequill's address, refused a client that is not a browser, or checks the addresses of the crawlers a request claims to be. One line under the AI access area when an owner asks why the CDN test is missing. The line must not blame the site for a 429: Shopify's limiter, shared across stores, answers the first control with a 429 challenge, which is stored as `browser-refused`, the same as Vercel's Security Checkpoint.
 - 2026-10-19: `comparedPair()` in `features/audit/changes.ts` compares two audits only when `checks_scored` is equal, so a CDN test that passes one week and meets a rate limit the next drops the score difference and the fixed and new counts. Compare on the checks both audits ran, the score of each recomputed on them, when an owner's report shows the comparison missing.
+- 2026-10-20: a read of Supabase that its Cloudflare gateway answers with 502 throws, and the section shows the error card. A `fetch` given to both clients that sends a `GET` or `HEAD` again after a 502, once or twice, would hide a short fault; a write is never sent again, because it may have landed. When a user's test shows the card a second time, or the owner finds the card during a running audit too much.

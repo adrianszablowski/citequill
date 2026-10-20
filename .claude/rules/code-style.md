@@ -33,15 +33,15 @@ Write the smallest function that does the job. If naming it needs an _and_, spli
 
 - One component per file, `export default`, named after the file: `project-card.tsx` → `ProjectCard`.
   Never a second one, not even private: a Suspense section, a data loader or an error line gets its
-  own file, and a `page.tsx` or `layout.tsx` holds only the route component. The one exception is
-  `components/ui/`, which the CLI writes.
-- `app/` holds only routes: `page.tsx`, `layout.tsx`, `route.ts`. Everything else lives by domain in
+  own file, and a `page.tsx`, `layout.tsx` or `error.tsx` holds only the route component. The one
+  exception is `components/ui/`, which the CLI writes.
+- `app/` holds only routes: `page.tsx`, `layout.tsx`, `error.tsx`, `route.ts`. Everything else lives by domain in
   `features/<domain>/`: `actions.ts` (`'use server'`, every mutation of that domain), `queries.ts`
   (`server-only` reads, wrapped in React `cache` when more than one section reads them in a request),
   `schema.ts` (the Zod schema and its values type), `components/` (the domain's components). An action
   is named after what it mutates, never after the page that calls it.
 - `components/` at the root holds only the shell every domain shares: the sidebar, the header, the
-  page title. `components/icons/` holds SVG icon components, one per file, named after what they
+  page title, the error card. `components/icons/` holds SVG icon components, one per file, named after what they
   draw. `components/ui/` is written by `pnpm dlx shadcn@latest add <name>` and keeps the shape the CLI
   wrote; `shadcn add -o` regenerates it. The one edit after adding a component is `pnpm lint:fix`.
 - `lib/` holds only what crosses domains: the Supabase clients, the sections, `utils.ts`. Logic that
