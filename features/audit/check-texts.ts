@@ -50,7 +50,7 @@ export function checkText(id: CheckId) {
     return severity === 'hint'
         ? {
               ...text,
-              says: `${text.says} ${area === 'ai-access' ? notScored : notCounted}`,
+              says: `${text.says} ${area === 'ai-access' || id === 'content-stale' ? notScored : notCounted}`,
           }
         : text;
 }
@@ -107,6 +107,11 @@ const links = {
         'https://developers.cloudflare.com/ai-crawl-control/features/pay-per-crawl/what-is-pay-per-crawl/',
     markdownStudy:
         'https://www.tryprofound.com/blog/does-markdown-increase-ai-bot-traffic',
+    questionStudy:
+        'https://www.semrush.com/blog/content-optimization-ai-search-study/',
+    sourceStudy:
+        'https://www.seerinteractive.com/insights/what-it-takes-to-rank-in-googles-ai-overviews-in-2026-is-not-what-you-think',
+    slugStudy: 'https://ahrefs.com/blog/why-chatgpt-cites-pages/',
 };
 
 const texts: Partial<Record<CheckId, CheckText>> = {
@@ -598,9 +603,9 @@ const texts: Partial<Record<CheckId, CheckText>> = {
     },
     'content-stale': {
         name: 'A page has not changed in six months',
-        says: 'Google’s starter guide asks you to check in on published content and update it as needed.',
+        says: 'Google’s starter guide asks you to check in on published content and update it as needed. Ahrefs, July 2025, 17 million citations: AI assistants cite pages fresher than Google’s organic results, except AI Overviews. Seer, June 2025, 5 000 URLs: AI Overviews favor recent pages the most. Seer, July 2026, 4 124 pages cited by ChatGPT, Gemini and Perplexity with readable dates: 75% were updated in the last year. The studies disagree on AI Overviews, and they show a correlation.',
         link: links.starterGuide,
-        fix: 'Check that the page is still accurate, and update it or remove it if it is not. The date comes from the Last-Modified header or article:modified_time.',
+        fix: 'Check that the page is still accurate, and update it or remove it if it is not. The date is the newest of the Last-Modified header, article:modified_time and every dateModified in the page’s JSON-LD.',
     },
     'url-shape': {
         name: 'A URL has a shape most tools flag',
@@ -1021,6 +1026,36 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         says: 'Bing says nocache lets Chat and Copilot show only the URL, title and snippet of a page, and treats a page with both nocache and noarchive as nocache. Google ignores the tag.',
         link: links.bingRobotsMeta,
         fix: 'Remove nocache from the robots or bingbot meta tag, or from the X-Robots-Tag header, so Copilot can cite the page more fully.',
+    },
+    'answer-first': {
+        name: 'An article starts late',
+        says: 'Bing’s Webmaster Guidelines, item 18, ask you to place essential information near the top of a page and to avoid long introductions. Citequill reads that advice as a rule of its own: a paragraph of at least 15 words starts within the 100 words after the H1. On a page with a main or article element, the H1 also sits in the first quarter of the article’s main text.',
+        link: links.bingGuidelines,
+        fix: 'Move the H1 to the start of the main text, and put a paragraph that answers the page’s question right under it, before any list, table or long introduction. The finding says which of the two it found, with the word counts.',
+    },
+    'one-topic': {
+        name: 'An article’s title and H1 name different topics',
+        says: 'Bing’s Webmaster Guidelines, item 17, ask you to focus each page on one topic and to align its title, headings and content. Citequill reads that advice as a rule of its own for articles: once the site’s name is taken out of the title and the H1s, no H1 shares a word with the title. Two words are shared when they have 3 letters in a row in common, so “buty” and “butów” match. Words of fewer than 4 letters are skipped.',
+        link: links.bingGuidelines,
+        fix: 'Rename the title or the H1 so both name the article’s topic in the words a reader would search for. The finding shows the title and the H1s as Citequill compared them.',
+    },
+    'geo-qa-structure': {
+        name: 'An article has no question and answer',
+        says: 'Semrush, January 2026, 11 882 prompts on ChatGPT, Google AI Mode and Perplexity: the 304 805 URLs they cited scored 25% higher on question-and-answer format than pages in Google’s top 20, by a score Semrush gave the text with a method it does not describe. This is a correlation, and the study sells a Semrush tool. This article has no question in a subheading or in bold text followed by a paragraph, no question in a summary or dt element, and no FAQPage or QAPage markup.',
+        link: links.questionStudy,
+        fix: 'Write a subheading that asks a question your readers ask, ending with a question mark, and answer it in the paragraph under it, or add an FAQ block with FAQPage markup. A question in the page’s header, navigation, sidebar or footer does not count.',
+    },
+    'geo-source-links': {
+        name: 'An article links to no public or academic source',
+        says: 'Seer, May 2026, 6 354 pages cited first in Google AI Overviews for 8 500 keywords: on definitional queries, one of the 9 kinds the study sorts, the winners link out to about twice as many .gov and .edu sources, and the study does not say compared with what. This is a correlation, and on Google only. This article links to no host with a gov, edu, gouv or gob label, or a go or ac label right before a two-letter country code, such as nih.gov, uw.edu.pl or ox.ac.uk.',
+        link: links.sourceStudy,
+        fix: 'Where a claim rests on a public or academic source, such as a statistics office or a university, link to that source. A public host without one of these labels, such as bund.de, does not count.',
+    },
+    'geo-slug': {
+        name: 'A page’s address ends in a number, a UUID or a date',
+        says: 'Ahrefs, April 2026, 1.4 million ChatGPT prompts: among the search results ChatGPT retrieved, those with natural-language slugs were cited 89.8% of the time, against 81.1%. The study does not say how it told a natural-language slug apart, so the rule is Citequill’s. This is a correlation, and on ChatGPT only. The last part of this page’s address is a number, a UUID or a date.',
+        link: links.slugStudy,
+        fix: 'End the address in words that name the page’s topic, such as /red-running-shoes, and redirect the old address to it with a 301. Pages of a list and date archives are left out.',
     },
     'ai-training-bots-blocked': {
         name: 'robots.txt blocks AI training crawlers from the home page',

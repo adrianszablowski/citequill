@@ -8,6 +8,7 @@ import {
     describesSite,
     featuresOf,
     fold,
+    isArticleNode,
     isDefinedType,
     isMerchantListing,
     isNode,
@@ -183,12 +184,7 @@ function nodeFindings(
         }
     }
 
-    // The flag picks between the two Product features only, so it cannot
-    // change whether a node takes the article feature.
-    if (
-        isOfType(node, 'Article') &&
-        featuresOf(node, false).some(({ feature }) => feature === 'article')
-    ) {
+    if (isArticleNode(node)) {
         const small = imageObjects(node, 'image', data).find(
             ({ declaredWidth, declaredHeight }) =>
                 declaredWidth !== null &&

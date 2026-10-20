@@ -34,6 +34,7 @@ function row(path: string, overrides: Partial<SiteRow> = {}): SiteRow {
         external_link_count: 0,
         hreflang_count: 0,
         jsonld_count: 0,
+        is_article: false,
         has_microdata: false,
         hreflang: [],
         click_depth: 1,

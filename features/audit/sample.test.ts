@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    isIdentifier,
     samplePages,
     topLevelPages,
     urlPattern,
@@ -88,5 +89,22 @@ describe('urlPattern', () => {
         }
 
         expect(urlPattern(at('/v2/a'))).not.toBe(urlPattern(at('/42/a')));
+    });
+});
+
+describe('isIdentifier', () => {
+    it('reads digits, a UUID and a date as an identifier, and a slug as none', () => {
+        for (const segment of [
+            '12345',
+            '3f2504e0-4f89-11d3-9a0c-0305e82c3301',
+            '2024-05-17',
+            '2024-05',
+        ]) {
+            expect(isIdentifier(segment), segment).toBe(true);
+        }
+
+        for (const segment of ['red-shoes', '12345-red-shoes', 'v2']) {
+            expect(isIdentifier(segment), segment).toBe(false);
+        }
     });
 });

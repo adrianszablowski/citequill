@@ -18,6 +18,7 @@ import { onPageChecks } from '@/features/audit/on-page-checks';
 import { type CanonicalTag, thinPageWords } from '@/features/audit/page';
 import { performanceChecks } from '@/features/audit/performance-checks';
 import { isHttpUrl } from '@/features/audit/queue';
+import { shapeChecks } from '@/features/audit/shape-checks';
 import { structuredDataChecks } from '@/features/audit/structured-data-checks';
 import {
     type Fetched,
@@ -41,6 +42,7 @@ export interface PageCheckContext {
     hosts: string[];
     homes: string[];
     projectName: string;
+    domain: string;
     previousRedirects: ReadonlyMap<string, string>;
     now: number;
 }
@@ -255,6 +257,7 @@ function answerFindings(
                             ...linkChecks(url, page, context),
                             ...viewportChecks(url, page),
                             ...structuredDataChecks(url, page, context),
+                            ...shapeChecks(url, page, context),
                         ]
                       : []),
               ]

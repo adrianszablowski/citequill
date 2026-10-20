@@ -1,13 +1,21 @@
 import { createHash } from 'node:crypto';
 
 import * as cheerio from 'cheerio';
-import { type AnyNode, type Element, hasChildren, isText } from 'domhandler';
+import {
+    type AnyNode,
+    type Element,
+    hasChildren,
+    isTag,
+    isText,
+    type Text,
+} from 'domhandler';
 
 import { selectorOf } from '@/features/audit/finding';
 import { hidingStyle } from '@/features/audit/hidden';
 import { imagesOf, type PageImage } from '@/features/audit/images';
 import { simhash } from '@/features/audit/simhash';
 import {
+    hasArticle,
     type StructuredData,
     structuredData,
 } from '@/features/audit/structured-data';
@@ -17,6 +25,7 @@ import {
     alternateLinks,
     type HreflangEntry,
     hreflangAlternates,
+    isLandmark,
     mainElement,
     robotsMetaOf,
 } from '@/features/crawl/html';
@@ -85,6 +94,25 @@ export interface PageForm extends PageElement {
     hasPassword: boolean;
 }
 
+export interface AnsweredText {
+    text: string;
+    isAnswered: boolean;
+}
+
+export interface MainHeading extends AnsweredText {
+    level: number;
+}
+
+export interface MainContent {
+    isLandmark: boolean;
+    words: number;
+    h1: { wordsBefore: number; wordsThrough: number } | null;
+    paragraphs: { words: number; wordsBefore: number }[];
+    headings: MainHeading[];
+    bold: AnsweredText[];
+    terms: string[];
+}
+
 export interface AuditPage {
     title: string | null;
     titles: TitleTag[];
@@ -114,6 +142,7 @@ export interface AuditPage {
     alternates: Alternate[];
     jsonLd: JsonLdBlock[];
     structuredData: StructuredData;
+    isArticle: boolean;
     hasMicrodata: boolean;
     anchors: Anchor[];
     links: string[];
@@ -125,6 +154,7 @@ export interface AuditPage {
     hiddenBlocks: HiddenBlock[];
     fragmentLinks: string[];
     mainText: string;
+    mainContent: MainContent;
     nosnippet: string | null;
     bodyHash: string | null;
     simhash: string | null;
@@ -229,6 +259,9 @@ export function readAuditPage(html: string, url: string): AuditPage {
         error,
     }));
 
+    const data = structuredData(jsonLd);
+    const h1Tags = inDocument('h1');
+
     const refresh = $('meta[http-equiv]')
         .toArray()
         .find(
@@ -243,7 +276,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         descriptions: metas
             .filter(({ keys }) => keys[0] === 'description')
             .map(({ content, isInHead }) => ({ content, isInHead })),
-        h1s: inDocument('h1').map((tag) => {
+        h1s: h1Tags.map((tag) => {
             const text = $(tag).text().replace(/\s+/g, ' ').trim();
 
             return (
@@ -305,6 +338,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
             .filter(isPlugin)
             .map((tag) => ({ ...located(tag), name: tag.name })),
         visibleText: textsOf(body.toArray())
+            .map((node) => node.data)
             .join(' ')
             .replace(/\s+/g, ' ')
             .trim(),
@@ -320,7 +354,11 @@ export function readAuditPage(html: string, url: string): AuditPage {
         alternateTags,
         alternates: hreflangAlternates(alternateTags),
         jsonLd,
-        structuredData: structuredData(jsonLd),
+        structuredData: data,
+        isArticle:
+            hasArticle(data) ||
+            (jsonLd.length === 0 &&
+                ogContents('og:type')[0]?.toLowerCase() === 'article'),
         hasMicrodata: $('[itemscope], [typeof], [vocab]').length > 0,
         anchors,
         links: [...new Set(anchors.flatMap((anchor) => anchor.url ?? []))],
@@ -364,6 +402,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
     return {
         ...page,
         mainText,
+        mainContent: mainContentOf($, main, h1Tags[0]),
         nosnippet: mainText && around ? selectorOf(around) : null,
         bodyHash: mainText
             ? createHash('sha256').update(mainText).digest('hex')
@@ -419,6 +458,17 @@ const nosnippet =
 
 const scriptOrStyle = /<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
 
+const headingNames = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
+
+const blockNames = new Set([
+    ...headingNames,
+    'p',
+    'strong',
+    'b',
+    'summary',
+    'dt',
+]);
+
 function documentElements($: cheerio.CheerioAPI) {
     return (selector: cheerio.SelectorType) =>
         $(selector)
@@ -472,14 +522,122 @@ function hiddenBlocksOf(
         .filter(({ words }) => words >= hiddenBlockWords);
 }
 
-function textsOf(nodes: AnyNode[]): string[] {
+function textsOf(nodes: AnyNode[]): Text[] {
     return nodes.flatMap((node) => {
         if (isText(node)) {
-            return [node.data];
+            return [node];
         }
 
         return hasChildren(node) ? textsOf(node.children) : [];
     });
+}
+
+function blocksOf(nodes: AnyNode[], blocks: Element[] = []) {
+    for (const node of nodes) {
+        if (isTag(node) && blockNames.has(node.name)) {
+            blocks.push(node);
+        }
+
+        if (hasChildren(node)) {
+            blocksOf(node.children, blocks);
+        }
+    }
+
+    return blocks;
+}
+
+function mainContentOf(
+    $: cheerio.CheerioAPI,
+    main: cheerio.Cheerio<Element> | undefined,
+    h1: Element | undefined,
+): MainContent {
+    const words = textsOf(main?.toArray() ?? [])
+        .flatMap((node) =>
+            node.data
+                .split(/\s+/)
+                .filter(Boolean)
+                .map(() => node.startIndex ?? 0),
+        )
+        .sort((one, other) => one - other);
+
+    const wordsBefore = (index: number) => {
+        let low = 0;
+        let high = words.length;
+
+        while (low < high) {
+            const middle = (low + high) >> 1;
+
+            if (words[middle] < index) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+
+        return low;
+    };
+
+    const blocks = blocksOf(main?.[0]?.children ?? []).map((element) => ({
+        element,
+        text: $(element).text().replace(/\s+/g, ' ').trim(),
+    }));
+
+    const isAnswered = (index: number) => {
+        for (let next = index + 1; next < blocks.length; next++) {
+            const { element, text } = blocks[next];
+
+            if (headingNames.has(element.name)) {
+                return false;
+            }
+
+            if (element.name === 'p' && text) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
+    return {
+        isLandmark: main ? isLandmark(main) : false,
+        words: words.length,
+        h1: h1
+            ? {
+                  wordsBefore: wordsBefore(h1.startIndex ?? 0),
+                  wordsThrough: wordsBefore(h1.endIndex ?? 0),
+              }
+            : null,
+        paragraphs: blocks
+            .filter(({ element }) => element.name === 'p')
+            .map(({ element }) => ({
+                words:
+                    wordsBefore(element.endIndex ?? 0) -
+                    wordsBefore(element.startIndex ?? 0),
+                wordsBefore: wordsBefore(element.startIndex ?? 0),
+            })),
+        headings: blocks.flatMap(({ element, text }, index) =>
+            headingNames.has(element.name)
+                ? [
+                      {
+                          level: Number(element.name.slice(1)),
+                          text,
+                          isAnswered: isAnswered(index),
+                      },
+                  ]
+                : [],
+        ),
+        bold: blocks.flatMap(({ element, text }, index) =>
+            element.name === 'strong' || element.name === 'b'
+                ? [{ text, isAnswered: isAnswered(index) }]
+                : [],
+        ),
+        terms: blocks
+            .filter(
+                ({ element }) =>
+                    element.name === 'summary' || element.name === 'dt',
+            )
+            .map(({ element }) => $(element).text().trim()),
+    };
 }
 
 function isOffscreen(element: Element) {

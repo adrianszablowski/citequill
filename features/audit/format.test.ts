@@ -259,6 +259,48 @@ describe('detailLines', () => {
         ).toEqual(['Meta tag: noarchive', 'Header: nocache']);
     });
 
+    it('shows a page-shape finding by its halves and word counts, the title and H1 as compared, the external links, the slug and the JSON-LD date', () => {
+        expect(
+            detailLines({
+                reasons: ['h1-position', 'first-paragraph'],
+                wordsBeforeH1: 120,
+                mainWords: 400,
+                wordsBeforeParagraph: 130,
+            }),
+        ).toEqual([
+            'Reasons: h1-position, first-paragraph',
+            'Words before the H1: 120',
+            'Words in the main text: 400',
+            'Words from the H1 to the first paragraph of 15 words or more: 130',
+        ]);
+
+        expect(
+            detailLines({
+                comparedTitle: 'running shoes |',
+                comparedH1s: ['summer sale', 'our story'],
+            }),
+        ).toEqual([
+            'Title as compared: running shoes |',
+            'H1s as compared: summer sale, our story',
+        ]);
+
+        expect(detailLines({ externalLinks: 3 })).toEqual([
+            'External links: 3',
+        ]);
+
+        expect(detailLines({ segment: '12345' })).toEqual([
+            'Last segment of the path: 12345',
+        ]);
+
+        expect(
+            detailLines({
+                lastModified: null,
+                modifiedTime: null,
+                dateModified: '2026-01-02',
+            }),
+        ).toEqual(['JSON-LD dateModified: 2026-01-02']);
+    });
+
     it('leaves out the attributes an image finding records, whose width may be a percentage', () => {
         expect(
             detailLines({

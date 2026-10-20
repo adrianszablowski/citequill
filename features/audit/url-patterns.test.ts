@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     facetPath,
+    isDateArchive,
     isSearchUrl,
     isUtilityUrl,
     pagination,
@@ -83,6 +84,32 @@ describe('pagination', () => {
         expect(pagination(`${site}/blog?page=last`)).toBeNull();
         expect(pagination(`${site}/pages/2`)).toBeNull();
         expect(pagination(`${site}/blog`)).toBeNull();
+    });
+});
+
+describe('isDateArchive', () => {
+    it('finds a path that ends in a year from 1900 to 2099, alone or with one or two 2-digit segments', () => {
+        for (const path of [
+            '/2024',
+            '/2024/',
+            '/1900/05/',
+            '/blog/2099/05/17/',
+            '/blog/2024/05/17',
+        ]) {
+            expect(isDateArchive(`${site}${path}`), path).toBe(true);
+        }
+    });
+
+    it('leaves out an identifier of 4 digits outside the years and a longer date path', () => {
+        for (const path of [
+            '/ebooks/1342',
+            '/ebooks/2100',
+            '/2024/05/17/09',
+            '/2024/5/',
+            '/blog/2024-05-17',
+        ]) {
+            expect(isDateArchive(`${site}${path}`), path).toBe(false);
+        }
     });
 });
 

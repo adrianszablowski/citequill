@@ -32,10 +32,14 @@ export function samplePages(urls: string[], homes: string[], limit: number) {
 
 export function urlPattern(url: string) {
     const segments = segmentsOf(url).map((segment) =>
-        identifier.test(segment) ? placeholder : segment.toLowerCase(),
+        isIdentifier(segment) ? placeholder : segment.toLowerCase(),
     );
 
     return `${segments[0] ?? ''}/${segments.length}`;
+}
+
+export function isIdentifier(segment: string) {
+    return identifier.test(segment);
 }
 
 const placeholder = ':id';

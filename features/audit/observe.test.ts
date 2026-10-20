@@ -379,6 +379,30 @@ describe('observeRead, for structured data', () => {
             observe({ entry: entry(url), outcome: new Error('timeout') }).row,
         ).toMatchObject({ jsonld_count: 0, has_microdata: false });
     });
+
+    it('records whether the page is an article, a page with noindex included, and no article for a page it could not read', () => {
+        expect(
+            read(
+                '<script type="application/ld+json">{"@context": "https://schema.org", "@type": "NewsArticle"}</script>',
+            ),
+        ).toMatchObject({ is_article: true });
+
+        expect(
+            read(
+                '<meta name="robots" content="noindex"><meta property="og:type" content="article">',
+            ),
+        ).toMatchObject({ is_article: true, is_indexable: false });
+
+        expect(
+            read(
+                '<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Blog", "blogPost": {"@type": "BlogPosting"}}</script>',
+            ),
+        ).toMatchObject({ is_article: false });
+
+        expect(
+            observe({ entry: entry(url), outcome: new Error('timeout') }).row,
+        ).toMatchObject({ is_article: false });
+    });
 });
 
 describe('headerAlternates', () => {

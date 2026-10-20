@@ -21,6 +21,7 @@ const context: PageCheckContext = {
     hosts,
     homes: ['https://acme.com/'],
     projectName: 'Acme',
+    domain: 'acme.com',
     previousRedirects: new Map(),
     now: Date.parse('2026-10-17T12:00:00Z'),
 };
@@ -824,5 +825,24 @@ describe('checkPage, for HTTPS', () => {
         ]);
 
         expect(checks(fetched(html('')))).not.toContain('security-headers');
+    });
+
+    it('runs the article checks on an indexable article page, and no check of the shape on a page with noindex', () => {
+        const article =
+            '<script type="application/ld+json">{"@context": "https://schema.org", "@type": "Article", "headline": "Pricing"}</script>';
+
+        expect(
+            checks(fetched(html(article))).filter(
+                (id) => !id.startsWith('jsonld-'),
+            ),
+        ).toEqual(['geo-qa-structure', 'geo-source-links']);
+
+        expect(
+            checks(
+                fetched(
+                    html(`${article}<meta name="robots" content="noindex">`),
+                ),
+            ).filter((id) => id.startsWith('geo-') || id === 'answer-first'),
+        ).toEqual([]);
     });
 });

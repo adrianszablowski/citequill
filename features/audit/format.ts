@@ -1,6 +1,7 @@
 import { findingsPerPage } from '@/features/audit/finding';
 import type { AltState } from '@/features/audit/image-checks';
 import type { PageImage } from '@/features/audit/images';
+import { answerFirst } from '@/features/audit/shape-checks';
 import type { Json } from '@/lib/types/database';
 import { formatCount, formatDate } from '@/lib/utils';
 
@@ -189,6 +190,7 @@ const detailLabels: Record<string, string> = {
     links: 'Links',
     lastModified: 'Last-Modified',
     modifiedTime: 'article:modified_time',
+    dateModified: 'JSON-LD dateModified',
     series: 'Series',
     ms: 'Time (ms)',
     region: 'Region',
@@ -207,4 +209,11 @@ const detailLabels: Record<string, string> = {
     answers: 'Answers',
     prices: 'Prices',
     vary: 'Vary',
+    wordsBeforeH1: 'Words before the H1',
+    mainWords: 'Words in the main text',
+    wordsBeforeParagraph: `Words from the H1 to the first paragraph of ${answerFirst.paragraphWords} words or more`,
+    comparedTitle: 'Title as compared',
+    comparedH1s: 'H1s as compared',
+    externalLinks: 'External links',
+    segment: 'Last segment of the path',
 };

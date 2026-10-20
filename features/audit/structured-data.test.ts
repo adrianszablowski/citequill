@@ -8,9 +8,12 @@ import {
     describesSite,
     featuresOf,
     fold,
+    hasArticle,
     isA,
+    isArticleNode,
     isPriceInText,
     jsonLdImages,
+    modifiedDates,
     priceOf,
     structuredData,
     topNodes,
@@ -479,6 +482,155 @@ describe('jsonLdImages', () => {
             'https://acme.com/a-full.jpg',
             'https://cdn.other.com/logo.png',
             'https://acme.com/blog/hello/thumb.jpg',
+        ]);
+    });
+});
+
+describe('isArticleNode', () => {
+    it('takes a node of the Article feature, its subtypes included, and not a forum post', () => {
+        for (const type of [
+            'Article',
+            'NewsArticle',
+            'BlogPosting',
+            'TechArticle',
+            ['WebPage', 'Article'],
+        ]) {
+            expect(isArticleNode({ '@type': type }), String(type)).toBe(true);
+        }
+
+        for (const type of ['DiscussionForumPosting', 'WebPage', 'Product']) {
+            expect(isArticleNode({ '@type': type }), type).toBe(false);
+        }
+    });
+});
+
+describe('hasArticle', () => {
+    const context = 'https://schema.org';
+
+    function articleOf(...values: unknown[]) {
+        return hasArticle(structuredData(blocksOf(...values)));
+    }
+
+    it('finds an article at the top of a block, in its @graph, as the mainEntity of a top node, and through an @id reference', () => {
+        expect(articleOf({ '@context': context, '@type': 'NewsArticle' })).toBe(
+            true,
+        );
+
+        expect(
+            articleOf({
+                '@context': context,
+                '@graph': [{ '@type': 'WebPage' }, { '@type': 'BlogPosting' }],
+            }),
+        ).toBe(true);
+
+        expect(
+            articleOf({
+                '@context': context,
+                '@type': 'WebPage',
+                mainEntity: { '@type': 'TechArticle', headline: 'Hello' },
+            }),
+        ).toBe(true);
+
+        expect(
+            articleOf(
+                {
+                    '@context': context,
+                    '@type': 'WebPage',
+                    mainEntity: { '@id': '#post' },
+                },
+                {
+                    '@context': context,
+                    '@type': 'ItemList',
+                    itemListElement: [{ '@type': 'Article', '@id': '#post' }],
+                },
+            ),
+        ).toBe(true);
+    });
+
+    it('finds no article in a blog that lists its posts, an ItemList of articles or a hasPart', () => {
+        expect(
+            articleOf({
+                '@context': context,
+                '@type': 'Blog',
+                blogPost: [{ '@type': 'BlogPosting' }],
+            }),
+        ).toBe(false);
+
+        expect(
+            articleOf({
+                '@context': context,
+                '@type': 'ItemList',
+                itemListElement: [
+                    {
+                        '@type': 'ListItem',
+                        item: { '@type': 'Article' },
+                    },
+                ],
+            }),
+        ).toBe(false);
+
+        expect(
+            articleOf({
+                '@context': context,
+                '@type': 'WebPage',
+                hasPart: { '@type': 'Article' },
+            }),
+        ).toBe(false);
+    });
+
+    it('finds no article in a forum post or in a node without a schema.org context', () => {
+        expect(
+            articleOf({
+                '@context': context,
+                '@type': 'DiscussionForumPosting',
+            }),
+        ).toBe(false);
+
+        expect(articleOf({ '@type': 'Article' })).toBe(false);
+
+        expect(
+            articleOf({
+                '@context': 'https://example.com',
+                '@type': 'Article',
+            }),
+        ).toBe(false);
+    });
+});
+
+describe('modifiedDates', () => {
+    it('reads every dateModified string of the parsed blocks, at any depth and under @graph, context or not', () => {
+        const blocks = [
+            ...blocksOf(
+                {
+                    '@context': 'https://schema.org',
+                    '@graph': [
+                        { '@type': 'WebPage', dateModified: '2026-01-02' },
+                        {
+                            '@type': 'FAQPage',
+                            mainEntity: [
+                                {
+                                    '@type': 'Question',
+                                    acceptedAnswer: {
+                                        '@type': 'Answer',
+                                        dateModified: '2026-09-30',
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+                { '@type': 'Article', dateModified: ['soon', 7] },
+            ),
+            ...readAuditPage(
+                '<script type="application/ld+json">{"dateModified": </script>',
+                url,
+            ).jsonLd,
+        ];
+
+        expect(modifiedDates(blocks)).toEqual([
+            '2026-01-02',
+            '2026-09-30',
+            'soon',
         ]);
     });
 });

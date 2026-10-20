@@ -111,6 +111,7 @@ export function observeRead(
         hreflang_count: alternates ? alternateCount(alternates) : 0,
         jsonld_count: page?.jsonLd.length ?? 0,
         has_microdata: page?.hasMicrodata ?? false,
+        is_article: page?.isArticle ?? false,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,
         page_id: pageIds.get(withoutSlash(entry.url)) ?? null,

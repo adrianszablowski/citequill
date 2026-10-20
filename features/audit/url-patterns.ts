@@ -66,6 +66,10 @@ export function pagination(url: string): Pagination | null {
     return { page: Number(value), series: series.href, first: first.href };
 }
 
+export function isDateArchive(url: string) {
+    return dateArchive.test(new URL(url).pathname);
+}
+
 export function isUtilityUrl(url: string) {
     const parsed = new URL(url);
 
@@ -113,6 +117,8 @@ const facetParameters = new Set([
 ]);
 
 const paginationNames = new Set(['page', 'strona']);
+
+const dateArchive = /\/(?:19|20)\d{2}(?:\/\d{2}){0,2}\/?$/;
 
 const utilitySegments = new Set([
     'print',

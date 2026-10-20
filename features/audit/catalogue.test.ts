@@ -8,8 +8,8 @@ import {
 } from '@/features/audit/catalogue';
 
 describe('catalogue', () => {
-    it('scores 115 checks, as the score header counts them', () => {
-        expect(scoredChecks).toHaveLength(115);
+    it('scores 113 checks, as the score header counts them', () => {
+        expect(scoredChecks).toHaveLength(113);
     });
 
     it('gates the score on the nine checks the Severity section names, every one of severity 3', () => {
@@ -99,14 +99,45 @@ describe('catalogue', () => {
         expect(checkOf('html-uncompressed').severity).toBe('2');
     });
 
-    it('holds 176 rows, the tables of the document but the three GEO hints of slice 7 that have not shipped', () => {
-        expect(catalogue).toHaveLength(176);
+    it('holds the 179 rows of the tables of the document', () => {
+        expect(catalogue).toHaveLength(179);
     });
 
-    it('holds the 13 rows of the AI access table shipped so far, its robots.txt hints, pay-per-crawl and markdown-alternate included', () => {
+    it('holds the 71 rows of the Indexability table, hints and questions included', () => {
+        expect(
+            catalogue.filter((check) => check.area === 'indexability'),
+        ).toHaveLength(71);
+    });
+
+    it('holds the three GEO hints in AI access, before markdown-alternate', () => {
+        const ids = catalogue
+            .filter((check) => check.area === 'ai-access')
+            .map((check) => check.id);
+
+        expect(ids.slice(-4)).toEqual([
+            'geo-qa-structure',
+            'geo-source-links',
+            'geo-slug',
+            'markdown-alternate',
+        ]);
+
+        for (const id of [
+            'geo-qa-structure',
+            'geo-source-links',
+            'geo-slug',
+        ] as const) {
+            expect(checkOf(id)).toMatchObject({
+                severity: 'hint',
+                needs: 'raw',
+                isGate: false,
+            });
+        }
+    });
+
+    it('holds the 16 rows of the AI access table and its GEO hints, the robots.txt hints, pay-per-crawl and markdown-alternate included', () => {
         expect(
             catalogue.filter((check) => check.area === 'ai-access'),
-        ).toHaveLength(13);
+        ).toHaveLength(16);
 
         for (const id of [
             'ai-training-bots-blocked',
@@ -114,6 +145,8 @@ describe('catalogue', () => {
             'content-signals',
             'pay-per-crawl',
             'markdown-alternate',
+            'answer-first',
+            'one-topic',
         ] as const) {
             expect(checkOf(id).severity, id).toBe('hint');
         }

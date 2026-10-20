@@ -791,6 +791,7 @@ export type Database = {
                     image_count: number;
                     in_sitemap: boolean;
                     inbound_links: number;
+                    is_article: boolean;
                     is_blocked: boolean;
                     is_gone: boolean;
                     is_indexable: boolean;
@@ -822,6 +823,7 @@ export type Database = {
                     image_count?: number;
                     in_sitemap?: boolean;
                     inbound_links?: number;
+                    is_article?: boolean;
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;
@@ -853,6 +855,7 @@ export type Database = {
                     image_count?: number;
                     in_sitemap?: boolean;
                     inbound_links?: number;
+                    is_article?: boolean;
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;

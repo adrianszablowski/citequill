@@ -609,3 +609,150 @@ describe('readAuditPage', () => {
         ).toBe(5);
     });
 });
+
+describe('readAuditPage, for the shape of a page', () => {
+    const blogPosting =
+        '<script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting"}</script>';
+
+    const read = (head: string, body: string) =>
+        readAuditPage(
+            `<html><head>${head}</head><body>${body}</body></html>`,
+            'https://acme.com/blog/post',
+        );
+
+    it('reads an article page from og:type article in any case, and from an Article node', () => {
+        expect(
+            read('<meta property="og:type" content=" ARTICLE ">', '').isArticle,
+        ).toBe(true);
+
+        expect(
+            read('<meta property="og:type" content="article">', '').isArticle,
+        ).toBe(true);
+
+        expect(
+            read('<meta property="og:type" content="website">', '').isArticle,
+        ).toBe(false);
+
+        expect(
+            read(
+                `<meta property="og:type" content="website">${blogPosting}`,
+                '',
+            ).isArticle,
+        ).toBe(true);
+    });
+
+    it('reads og:type article only on a page with no JSON-LD block, parsed or not, a blank block aside', () => {
+        const ogArticle = '<meta property="og:type" content="article">';
+
+        expect(
+            read(
+                `${ogArticle}<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage"}</script>`,
+                '',
+            ).isArticle,
+        ).toBe(false);
+
+        expect(
+            read(
+                `${ogArticle}<script type="application/ld+json">{"@type":</script>`,
+                '',
+            ).isArticle,
+        ).toBe(false);
+
+        expect(
+            read(
+                `${ogArticle}<script type="application/ld+json">  </script>`,
+                '',
+            ).isArticle,
+        ).toBe(true);
+    });
+
+    it('counts the words of the main content by its text nodes, and places the first H1 of the document against them', () => {
+        const { mainContent } = read(
+            '',
+            '<nav>Home Blog</nav><article><header><h1>Hello world</h1></header><p>one two<b>three</b></p><h2>Why?</h2><p>four five six</p></article>',
+        );
+
+        expect(mainContent).toEqual({
+            isLandmark: true,
+            words: 7,
+            h1: { wordsBefore: 0, wordsThrough: 0 },
+            paragraphs: [
+                { words: 3, wordsBefore: 0 },
+                { words: 3, wordsBefore: 4 },
+            ],
+            headings: [{ level: 2, text: 'Why?', isAnswered: true }],
+            bold: [{ text: 'three', isAnswered: false }],
+            terms: [],
+        });
+    });
+
+    it('places words by their offset in the source, where the parser moves a paragraph that stands loose in a table before it', () => {
+        const words = (count: number) =>
+            Array.from({ length: count }, () => 'word').join(' ');
+
+        const { mainContent } = read(
+            '',
+            `<main><h1>Title</h1><table><tr><td>${words(150)}</td></tr><p>${words(25)}</p></table></main>`,
+        );
+
+        expect(mainContent.h1).toEqual({ wordsBefore: 0, wordsThrough: 1 });
+
+        expect(mainContent.paragraphs).toEqual([
+            { words: 25, wordsBefore: 151 },
+        ]);
+    });
+
+    it('places an H1 inside the main content after the words before it, its own words through it', () => {
+        const { mainContent } = read(
+            '',
+            '<main><p>a b c</p><h1>The title</h1><p>d</p></main>',
+        );
+
+        expect(mainContent.h1).toEqual({ wordsBefore: 3, wordsThrough: 5 });
+        expect(mainContent.paragraphs[1]).toEqual({ words: 1, wordsBefore: 5 });
+    });
+
+    it('tells a main, role=main or article element from the body the main content falls back to', () => {
+        expect(
+            read('', '<div role="main"><p>a</p></div>').mainContent.isLandmark,
+        ).toBe(true);
+
+        expect(read('', '<div><p>a</p></div>').mainContent.isLandmark).toBe(
+            false,
+        );
+
+        expect(read('', '<div><p>a</p></div>').mainContent.h1).toBeNull();
+    });
+
+    it('answers a strong or b with a paragraph before the next heading, and skips a strong between a heading and its paragraph', () => {
+        const { mainContent } = read(
+            '',
+            '<main><p><strong>Why?</strong></p><p>Yes.</p><b>Who?</b><h2>Where?</h2><strong>Note</strong><p>Here.</p></main><footer><b>When?</b><p>Now.</p></footer>',
+        );
+
+        expect(mainContent.bold).toEqual([
+            { text: 'Why?', isAnswered: true },
+            { text: 'Who?', isAnswered: false },
+            { text: 'Note', isAnswered: true },
+        ]);
+
+        expect(mainContent.headings).toEqual([
+            { level: 2, text: 'Where?', isAnswered: true },
+        ]);
+    });
+
+    it('answers a heading with a paragraph of text before the next heading, and reads summary and dt of the main content', () => {
+        const { mainContent } = read(
+            '',
+            '<main><h2>One?</h2><p> </p><h3>Two?</h3><p>Yes.</p><h2>Three?</h2><details><summary> Why? </summary></details><dl><dt>Who?</dt></dl></main><footer><dl><dt>Where?</dt></dl></footer>',
+        );
+
+        expect(mainContent.headings).toEqual([
+            { level: 2, text: 'One?', isAnswered: false },
+            { level: 3, text: 'Two?', isAnswered: true },
+            { level: 2, text: 'Three?', isAnswered: false },
+        ]);
+
+        expect(mainContent.terms).toEqual(['Why?', 'Who?']);
+    });
+});

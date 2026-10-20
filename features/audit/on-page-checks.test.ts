@@ -330,7 +330,11 @@ describe('onPageChecks', () => {
             {
                 check: 'content-stale',
                 url,
-                detail: { lastModified: old.toUTCString(), modifiedTime: null },
+                detail: {
+                    lastModified: old.toUTCString(),
+                    modifiedTime: null,
+                    dateModified: null,
+                },
             },
         ]);
 
@@ -344,6 +348,66 @@ describe('onPageChecks', () => {
 
         expect(
             checks(page(), { headers: { 'last-modified': 'yesterday' } }),
+        ).toEqual([]);
+    });
+
+    it('reads every dateModified of the JSON-LD, so a fresh one nested in an FAQ answer saves an old page, and skips one that does not parse', () => {
+        const old = new Date(now - (staleDays + 1) * 86_400_000).toISOString();
+        const recent = new Date(now - 10 * 86_400_000).toISOString();
+
+        const jsonLd = (value: unknown) =>
+            page({
+                head: `<script type="application/ld+json">${JSON.stringify(value)}</script>`,
+            });
+
+        const faq = {
+            '@context': 'https://schema.org',
+            '@graph': [
+                { '@type': 'Article', dateModified: old },
+                {
+                    '@type': 'FAQPage',
+                    mainEntity: {
+                        '@type': 'Question',
+                        acceptedAnswer: {
+                            '@type': 'Answer',
+                            dateModified: recent,
+                        },
+                    },
+                },
+            ],
+        };
+
+        const lastModified = { 'last-modified': new Date(old).toUTCString() };
+
+        expect(checks(jsonLd(faq), { headers: lastModified })).toEqual([]);
+
+        expect(
+            check(jsonLd({ '@type': 'Article', dateModified: old })),
+        ).toEqual([
+            {
+                check: 'content-stale',
+                url,
+                detail: {
+                    lastModified: null,
+                    modifiedTime: null,
+                    dateModified: old,
+                },
+            },
+        ]);
+
+        expect(
+            check(
+                jsonLd([
+                    { '@type': 'Article', dateModified: 'last week' },
+                    { '@type': 'WebPage', dateModified: old },
+                ]),
+            ).map(({ detail }) => detail),
+        ).toEqual([
+            { lastModified: null, modifiedTime: null, dateModified: old },
+        ]);
+
+        expect(
+            checks(jsonLd({ '@type': 'Article', dateModified: 'last week' })),
         ).toEqual([]);
     });
 

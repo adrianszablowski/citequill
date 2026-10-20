@@ -195,6 +195,30 @@ export function featuresOf(node: JsonNode, isMerchant: boolean) {
     ];
 }
 
+// The flag picks between the two Product features only, so it cannot change
+// whether a node takes the article feature.
+export function isArticleNode(node: JsonNode) {
+    return (
+        isOfType(node, 'Article') &&
+        featuresOf(node, false).some(({ feature }) => feature === 'article')
+    );
+}
+
+export function hasArticle({
+    top,
+    valuesAt,
+}: Pick<StructuredData, 'top' | 'valuesAt'>) {
+    return top.some(({ node }) =>
+        [node, ...valuesAt(node, 'mainEntity')].some(
+            (value) => isNode(value) && isArticleNode(value),
+        ),
+    );
+}
+
+export function modifiedDates(blocks: JsonLdBlock[]) {
+    return blocks.flatMap(({ value }) => datesIn(value));
+}
+
 export function missingProperties(
     node: JsonNode,
     feature: RichResult,
@@ -432,6 +456,20 @@ function objectsIn(node: JsonNode): JsonNode[] {
                   .filter(isNode)
                   .flatMap((child) => [child, ...objectsIn(child)]),
     );
+}
+
+function datesIn(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.flatMap(datesIn);
+    }
+
+    return isNode(value)
+        ? Object.entries(value).flatMap(([key, child]) =>
+              key === 'dateModified'
+                  ? [child].flat().filter((date) => typeof date === 'string')
+                  : datesIn(child),
+          )
+        : [];
 }
 
 function isReference(value: unknown): value is { '@id': string } {

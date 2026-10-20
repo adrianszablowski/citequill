@@ -40,6 +40,7 @@ function page(index: number, overrides: Partial<ScoredPage> = {}): ScoredPage {
         external_link_count: 0,
         hreflang_count: 0,
         jsonld_count: 0,
+        is_article: false,
         ...overrides,
     };
 }
@@ -95,7 +96,7 @@ describe('scoreAudit', () => {
             score: 100,
             is_gated: false,
             checks_scored: 2,
-            checks_total: 115,
+            checks_total: 113,
             severity_3: 0,
             intended: [],
             results: [
@@ -208,6 +209,32 @@ describe('scoreAudit', () => {
                 check: 'html-over-2mb',
                 pages_checked: 1,
                 pages_failed: 0,
+                pages_intended: 0,
+            },
+        ]);
+    });
+
+    it('counts an article check on a page that is no article, and geo-slug on a home page, as no failure', () => {
+        const sitePages = [page(0), page(1, { is_article: true }), page(2)];
+
+        const result = score(['one-topic', 'geo-slug'], sitePages, [
+            finding('one-topic', 'page-1'),
+            finding('one-topic', 'page-2'),
+            finding('geo-slug', 'page-0'),
+            finding('geo-slug', 'page-2'),
+        ]);
+
+        expect(result.results).toEqual([
+            {
+                check: 'one-topic',
+                pages_checked: 1,
+                pages_failed: 1,
+                pages_intended: 0,
+            },
+            {
+                check: 'geo-slug',
+                pages_checked: 2,
+                pages_failed: 1,
                 pages_intended: 0,
             },
         ]);
@@ -679,6 +706,43 @@ describe('appliesTo', () => {
             appliesTo('resource-broken', sitePages, [home]).map(({ id }) => id),
         ).toEqual(['page-0', 'page-1']);
     });
+
+    it('applies answer-first, one-topic and the two GEO hints of an article to the indexable article pages', () => {
+        const sitePages = [
+            page(0, { is_article: true }),
+            page(1, { is_article: true }),
+            page(2),
+            page(3, { is_article: true, is_indexable: false }),
+        ];
+
+        for (const check of [
+            'answer-first',
+            'one-topic',
+            'geo-qa-structure',
+            'geo-source-links',
+        ] as const) {
+            expect(
+                appliesTo(check, sitePages, [home]).map(({ id }) => id),
+                check,
+            ).toEqual(['page-0', 'page-1']);
+        }
+    });
+
+    it('applies geo-slug to the indexable pages other than the home pages', () => {
+        const de = 'https://acme.com/de/';
+
+        const sitePages = [
+            page(0),
+            page(1, { url: de }),
+            page(2, { is_article: true }),
+            page(3),
+            page(4, { is_indexable: false }),
+        ];
+
+        expect(
+            appliesTo('geo-slug', sitePages, [home, de]).map(({ id }) => id),
+        ).toEqual(['page-2', 'page-3']);
+    });
 });
 
 describe('the on-page checks', () => {
@@ -878,8 +942,8 @@ describe('checksInScope', () => {
 });
 
 describe('shippedChecks', () => {
-    it('ships 157 checks, the HTTPS, viewport, performance, hreflang and structured data checks, the phone comparison, and the robots.txt, directive, CDN test and markdown checks of AI access included, protocol-relative left out', () => {
-        expect(shippedChecks).toHaveLength(157);
+    it('ships 162 checks, the HTTPS, viewport, performance, hreflang and structured data checks, the phone comparison, and the robots.txt, directive, CDN test, markdown, page-shape and GEO checks of AI access included, protocol-relative left out', () => {
+        expect(shippedChecks).toHaveLength(162);
     });
 
     it('judges assets-uncached on the pages of the sample, as the resource step puts it there', () => {

@@ -23,10 +23,11 @@ export type ScoredPage = Pick<
     | 'external_link_count'
     | 'hreflang_count'
     | 'jsonld_count'
+    | 'is_article'
 >;
 
 export const scoredPageColumns =
-    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count, hreflang_count, jsonld_count';
+    'id, url, status_code, redirect_to, is_indexable, is_blocked, canonical_url, in_sitemap, image_count, external_link_count, hreflang_count, jsonld_count, is_article';
 
 export type ScoredFinding = Pick<
     Tables<'audit_findings'>,
@@ -373,6 +374,10 @@ const pageScopes = {
         pages.filter((page) => page.is_indexable && page.hreflang_count > 0),
     jsonld: (pages: ScoredPage[]) =>
         pages.filter((page) => page.is_indexable && page.jsonld_count > 0),
+    articles: (pages: ScoredPage[]) =>
+        pages.filter((page) => page.is_indexable && page.is_article),
+    'not-homes': (pages: ScoredPage[], homes: string[]) =>
+        pages.filter((page) => page.is_indexable && !homes.includes(page.url)),
     'external-links': (pages: ScoredPage[]) =>
         pages.filter(
             (page) => page.is_indexable && page.external_link_count > 0,
@@ -535,6 +540,11 @@ const scopes: Partial<Record<CheckId, PageScope | 'site'>> = {
     'max-snippet-small': 'indexable',
     noarchive: 'indexable',
     nocache: 'indexable',
+    'answer-first': 'articles',
+    'one-topic': 'articles',
+    'geo-qa-structure': 'articles',
+    'geo-source-links': 'articles',
+    'geo-slug': 'not-homes',
     'ai-training-bots-blocked': 'site',
     'ai-user-agents-blocked': 'site',
     'content-signals': 'site',

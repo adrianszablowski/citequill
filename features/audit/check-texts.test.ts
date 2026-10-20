@@ -11,6 +11,9 @@ const hosts = new Set([
     'developers.cloudflare.com',
     'developers.openai.com',
     'www.tryprofound.com',
+    'www.semrush.com',
+    'www.seerinteractive.com',
+    'ahrefs.com',
 ]);
 
 describe('checkText', () => {
@@ -42,11 +45,11 @@ describe('checkText', () => {
         }
     });
 
-    it('tells the owner a hint is not counted, in AI access without naming Google, and asks a question as a question', () => {
+    it('tells the owner a hint is not counted, in AI access and on content-stale without naming Google, and asks a question as a question', () => {
         for (const id of shippedChecks) {
             const { area, severity } = checkOf(id);
             const text = checkText(id)!;
-            const isAiAccess = area === 'ai-access';
+            const isAiAccess = area === 'ai-access' || id === 'content-stale';
 
             expect(text.says.endsWith(notCounted), id).toBe(
                 severity === 'hint' && !isAiAccess,
@@ -60,5 +63,10 @@ describe('checkText', () => {
                 expect(text.fix, id).toContain('?');
             }
         }
+    });
+
+    it('ends content-stale, an on-page hint with the freshness label of the GEO hints, with the sentence of AI access', () => {
+        expect(checkOf('content-stale').area).toBe('on-page');
+        expect(checkText('content-stale')!.says.endsWith(notScored)).toBe(true);
     });
 });

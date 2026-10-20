@@ -1,6 +1,7 @@
 import type { Finding } from '@/features/audit/finding';
 import { canonicalOf } from '@/features/audit/observe';
 import type { AuditPage } from '@/features/audit/page';
+import { modifiedDates } from '@/features/audit/structured-data';
 import { titleWidth, titleWidthLimit } from '@/features/audit/title-width';
 import type { Fetched } from '@/features/crawl/fetch';
 
@@ -238,13 +239,14 @@ function textFindings(
 
 function staleFindings(
     url: string,
-    { modifiedTime }: AuditPage,
+    { modifiedTime, jsonLd }: AuditPage,
     headers: Headers,
     now: number,
 ): Finding[] {
     const lastModified = headers.get('last-modified');
+    const dateModified = newest(modifiedDates(jsonLd));
 
-    const times = [lastModified, modifiedTime]
+    const times = [lastModified, modifiedTime, dateModified]
         .map((value) => Date.parse(value ?? ''))
         .filter(Number.isFinite);
 
@@ -254,10 +256,21 @@ function staleFindings(
               {
                   check: 'content-stale',
                   url,
-                  detail: { lastModified, modifiedTime },
+                  detail: { lastModified, modifiedTime, dateModified },
               },
           ]
         : [];
+}
+
+function newest(dates: string[]) {
+    return dates.reduce<string | null>((latest, date) => {
+        const time = Date.parse(date);
+
+        return Number.isFinite(time) &&
+            (latest === null || time > Date.parse(latest))
+            ? date
+            : latest;
+    }, null);
 }
 
 function urlFindings(url: string): Finding[] {

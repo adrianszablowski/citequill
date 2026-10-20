@@ -334,6 +334,7 @@ export async function readPages(
         hosts: site.access.hosts,
         homes: site.homes,
         projectName: site.name,
+        domain: site.domain,
         previousRedirects: new Map(
             previous.flatMap(({ url, redirect_to }) =>
                 redirect_to ? [[url, redirect_to] as const] : [],

@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import type { AnyNode } from 'domhandler';
 import TurndownService from 'turndown';
 import { tables } from 'turndown-plugin-gfm';
 
@@ -120,9 +121,13 @@ export function robotsMetaOf(
 export function mainElement($: cheerio.CheerioAPI) {
     $(stripped).remove();
 
-    return (['main', '[role="main"]', 'article', 'body'] as const)
+    return ([...landmarks, 'body'] as const)
         .map((selector) => $(selector).first())
         .find((element) => element.html());
+}
+
+export function isLandmark(element: cheerio.Cheerio<AnyNode>) {
+    return landmarks.some((selector) => element.is(selector));
 }
 
 export function absolute(href: string | null | undefined, base: URL) {
@@ -151,6 +156,8 @@ export function toMarkdown(html: string) {
         .replace(/(?:[ \t]*\n){3,}/g, '\n\n')
         .trim();
 }
+
+const landmarks = ['main', '[role="main"]', 'article'] as const;
 
 const stripped = [
     'script',
