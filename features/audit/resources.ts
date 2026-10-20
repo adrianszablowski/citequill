@@ -129,7 +129,9 @@ export function addResources(
             next.set(url, {
                 ...known,
                 linked_from: withLinkingPage(known.linked_from, from),
-                link_count: known.link_count + 1,
+                link_count:
+                    known.link_count +
+                    (known.linked_from.includes(from) ? 0 : 1),
             });
 
             touched.add(url);

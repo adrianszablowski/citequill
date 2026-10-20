@@ -43,6 +43,10 @@ export function robotsFile(
     };
 }
 
+export function namedSitemaps(files: RobotsFile[]) {
+    return files.flatMap((file) => file.sitemaps);
+}
+
 export function parseRobots(text: string) {
     const groups: RobotsGroup[] = [];
     let isAgentRun = false;

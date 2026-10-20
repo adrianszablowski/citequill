@@ -8,8 +8,8 @@ import {
 } from '@/features/audit/catalogue';
 
 describe('catalogue', () => {
-    it('scores 113 checks, as the score header counts them', () => {
-        expect(scoredChecks).toHaveLength(113);
+    it('scores 112 checks, as the score header counts them', () => {
+        expect(scoredChecks).toHaveLength(112);
     });
 
     it('gates the score on the nine checks the Severity section names, every one of severity 3', () => {
@@ -186,5 +186,6 @@ describe('catalogue', () => {
         });
 
         expect(checkOf('noindex-content').severity).toBe('question');
+        expect(checkOf('sitemap-scope').severity).toBe('question');
     });
 });

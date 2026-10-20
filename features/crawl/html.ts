@@ -1,5 +1,11 @@
 import * as cheerio from 'cheerio';
-import type { AnyNode, Element } from 'domhandler';
+import {
+    type AnyNode,
+    type Element,
+    hasChildren,
+    isTag,
+    isText,
+} from 'domhandler';
 import TurndownService from 'turndown';
 import { tables } from 'turndown-plugin-gfm';
 
@@ -158,6 +164,10 @@ export function isLandmark(element: cheerio.Cheerio<AnyNode>) {
     );
 }
 
+export function spacedText(nodes: AnyNode[]) {
+    return textParts(nodes, []).join('').replace(/\s+/g, ' ').trim();
+}
+
 export function absolute(href: string | null | undefined, base: URL) {
     if (!href) {
         return null;
@@ -207,6 +217,62 @@ const stripped = [
     '[aria-hidden="true" i]',
 ].join(', ');
 
+const blockElements = new Set([
+    'address',
+    'article',
+    'aside',
+    'blockquote',
+    'body',
+    'br',
+    'caption',
+    'center',
+    'dd',
+    'details',
+    'dialog',
+    'div',
+    'dl',
+    'dt',
+    'fieldset',
+    'figcaption',
+    'figure',
+    'footer',
+    'form',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'header',
+    'hgroup',
+    'hr',
+    'html',
+    'legend',
+    'li',
+    'listing',
+    'main',
+    'menu',
+    'nav',
+    'ol',
+    'optgroup',
+    'option',
+    'p',
+    'plaintext',
+    'pre',
+    'search',
+    'section',
+    'summary',
+    'table',
+    'tbody',
+    'td',
+    'tfoot',
+    'th',
+    'thead',
+    'tr',
+    'ul',
+    'xmp',
+]);
+
 const turndown = new TurndownService({
     headingStyle: 'atx',
     codeBlockStyle: 'fenced',
@@ -227,7 +293,23 @@ function longestArticle($: cheerio.CheerioAPI) {
 }
 
 function textLength(element: cheerio.Cheerio<Element>) {
-    return element.text().replace(/\s+/g, ' ').trim().length;
+    return spacedText(element.toArray()).length;
+}
+
+function textParts(nodes: AnyNode[], parts: string[]) {
+    for (const node of nodes) {
+        if (isText(node)) {
+            parts.push(node.data);
+        } else if (hasChildren(node)) {
+            const gap = isTag(node) && blockElements.has(node.name) ? ' ' : '';
+
+            parts.push(gap);
+            textParts(node.children, parts);
+            parts.push(gap);
+        }
+    }
+
+    return parts;
 }
 
 function siteLinks($: cheerio.CheerioAPI, selector: string, base: URL) {

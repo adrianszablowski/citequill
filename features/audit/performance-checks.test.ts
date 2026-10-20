@@ -279,6 +279,7 @@ describe('assetWeightChecks', () => {
             {
                 check: 'assets-heavy',
                 url: home,
+                half: 'bytes',
                 detail: {
                     reason: 'bytes',
                     bytes: heavyAssetBytes + 1,

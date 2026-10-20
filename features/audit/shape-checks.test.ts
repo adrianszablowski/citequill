@@ -336,6 +336,10 @@ describe('shapeChecks, one-topic', () => {
         ).toEqual([]);
     });
 
+    it('reads the words of an H1 split by a br apart', () => {
+        expect(topic('Jak żyć dłużej | Acme', ['Jak<br>żyć'])).toEqual([]);
+    });
+
     it('folds full-width letters with NFKC before it compares', () => {
         expect(topic('ＳＨＯＥＳ for runners', ['Shoes'])).toEqual([]);
     });

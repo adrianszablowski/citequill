@@ -140,8 +140,8 @@ export function observeRead(
 
     const alternateCandidates = [
         ...new Set(
-            (alternates ? Object.values(alternates).flat() : []).flatMap(
-                ({ url }) => (url ? (linkTarget(url, hosts) ?? []) : []),
+            allAlternates(alternates).flatMap(({ url }) =>
+                url ? (linkTarget(url, hosts) ?? []) : [],
             ),
         ),
     ]
@@ -292,11 +292,13 @@ export function alternateSets(
 
 export type AlternateSets = ReturnType<typeof alternateSets>;
 
+export function allAlternates(alternates: AlternateSets | null) {
+    return alternates ? Object.values(alternates).flat() : [];
+}
+
 export function alternateCount(alternates: AlternateSets) {
     return new Set(
-        Object.values(alternates)
-            .flat()
-            .map(({ url, href }) => url ?? href),
+        allAlternates(alternates).map(({ url, href }) => url ?? href),
     ).size;
 }
 

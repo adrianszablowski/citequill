@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    cappedPerPage,
     fingerprint,
     findingRows,
     isTemplateSelector,
@@ -8,6 +9,10 @@ import {
     snippetLength,
     snippetOf,
 } from '@/features/audit/finding';
+import {
+    assetWeightChecks,
+    heavyAssetBytes,
+} from '@/features/audit/performance-checks';
 
 const context = {
     projectId: 'project',
@@ -71,6 +76,54 @@ describe('findingRows', () => {
         );
     });
 
+    it('tells the two halves of assets-heavy on one home page apart, and keeps the fingerprint of the files half', () => {
+        const [files, bytes] = findingRows(
+            [
+                {
+                    check: 'assets-heavy',
+                    url: 'https://acme.com/a',
+                    detail: { reason: 'files', files: 60 },
+                },
+                ...assetWeightChecks(
+                    ['https://acme.com/a'],
+                    [
+                        {
+                            linked_from: ['https://acme.com/a'],
+                            content_length: heavyAssetBytes + 1,
+                        },
+                    ],
+                ),
+            ],
+            context,
+        );
+
+        expect(bytes).toMatchObject({ subject: null, selector: null });
+        expect(bytes.fingerprint).not.toBe(files.fingerprint);
+
+        expect(files.fingerprint).toBe(
+            fingerprint('assets-heavy', 'page-a', null, null),
+        );
+    });
+
+    it('keeps the fingerprint of every other finding the hash of its check, page, subject and selector', () => {
+        const [row] = findingRows(
+            [
+                {
+                    check: 'link-broken-internal',
+                    url: 'https://acme.com/a',
+                    subject: 'https://acme.com/gone',
+                    selector: 'a.cta',
+                    detail: { reason: 'status', status: 404 },
+                },
+            ],
+            context,
+        );
+
+        expect(row.fingerprint).toBe(
+            '87db53a723792f38f46dbc94c064db55dee76c7bd152f75b5449612186a42c37',
+        );
+    });
+
     it('keeps a short snippet of the element and never the page', () => {
         const [row] = findingRows(
             [
@@ -85,6 +138,23 @@ describe('findingRows', () => {
 
         expect(row.snippet).toHaveLength(snippetLength);
         expect(row.snippet).toMatch(/^<link rel="canonical" href="x+…$/);
+    });
+});
+
+describe('cappedPerPage', () => {
+    it('drops a copy of a finding, never another half of it', () => {
+        const files = {
+            check: 'assets-heavy',
+            url: 'https://acme.com/a',
+            detail: { reason: 'files' },
+        } as const;
+
+        const bytes = { ...files, detail: { reason: 'bytes' }, half: 'bytes' };
+
+        expect(cappedPerPage([files, files, bytes, bytes])).toEqual([
+            files,
+            bytes,
+        ]);
     });
 });
 

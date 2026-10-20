@@ -82,7 +82,7 @@ const rows = {
         ['sitemap-not-in-robots', 'hint'],
         ['sitemap-limits', '3'],
         ['sitemap-invalid', '3'],
-        ['sitemap-scope', '3'],
+        ['sitemap-scope', 'question'],
         ['sitemap-url-error', '3'],
         ['sitemap-url-noncanonical', '2'],
         ['page-not-in-sitemap', '2'],

@@ -410,10 +410,10 @@ const texts: Partial<Record<CheckId, CheckText>> = {
         fix: 'Write every ampersand as &amp;, use full URLs under 2 048 characters, and declare the sitemaps.org namespace.',
     },
     'sitemap-scope': {
-        name: 'A sitemap lists URLs it may not list',
-        says: 'A sitemap may list only URLs on its own host and protocol, in its own folder or below it.',
-        link: links.protocol,
-        fix: 'Move the URLs into a sitemap on their own host, or put the sitemap at the root of the site.',
+        name: 'A sitemap lists URLs outside its folder or host',
+        says: 'Google reads a sitemap only for URLs in its own folder and below it, unless you add it in Search Console. A sitemap on another host counts for a site whose robots.txt names it.',
+        link: links.buildSitemap,
+        fix: 'Did you add this sitemap in Search Console? If you did not, add it there, or move these URLs into a sitemap at the root of their host.',
     },
     'sitemap-url-error': {
         name: 'A sitemap lists a page that fails',

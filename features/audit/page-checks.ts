@@ -7,6 +7,8 @@ import { imageChecks } from '@/features/audit/image-checks';
 import { linkChecks } from '@/features/audit/link-checks';
 import { viewportChecks } from '@/features/audit/mobile-checks';
 import {
+    allAlternates,
+    type AlternateSets,
     canonicalOf,
     googlebotDirectives,
     headerCanonical,
@@ -26,7 +28,7 @@ import {
     maxHops,
     tlsErrorOf,
 } from '@/features/crawl/fetch';
-import { absolute } from '@/features/crawl/html';
+import { absolute, hreflangAlternates } from '@/features/crawl/html';
 import {
     isSameLanguage,
     type Locale,
@@ -246,7 +248,7 @@ function answerFindings(
         ...(page
             ? [
                   ...canonicalFindings(url, fetched, page, locales),
-                  ...contentFindings(url, page, isIndexable),
+                  ...contentFindings(url, page, alternates, isIndexable),
                   ...heuristicChecks(url, row, page, directives, context),
                   ...performanceChecks(url, fetched, page, secondReadMs),
                   ...(isIndexable
@@ -343,6 +345,7 @@ function canonicalFindings(
 function contentFindings(
     url: string,
     page: NonNullable<Observed['page']>,
+    alternates: AlternateSets | null,
     isIndexable: boolean,
 ): Finding[] {
     const findings: Finding[] = [];
@@ -359,19 +362,22 @@ function contentFindings(
         return findings;
     }
 
-    const self = page.alternates.find(
+    const { lang } = page;
+
+    const selves = hreflangAlternates(allAlternates(alternates)).filter(
         (alternate) => alternate.href === url && alternate.lang !== 'x-default',
     );
 
     if (
-        !page.lang ||
-        !languageTag.test(page.lang) ||
-        (self && !isSameLanguage(page.lang, self.lang))
+        !lang ||
+        !languageTag.test(lang) ||
+        (selves.length > 0 &&
+            !selves.some((self) => isSameLanguage(lang, self.lang)))
     ) {
         findings.push({
             check: 'html-lang',
             url,
-            detail: { lang: page.lang, hreflang: self?.lang ?? null },
+            detail: { lang, hreflang: selves.map((self) => self.lang) },
         });
     }
 

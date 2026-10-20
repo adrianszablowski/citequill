@@ -153,6 +153,7 @@ const detailLabels: Record<string, string> = {
     html: 'HTML',
     elements: 'Elements',
     count: 'Count',
+    lines: 'Lines',
     length: 'Length',
     words: 'Words',
     level: 'Level',

@@ -92,7 +92,12 @@ describe('readAuditPage', () => {
             lang: 'en-gb',
             canonical: 'https://acme.com/pricing',
             robotsMeta: ['noindex', 'nosnippet'],
-            alternates: [{ lang: 'de', href: 'https://acme.de/preise' }],
+            alternateTags: [
+                expect.objectContaining({
+                    lang: 'de',
+                    url: 'https://acme.de/preise',
+                }),
+            ],
             links: [
                 'https://acme.com/',
                 'https://acme.com/contact',
@@ -171,7 +176,7 @@ describe('readAuditPage', () => {
         ]);
     });
 
-    it('keeps every hreflang tag as written in document order, with its absolute URL, skips an alternative stylesheet and a tag without href, and derives the alternates from the ones that resolve', () => {
+    it('keeps every hreflang tag as written in document order, with its absolute URL, and skips an alternative stylesheet and a tag without href', () => {
         const page = readAuditPage(
             `<html><head>
 <link rel="alternate" hreflang=" en-GB " href=" https://acme.com/uk ">
@@ -202,10 +207,6 @@ describe('readAuditPage', () => {
                 href: 'javascript:void(0)',
                 url: null,
             }),
-        ]);
-
-        expect(page.alternates).toEqual([
-            { lang: 'en-gb', href: 'https://acme.com/uk' },
         ]);
     });
 
@@ -280,6 +281,20 @@ describe('readAuditPage', () => {
             [1, 'h1', 'Plans for teams'],
             [3, 'h3#faq', 'FAQ'],
             [1, 'h1', 'Again'],
+        ]);
+    });
+
+    it('reads the text of a heading with a space at a br and none at an inline element', () => {
+        const page = readAuditPage(
+            '<html><body><h1>Jak<br>żyć</h1><h2>po<b>gru</b>bym<br>tekst</h2></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.h1s).toEqual(['Jak żyć']);
+
+        expect(page.headings.map(({ text }) => text)).toEqual([
+            'Jak żyć',
+            'pogrubym tekst',
         ]);
     });
 
@@ -595,6 +610,20 @@ describe('readAuditPage', () => {
         expect(page.hiddenBlocks[0].snippet).toMatch(/^<div id="seo"/);
     });
 
+    it('reads a hidden block of two paragraphs with a space between them', () => {
+        const words = (count: number) =>
+            Array.from({ length: count }, (_, i) => `word${i}`).join(' ');
+
+        const page = readAuditPage(
+            `<html><body><main><p>Text</p><div id="seo" style="left:-9999px"><p>${words(25)}</p><p>${words(25)}</p></div></main></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(
+            page.hiddenBlocks.map(({ words, text }) => [words, text]),
+        ).toEqual([[50, `${words(25)} ${words(25)}`]]);
+    });
+
     it('reads hidden blocks, images and anchors from the document, while the main text leaves out dialogs and hidden elements', () => {
         const words = Array.from({ length: 60 }, (_, i) => `w${i}`).join(' ');
 
@@ -618,6 +647,41 @@ describe('readAuditPage', () => {
         ]);
 
         expect(page.links).toEqual(['https://acme.com/privacy']);
+    });
+
+    it('reads the main text with a space at every block element and br, and none at an inline element', () => {
+        const pageOf = (main: string) =>
+            readAuditPage(
+                `<html><body><main>${main}</main></body></html>`,
+                'https://acme.com/',
+            );
+
+        expect(pageOf('<p>Czytaj dalej</p><p>20 Grzegorz</p>').mainText).toBe(
+            'Czytaj dalej 20 Grzegorz',
+        );
+
+        expect(
+            pageOf('<li>one</li><li>two</li><h2>Tytuł</h2>Tekst<br>po')
+                .mainText,
+        ).toBe('one two Tytuł Tekst po');
+
+        expect(pageOf('<p>po<b>gru</b>bym</p>').mainText).toBe('pogrubym');
+
+        expect(
+            pageOf('<table><tr><td>Cena</td><td>20 zł</td></tr></table>')
+                .mainText,
+        ).toBe('Cena 20 zł');
+
+        expect(
+            pageOf('<ul><li>one</li><li>two</li><li>three</li></ul>').wordCount,
+        ).toBe(3);
+
+        expect(
+            pageOf('<h2>Tytuł<br>Czy to działa?</h2><p>Tak.</p>').mainContent
+                .headings,
+        ).toEqual([
+            { level: 2, text: 'Tytuł Czy to działa?', isAnswered: true },
+        ]);
     });
 
     it('takes a SimHash of the main text the body hash is taken from, and none of an empty page', () => {

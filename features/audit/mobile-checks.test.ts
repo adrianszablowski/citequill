@@ -239,8 +239,8 @@ describe('judgeMobile', () => {
             subject: mobile,
             detail: {
                 reasons: ['words'],
-                desktop: { headings: 2, words: 101, links: 10 },
-                phone: { headings: 2, words: 51, links: 10 },
+                desktop: { headings: 2, words: 103, links: 10 },
+                phone: { headings: 2, words: 53, links: 10 },
             },
         });
     });

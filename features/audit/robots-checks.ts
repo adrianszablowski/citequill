@@ -80,7 +80,10 @@ function fileFindings({ url, status, hops, bytes, groups }: RobotsFile) {
             ...site,
             check: 'robots-unsupported',
             snippet: `${unsupported[0].directive}: ${unsupported[0].value}`,
-            detail: { lines: unsupported.map(({ line }) => line) },
+            detail: {
+                count: unsupported.length,
+                lines: unsupported.slice(0, 5).map(({ line }) => String(line)),
+            },
         });
     }
 

@@ -98,6 +98,7 @@ export function assetWeightChecks(
                   {
                       check: 'assets-heavy',
                       url: home,
+                      half: 'bytes',
                       detail: { reason: 'bytes', bytes, files: used.length },
                   },
               ]

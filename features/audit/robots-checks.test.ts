@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { detailLines } from '@/features/audit/format';
 import { robotsByteCap, robotsChecks } from '@/features/audit/robots-checks';
 import { robotsFile } from '@/features/audit/robots';
 
@@ -104,8 +105,42 @@ describe('robotsChecks', () => {
             url: null,
             subject: 'https://acme.com/robots.txt',
             snippet: 'crawl-delay: 10',
-            detail: { lines: [2, 3] },
+            detail: { count: 2, lines: ['2', '3'] },
         });
+    });
+
+    it('counts every line Google ignores and names the first 5', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    `User-agent: *\n${Array.from({ length: 7 }, (_, i) => `Crawl-delay: ${i}`).join('\n')}`,
+                ),
+            ],
+            homes,
+        );
+
+        expect(finding).toMatchObject({
+            check: 'robots-unsupported',
+            snippet: 'crawl-delay: 0',
+            detail: { count: 7, lines: ['2', '3', '4', '5', '6'] },
+        });
+    });
+
+    it('shows the number of a line past 999 as written, never with a thousands separator', () => {
+        const [finding] = robotsChecks(
+            [
+                file(
+                    'https://acme.com/robots.txt',
+                    200,
+                    `${'Disallow: /x\n'.repeat(1233)}Crawl-delay: 10`,
+                ),
+            ],
+            homes,
+        );
+
+        expect(detailLines(finding.detail)).toContain('Lines: 1234');
     });
 
     it('fails the gate for every home page Googlebot may not fetch, through its own group or the * group', () => {

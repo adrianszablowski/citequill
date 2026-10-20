@@ -222,6 +222,33 @@ describe('siteChecks', () => {
         ]);
     });
 
+    it('compares the twins on other paths of the first variant that is its own canonical, not of a first one that names another', () => {
+        expect(
+            siteChecks(
+                [
+                    row('/a?x=1', {
+                        body_hash: 'same',
+                        canonical_url: 'https://acme.com/b',
+                    }),
+                    row('/a?y=2', { body_hash: 'same' }),
+                    row('/b', { body_hash: 'same' }),
+                ],
+                context,
+            )
+                .filter(({ check }) => check === 'duplicate-body')
+                .map(({ url, detail }) => [url, detail]),
+        ).toEqual([
+            [
+                'https://acme.com/a?y=2',
+                { value: 'same', duplicates: ['https://acme.com/b'] },
+            ],
+            [
+                'https://acme.com/b',
+                { value: 'same', duplicates: ['https://acme.com/a?y=2'] },
+            ],
+        ]);
+    });
+
     it('finds no variants under one path with different bodies, or where a variant names the clean URL as canonical', () => {
         expect(
             checks([
@@ -235,6 +262,101 @@ describe('siteChecks', () => {
                 }),
             ]),
         ).toEqual([]);
+    });
+
+    it('pairs no two variants of a path that name the same canonical, by title, description or body', () => {
+        const variant = (path: string) =>
+            row(path, {
+                body_hash: 'same',
+                canonical_url: 'https://acme.com/a',
+                title: 'Shoes | Acme',
+                description: 'Every shoe we sell.',
+            });
+
+        expect(
+            siteChecks(
+                [variant('/a?sort=price'), variant('/a?sort=name')],
+                context,
+            ).filter(({ check }) =>
+                [
+                    'title-duplicate',
+                    'description-duplicate',
+                    'param-duplicates',
+                    'duplicate-body',
+                ].includes(check),
+            ),
+        ).toEqual([]);
+    });
+
+    it('pairs no two pages on different paths that name the same canonical, by body or by SimHash', () => {
+        const canonical = 'https://acme.com/article';
+
+        expect(
+            checks([
+                row('/print', { body_hash: 'same', canonical_url: canonical }),
+                row('/amp', { body_hash: 'same', canonical_url: canonical }),
+                row('/en/story', {
+                    body_hash: 'one',
+                    body_simhash: '0000000000000000',
+                    canonical_url: 'https://acme.com/story',
+                }),
+                row('/pl/story', {
+                    body_hash: 'two',
+                    body_simhash: '000000000000003f',
+                    canonical_url: 'https://acme.com/story',
+                }),
+            ]).filter(
+                (finding) =>
+                    finding.startsWith('duplicate-body') ||
+                    finding.startsWith('near-duplicate'),
+            ),
+        ).toEqual([]);
+    });
+
+    it('pairs a page that names a canonical other than its twin, and two twins that name none', () => {
+        expect(
+            siteChecks(
+                [
+                    row('/print', {
+                        body_hash: 'same',
+                        canonical_url: 'https://acme.com/article',
+                    }),
+                    row('/x', { body_hash: 'same', canonical_url: null }),
+                    row('/y', { body_hash: 'same', canonical_url: null }),
+                ],
+                context,
+            )
+                .filter(({ check }) => check === 'duplicate-body')
+                .map(({ url, detail }) => [url, detail]),
+        ).toEqual([
+            [
+                'https://acme.com/print',
+                {
+                    value: 'same',
+                    duplicates: ['https://acme.com/x', 'https://acme.com/y'],
+                },
+            ],
+            [
+                'https://acme.com/x',
+                {
+                    value: 'same',
+                    duplicates: [
+                        'https://acme.com/print',
+                        'https://acme.com/y',
+                    ],
+                },
+            ],
+            [
+                'https://acme.com/y',
+                {
+                    value: 'same',
+                    duplicates: [
+                        'https://acme.com/print',
+                        'https://acme.com/x',
+                    ],
+                },
+            ],
+        ]);
     });
 
     it('notes indexable pages whose SimHashes differ in 6 bits or fewer, with different body hashes and no canonical between them', () => {
@@ -612,6 +734,49 @@ describe('siteChecks', () => {
                 detail: { title: 'Untitled', siteName: 'acme' },
             },
         ]);
+    });
+
+    it('reports a Polish stock word as it reports an English one', () => {
+        expect(
+            siteChecks(
+                [
+                    row('/', { title: 'Acme' }),
+                    row('/start', { title: 'Strona główna | Acme' }),
+                    row('/draft', { title: 'Bez tytułu' }),
+                    row('/pricing', { title: 'Cennik | Acme' }),
+                ],
+                context,
+            ).filter(({ check }) => check === 'title-boilerplate'),
+        ).toEqual([
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/start',
+                detail: { title: 'Strona główna | Acme', siteName: 'acme' },
+            },
+            {
+                check: 'title-boilerplate',
+                url: 'https://acme.com/draft',
+                detail: { title: 'Bez tytułu', siteName: 'acme' },
+            },
+        ]);
+    });
+
+    it('reports every Polish stock word once the site name is removed', () => {
+        for (const word of [
+            'Strona główna',
+            'Bez tytułu',
+            'Witamy',
+            'Nowa strona',
+            'Domyślna',
+        ]) {
+            expect(
+                checks([
+                    row('/pricing', { title: 'Cennik | Acme' }),
+                    row('/a', { title: `${word} | Acme` }),
+                ]),
+                word,
+            ).toContain('title-boilerplate https://acme.com/a');
+        }
     });
 
     it('finds no site name in fewer than 2 titles, and still notes a stock word', () => {

@@ -1,9 +1,10 @@
 import type { Finding } from '@/features/audit/finding';
+import { namedSitemaps, type RobotsFile } from '@/features/audit/robots';
 import type { SitemapAnswer, SitemapFile } from '@/features/audit/sitemaps';
 import { sitemapByteCap } from '@/features/crawl/fetch';
 
 export interface SitemapContext {
-    named: string[];
+    robots: RobotsFile[];
     now: number;
 }
 
@@ -21,8 +22,11 @@ export const identicalLastmodShare = 0.9;
 
 export function sitemapChecks(
     files: SitemapFile[],
-    { named, now }: SitemapContext,
+    { robots, now }: SitemapContext,
 ): Finding[] {
+    const named = namedSitemaps(robots);
+    const naming = namingFiles(robots, files);
+
     const listed = new Set(
         [
             ...named,
@@ -51,7 +55,7 @@ export function sitemapChecks(
         ...answered.flatMap(({ file, fetched }) => [
             ...limits(file, fetched),
             ...invalid(file, fetched),
-            ...scope(file),
+            ...scope(file, naming),
             ...lastmod(file, now),
             ...priority(file),
             ...extensions(file),
@@ -163,17 +167,47 @@ function invalid(
         : [];
 }
 
-function scope({ url, sitemap }: SitemapFile): Finding[] {
+function namingFiles(robots: RobotsFile[], files: SitemapFile[]) {
+    return robots.map((file) => {
+        const named = new Set(file.sitemaps.map(normalized));
+
+        return {
+            origin: new URL(file.url).origin,
+            sitemaps: new Set([
+                ...named,
+                ...files
+                    .filter((index) => named.has(normalized(index.url)))
+                    .flatMap((index) =>
+                        index.sitemap.sitemaps.map(({ loc }) =>
+                            normalized(loc),
+                        ),
+                    ),
+            ]),
+        };
+    });
+}
+
+function scope(
+    { url, sitemap }: SitemapFile,
+    naming: ReturnType<typeof namingFiles>,
+): Finding[] {
     const base = new URL(url);
     const folder = base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
+
+    const origins = new Set(
+        naming
+            .filter(({ sitemaps }) => sitemaps.has(normalized(url)))
+            .map(({ origin }) => origin),
+    );
 
     const outside = sitemap.urls.filter(({ loc }) => {
         const entry = URL.parse(loc);
 
         return (
-            entry?.protocol !== base.protocol ||
-            entry.host !== base.host ||
-            !entry.pathname.startsWith(folder)
+            (entry?.protocol !== base.protocol ||
+                entry.host !== base.host ||
+                !entry.pathname.startsWith(folder)) &&
+            !origins.has(entry?.origin ?? '')
         );
     });
 

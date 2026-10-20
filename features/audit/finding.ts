@@ -10,6 +10,7 @@ export interface Finding {
     selector?: string | null;
     snippet?: string | null;
     detail?: Json;
+    half?: string;
 }
 
 export interface FindingContext {
@@ -39,6 +40,7 @@ export function findingRows(
             selector = null,
             snippet = null,
             detail = null,
+            half,
         }) => {
             const sitePageId = url === null ? null : (pageIds.get(url) ?? null);
 
@@ -52,7 +54,13 @@ export function findingRows(
                 selector,
                 snippet: snippet === null ? null : snippetOf(snippet),
                 detail,
-                fingerprint: fingerprint(check, sitePageId, subject, selector),
+                fingerprint: fingerprint(
+                    check,
+                    sitePageId,
+                    subject,
+                    selector,
+                    half,
+                ),
             };
         },
     );
@@ -68,6 +76,7 @@ export function cappedPerPage(findings: Finding[]): Finding[] {
             finding.url,
             finding.subject,
             finding.selector,
+            finding.half,
         ].join('\n');
 
         if (!seen.has(key)) {
@@ -99,10 +108,13 @@ export function fingerprint(
     sitePageId: string | null,
     subject: string | null,
     selector: string | null,
+    half?: string,
 ) {
+    // A finding without a half keeps the hash it had before halves existed,
+    // so the findings of earlier audits still match.
     return createHash('sha256')
         .update(
-            [check, sitePageId, subject, selector]
+            [check, sitePageId, subject, selector, ...(half ? [half] : [])]
                 .map((part) => part ?? '')
                 .join('\n'),
         )

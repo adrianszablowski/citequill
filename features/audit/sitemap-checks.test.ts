@@ -8,6 +8,7 @@ import {
     sitemapEntryCap,
     sitemapNamespace,
 } from '@/features/audit/sitemap-checks';
+import type { RobotsFile } from '@/features/audit/robots';
 import type { SitemapFile } from '@/features/audit/sitemaps';
 import { sitemapByteCap } from '@/features/crawl/fetch';
 import { emptySitemap, readSitemap } from '@/features/crawl/sitemap';
@@ -60,8 +61,17 @@ function entry(loc: string, children = '') {
     return `<url><loc>${loc}</loc>${children}</url>`;
 }
 
+function robotsNaming(
+    sitemaps: string[],
+    url = 'https://acme.com/robots.txt',
+): RobotsFile {
+    return { url, status: 200, hops: [], bytes: 0, groups: [], sitemaps };
+}
+
 function checks(files: SitemapFile[], named: string[] = [root]) {
-    return sitemapChecks(files, { named, now }).map((finding) => finding.check);
+    return sitemapChecks(files, { robots: [robotsNaming(named)], now }).map(
+        (finding) => finding.check,
+    );
 }
 
 describe('sitemapChecks', () => {
@@ -122,7 +132,7 @@ describe('sitemapChecks', () => {
                         sitemap: emptySitemap,
                     },
                 ],
-                { named: [root], now },
+                { robots: [robotsNaming([root])], now },
             ),
         ).toMatchObject([
             { check: 'sitemap-unreachable', detail: { error: 'timeout' } },
@@ -178,16 +188,16 @@ describe('sitemapChecks', () => {
     it('finds nothing in an empty urlset and calls an empty body no sitemap', () => {
         expect(checks([file(urlset([]))])).toEqual([]);
 
-        expect(sitemapChecks([file('')], { named: [root], now })).toMatchObject(
-            [
-                {
-                    check: 'sitemap-invalid',
-                    detail: {
-                        problems: ['not a sitemap', 'not well-formed XML'],
-                    },
+        expect(
+            sitemapChecks([file('')], { robots: [robotsNaming([root])], now }),
+        ).toMatchObject([
+            {
+                check: 'sitemap-invalid',
+                detail: {
+                    problems: ['not a sitemap', 'not well-formed XML'],
                 },
-            ],
-        );
+            },
+        ]);
     });
 
     it('reports a sitemap whose bytes are not UTF-8, unless the fetch cut it', () => {
@@ -195,7 +205,7 @@ describe('sitemapChecks', () => {
 
         expect(
             sitemapChecks([file(xml, { isUtf8: false })], {
-                named: [root],
+                robots: [robotsNaming([root])],
                 now,
             }),
         ).toMatchObject([
@@ -214,7 +224,7 @@ describe('sitemapChecks', () => {
                     `<urlset xmlns="http://www.google.com/schemas/sitemap/0.84">${entry('/relative')}${entry(`https://acme.com/${'a'.repeat(locLengthCap)}`)}${entry('https://acme.com/a?x=1&y=2')}</urlset>`,
                 ),
             ],
-            { named: [root], now },
+            { robots: [robotsNaming([root])], now },
         );
 
         expect(wrong).toMatchObject({
@@ -269,13 +279,140 @@ describe('sitemapChecks', () => {
                     { url: 'https://acme.com/blog/sitemap.xml' },
                 ),
             ],
-            { named: ['https://acme.com/blog/sitemap.xml'], now },
+            { robots: [robotsNaming([root])], now },
         );
 
         expect(finding).toMatchObject({
             check: 'sitemap-scope',
             detail: { count: 3 },
         });
+    });
+
+    it('does not count a URL whose protocol and host name the sitemap in their robots.txt, whatever its path', () => {
+        const sitemap = 'https://acme.com/sitemaps/sitemap.xml';
+
+        const scopeOf = (robots: RobotsFile[]) =>
+            sitemapChecks(
+                [
+                    file(
+                        urlset([
+                            entry('https://acme.com/sitemaps/a'),
+                            entry('https://acme.com/about'),
+                            entry('https://shop.acme.com/b'),
+                        ]),
+                        { url: sitemap },
+                    ),
+                ],
+                { robots, now },
+            ).filter((finding) => finding.check === 'sitemap-scope');
+
+        expect(
+            scopeOf([
+                robotsNaming([`${sitemap}#top`]),
+                robotsNaming([sitemap], 'https://shop.acme.com/robots.txt'),
+            ]),
+        ).toEqual([]);
+
+        expect(
+            scopeOf([
+                robotsNaming([sitemap]),
+                robotsNaming(
+                    ['https://shop.acme.com/sitemap.xml'],
+                    'https://shop.acme.com/robots.txt',
+                ),
+            ]),
+        ).toMatchObject([
+            {
+                detail: { count: 1, examples: ['https://shop.acme.com/b'] },
+            },
+        ]);
+
+        expect(
+            scopeOf([robotsNaming([], 'https://shop.acme.com/robots.txt')]),
+        ).toMatchObject([
+            {
+                detail: {
+                    count: 2,
+                    examples: [
+                        'https://acme.com/about',
+                        'https://shop.acme.com/b',
+                    ],
+                },
+            },
+        ]);
+
+        expect(
+            scopeOf([robotsNaming([sitemap], 'http://acme.com/robots.txt')]),
+        ).toMatchObject([
+            {
+                detail: {
+                    count: 2,
+                    examples: [
+                        'https://acme.com/about',
+                        'https://shop.acme.com/b',
+                    ],
+                },
+            },
+        ]);
+    });
+
+    it('counts a sitemap as named by the robots.txt that names an index listing it, for the URLs of that origin alone', () => {
+        const index = 'https://acme.com/sitemap_index.xml';
+        const posts = 'https://acme.com/sitemaps/posts.xml';
+        const pages = 'https://acme.com/sitemaps/pages.xml';
+
+        const indexOf = (url: string, child: string) =>
+            file(
+                `<sitemapindex xmlns="${sitemapNamespace}"><sitemap><loc>${child}</loc></sitemap></sitemapindex>`,
+                { url },
+            );
+
+        const childOf = (url: string) =>
+            file(
+                urlset([
+                    entry('https://acme.com/about'),
+                    entry('https://shop.acme.com/b'),
+                ]),
+                { url },
+            );
+
+        const scopeOf = (robots: RobotsFile[]) =>
+            sitemapChecks(
+                [
+                    indexOf(index, posts),
+                    indexOf('https://acme.com/other_index.xml', pages),
+                    childOf(posts),
+                    childOf(pages),
+                ],
+                { robots, now },
+            )
+                .filter((finding) => finding.check === 'sitemap-scope')
+                .map(({ subject, detail }) => ({ subject, detail }));
+
+        const both = {
+            count: 2,
+            examples: ['https://acme.com/about', 'https://shop.acme.com/b'],
+        };
+
+        expect(
+            scopeOf([
+                robotsNaming([index]),
+                robotsNaming([index], 'https://shop.acme.com/robots.txt'),
+            ]),
+        ).toEqual([{ subject: pages, detail: both }]);
+
+        expect(
+            scopeOf([
+                robotsNaming([]),
+                robotsNaming([index], 'https://shop.acme.com/robots.txt'),
+            ]),
+        ).toEqual([
+            {
+                subject: posts,
+                detail: { count: 1, examples: ['https://acme.com/about'] },
+            },
+            { subject: pages, detail: both },
+        ]);
     });
 
     it('reports a lastmod in the wrong format, in the future, or the same on over 90% of at least 10 entries', () => {
@@ -342,7 +479,7 @@ describe('sitemapChecks', () => {
                     ]),
                 ),
             ],
-            { named: [root], now },
+            { robots: [robotsNaming([root])], now },
         );
 
         expect(finding).toMatchObject({

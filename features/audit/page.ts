@@ -21,13 +21,12 @@ import {
 } from '@/features/audit/structured-data';
 import {
     absolute,
-    type Alternate,
     alternateLinks,
     type HreflangEntry,
-    hreflangAlternates,
     isLandmark,
     mainElement,
     robotsMetaOf,
+    spacedText,
 } from '@/features/crawl/html';
 import { jsonLdBlocks } from '@/features/crawl/signals';
 
@@ -139,7 +138,6 @@ export interface AuditPage {
     bingbotMeta: string[];
     refresh: string | null;
     alternateTags: AlternateTag[];
-    alternates: Alternate[];
     jsonLd: JsonLdBlock[];
     structuredData: StructuredData;
     isArticle: boolean;
@@ -277,7 +275,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
             .filter(({ keys }) => keys[0] === 'description')
             .map(({ content, isInHead }) => ({ content, isInHead })),
         h1s: h1Tags.map((tag) => {
-            const text = $(tag).text().replace(/\s+/g, ' ').trim();
+            const text = spacedText([tag]);
 
             return (
                 text ||
@@ -292,7 +290,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         headings: inDocument('h1, h2, h3, h4, h5, h6').map((tag) => ({
             ...located(tag),
             level: Number(tag.name.slice(1)),
-            text: $(tag).text().replace(/\s+/g, ' ').trim(),
+            text: spacedText([tag]),
         })),
         hasDoctype: $.root()
             .contents()
@@ -352,7 +350,6 @@ export function readAuditPage(html: string, url: string): AuditPage {
         bingbotMeta: robotsMetaOf($, 'bingbot'),
         refresh: refresh ? ($(refresh).attr('content') ?? '') : null,
         alternateTags,
-        alternates: hreflangAlternates(alternateTags),
         jsonLd,
         structuredData: data,
         isArticle:
@@ -393,16 +390,12 @@ export function readAuditPage(html: string, url: string): AuditPage {
     const around =
         main && (main.is(nosnippet) ? main : main.parents(nosnippet)).last()[0];
 
-    const mainText = cheerio
-        .load(main?.html() ?? '')
-        .text()
-        .replace(/\s+/g, ' ')
-        .trim();
+    const mainText = spacedText(main?.toArray() ?? []);
 
     return {
         ...page,
         mainText,
-        mainContent: mainContentOf($, main, h1Tags[0]),
+        mainContent: mainContentOf(main, h1Tags[0]),
         nosnippet: mainText && around ? selectorOf(around) : null,
         bodyHash: mainText
             ? createHash('sha256').update(mainText).digest('hex')
@@ -598,7 +591,7 @@ function hiddenBlocksOf(
                 $(element).find(blockControls).length === 0,
         )
         .map((element) => {
-            const text = $(element).text().replace(/\s+/g, ' ').trim();
+            const text = spacedText([element]);
 
             return {
                 selector: selectorOf(element),
@@ -635,7 +628,6 @@ function blocksOf(nodes: AnyNode[], blocks: Element[] = []) {
 }
 
 function mainContentOf(
-    $: cheerio.CheerioAPI,
     main: cheerio.Cheerio<Element> | undefined,
     h1: Element | undefined,
 ): MainContent {
@@ -667,7 +659,7 @@ function mainContentOf(
 
     const blocks = blocksOf(main?.[0]?.children ?? []).map((element) => ({
         element,
-        text: $(element).text().replace(/\s+/g, ' ').trim(),
+        text: spacedText([element]),
     }));
 
     const isAnswered = (index: number) => {
@@ -724,7 +716,7 @@ function mainContentOf(
                 ({ element }) =>
                     element.name === 'summary' || element.name === 'dt',
             )
-            .map(({ element }) => $(element).text().trim()),
+            .map(({ text }) => text),
     };
 }
 

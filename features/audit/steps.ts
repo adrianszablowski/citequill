@@ -59,6 +59,7 @@ import {
     blockedBy,
     cdnTestAgents,
     googlebotBlocks,
+    namedSitemaps,
     type RobotsFile,
     robotsFile,
 } from '@/features/audit/robots';
@@ -138,7 +139,7 @@ export async function discoverSite(
         }
     }
 
-    const named = files.flatMap((file) => file.sitemaps);
+    const named = namedSitemaps(files);
 
     const sitemaps = await readSitemaps(
         client,
@@ -163,7 +164,7 @@ export async function discoverSite(
         findingRows(
             [
                 ...robotsChecks(files, site.homes),
-                ...sitemapChecks(sitemaps, { named, now: Date.now() }),
+                ...sitemapChecks(sitemaps, { robots: files, now: Date.now() }),
             ],
             { projectId, auditId, pageIds: new Map() },
         ),

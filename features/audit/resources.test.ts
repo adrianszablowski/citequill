@@ -238,6 +238,39 @@ describe('addResources', () => {
         expect(touched).toEqual(['https://other.com/x']);
     });
 
+    it('counts a linking page once when a Read step adds its resources again, and still counts a new one', () => {
+        const candidates = [
+            {
+                url: 'https://acme.com/a.png',
+                kind: 'image' as const,
+                from: page,
+            },
+            {
+                url: 'https://acme.com/a.png',
+                kind: 'image' as const,
+                from: 'https://acme.com/b',
+            },
+        ];
+
+        const once = addResources(new Map(), candidates).frontier;
+        const twice = addResources(once, candidates).frontier;
+
+        expect(twice.get('https://acme.com/a.png')).toMatchObject({
+            link_count: 2,
+            linked_from: [page, 'https://acme.com/b'],
+        });
+
+        expect(
+            addResources(twice, [
+                {
+                    url: 'https://acme.com/a.png',
+                    kind: 'image',
+                    from: 'https://acme.com/c',
+                },
+            ]).frontier.get('https://acme.com/a.png')?.link_count,
+        ).toBe(3);
+    });
+
     it(`stores ${resourceCaps.external} external links and ${resourceCaps.internal} other resources at most, the first seen first`, () => {
         const full = new Map([
             ...frontierOf(resourceCaps.external, 'external'),

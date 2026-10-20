@@ -96,7 +96,7 @@ describe('scoreAudit', () => {
             score: 100,
             is_gated: false,
             checks_scored: 2,
-            checks_total: 113,
+            checks_total: 112,
             severity_3: 0,
             intended: [],
             results: [

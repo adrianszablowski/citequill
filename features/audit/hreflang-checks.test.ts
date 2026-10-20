@@ -591,6 +591,12 @@ describe('hreflangSiteChecks', () => {
         ]);
     });
 
+    it('leaves a page whose every alternate fails to resolve to hreflang-code', () => {
+        expect(
+            siteFindings([row('/en', { hreflang_count: 2 }), row('/de')]),
+        ).toEqual([]);
+    });
+
     it('checks only the indexable pages', () => {
         expect(
             siteFindings([

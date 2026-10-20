@@ -105,6 +105,12 @@ describe('detailLines', () => {
         ]);
     });
 
+    it('shows how many lines of robots.txt Google ignores and the numbers of the first ones', () => {
+        expect(
+            detailLines({ count: 7, lines: ['2', '3', '4', '5', '1234'] }),
+        ).toEqual(['Count: 7', 'Lines: 2, 3, 4, 5, 1234']);
+    });
+
     it('hides the keys the audit keeps for itself and the values with nothing to show', () => {
         expect(
             detailLines({

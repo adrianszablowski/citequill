@@ -30,7 +30,10 @@ const url = 'https://acme.com/pricing';
 
 const words = Array.from({ length: thinPageWords }, () => 'word').join(' ');
 
-function entry(inSitemap = false): QueueEntry {
+function entry(
+    inSitemap = false,
+    alternates: QueueEntry['alternates'] = null,
+): QueueEntry {
     return {
         url,
         depth: 1,
@@ -38,7 +41,7 @@ function entry(inSitemap = false): QueueEntry {
         in_sitemap: inSitemap,
         inbound_links: 0,
         linked_from: [],
-        alternates: null,
+        alternates,
     };
 }
 
@@ -101,13 +104,15 @@ function check(
     {
         inSitemap = false,
         pageIds = new Map<string, string>(),
+        alternates = null,
         ...overrides
     }: Partial<PageCheckContext> & {
         inSitemap?: boolean;
         pageIds?: Map<string, string>;
+        alternates?: QueueEntry['alternates'];
     } = {},
 ) {
-    const read: Read = { entry: entry(inSitemap), outcome };
+    const read: Read = { entry: entry(inSitemap, alternates), outcome };
 
     const observed = observeRead(read, {
         projectId: 'project',
@@ -569,6 +574,73 @@ describe('checkPage', () => {
                 ),
             ),
         ).toEqual([]);
+    });
+
+    it('compares the language with the self-entries of the tags, the Link header and the sitemap entry together, never x-default', () => {
+        const page = (head = '', headers: Record<string, string> = {}) =>
+            fetched(html(head), { headers });
+
+        expect(
+            checks(
+                page('', { link: `<${url}>; rel="alternate"; hreflang="de"` }),
+            ),
+        ).toEqual(['html-lang']);
+
+        expect(
+            checks(page(), { alternates: [{ lang: 'de', href: url }] }),
+        ).toEqual(['html-lang']);
+
+        expect(
+            checks(
+                page(
+                    ['de', 'en', 'x-default']
+                        .map(
+                            (lang) =>
+                                `<link rel="alternate" hreflang="${lang}" href="${url}">`,
+                        )
+                        .join(''),
+                ),
+            ),
+        ).toEqual([]);
+
+        expect(
+            checks(page(), { alternates: [{ lang: 'x-default', href: url }] }),
+        ).toEqual([]);
+    });
+
+    it('lists the language of every self-entry in the detail of html-lang', () => {
+        const page = (lang: string, head = '') =>
+            fetched(
+                documentOf(
+                    `<link rel="canonical" href="${url}">${head}`,
+                    undefined,
+                    lang,
+                ),
+            );
+
+        expect(
+            check(
+                page(
+                    ' lang="fr"',
+                    ['de', 'pl', 'x-default']
+                        .map(
+                            (lang) =>
+                                `<link rel="alternate" hreflang="${lang}" href="${url}">`,
+                        )
+                        .join(''),
+                ),
+            ),
+        ).toEqual([
+            {
+                check: 'html-lang',
+                url,
+                detail: { lang: 'fr', hreflang: ['de', 'pl'] },
+            },
+        ]);
+
+        expect(check(page(''))).toEqual([
+            { check: 'html-lang', url, detail: { lang: null, hreflang: [] } },
+        ]);
     });
 
     it(`notes main content under ${thinPageWords} words`, () => {

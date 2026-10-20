@@ -59,6 +59,11 @@ export const stockTitles = new Set([
     'welcome',
     'new page',
     'default',
+    'strona główna',
+    'bez tytułu',
+    'witamy',
+    'nowa strona',
+    'domyślna',
 ]);
 
 export function siteChecks(rows: SiteRow[], context: SiteContext) {
@@ -381,11 +386,7 @@ function twinsOf(row: SiteRow, others: SiteRow[]) {
             break;
         }
 
-        if (
-            other !== row &&
-            other.canonical_url !== row.url &&
-            row.canonical_url !== other.url
-        ) {
+        if (other !== row && !hasCanonicalBetween(row, other)) {
             duplicates.push(other.url);
         }
     }
@@ -393,22 +394,34 @@ function twinsOf(row: SiteRow, others: SiteRow[]) {
     return duplicates;
 }
 
+function hasCanonicalBetween(one: SiteRow, other: SiteRow) {
+    return (
+        other.canonical_url === one.url ||
+        one.canonical_url === other.url ||
+        (one.canonical_url !== null &&
+            one.canonical_url === other.canonical_url)
+    );
+}
+
 function onePerPath(rows: SiteRow[]) {
-    const firsts = new Map<string, string>();
+    const kept = new Map<string, SiteRow>();
 
-    for (const row of rows) {
+    for (const row of sortedByUrl(rows)) {
         const key = variantKey(row);
-        const first = key && firsts.get(key);
+        const held = key && kept.get(key);
 
-        if (key && (!first || row.url < first)) {
-            firsts.set(key, row.url);
+        if (
+            key &&
+            (!held || (isSelfCanonical(row) && !isSelfCanonical(held)))
+        ) {
+            kept.set(key, row);
         }
     }
 
     return rows.filter((row) => {
         const key = variantKey(row);
 
-        return !key || firsts.get(key) === row.url;
+        return !key || kept.get(key) === row;
     });
 }
 

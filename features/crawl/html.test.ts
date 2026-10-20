@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import * as cheerio from 'cheerio';
 
-import { mainElement, readPage, toMarkdown } from '@/features/crawl/html';
+import {
+    mainElement,
+    readPage,
+    spacedText,
+    toMarkdown,
+} from '@/features/crawl/html';
 
 const page = `<!doctype html>
 <html lang="en-US">
@@ -228,6 +233,17 @@ describe('mainElement', () => {
         );
     });
 
+    it('weighs the article against the body by the text a reader sees, a space between its blocks', () => {
+        const letters = [...'abcdefghij'];
+        const list = letters.map((letter) => `<p>${letter}</p>`).join('');
+
+        expect(
+            main(
+                `<div><h1>T</h1><p>${'x'.repeat(12)}</p></div><article>${list}</article>`,
+            ),
+        ).toBe(letters.join(' '));
+    });
+
     it('takes the article with the most text when the H1 sits in any element left out, in any case', () => {
         const story =
             '<article><p>The story, the longest article of the page.</p></article>';
@@ -267,6 +283,52 @@ describe('mainElement', () => {
         expect(main('<div><h1>Title</h1><p>Text.</p></div>')).toBe(
             'Title Text.',
         );
+    });
+});
+
+describe('spacedText', () => {
+    const textOf = (html: string) =>
+        spacedText(cheerio.load(html)('body').toArray());
+
+    it('puts a space at every block element and br, the obsolete ones included, and none at an inline one', () => {
+        expect(textOf('<div>a</div><div>b</div>')).toBe('a b');
+        expect(textOf('a<hr>b')).toBe('a b');
+        expect(textOf('a<br>b')).toBe('a b');
+        expect(textOf('<dl><dt>a</dt><dt>b</dt><dd>c</dd></dl>')).toBe('a b c');
+        expect(textOf('<dl><dt>a</dt><dd>b</dd><dd>c</dd></dl>')).toBe('a b c');
+
+        expect(textOf('<table><tr><th>a</th><th>b</th></tr></table>')).toBe(
+            'a b',
+        );
+
+        expect(
+            textOf(
+                '<table><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></table>',
+            ),
+        ).toBe('a b c');
+
+        expect(
+            textOf('<select><option>a</option><option>b</option></select>'),
+        ).toBe('a b');
+
+        expect(textOf('<details><summary>a</summary>b</details>')).toBe('a b');
+
+        expect(textOf('<listing>a</listing><listing>b</listing>')).toBe('a b');
+
+        expect(textOf('<xmp>a</xmp><xmp>b</xmp>')).toBe('a b');
+        expect(textOf('a<plaintext>b')).toBe('a b');
+        expect(textOf('po<b>gru</b><span>by</span>m')).toBe('pogrubym');
+    });
+
+    it('puts a space at a table row even where no cell gives one', () => {
+        expect(
+            spacedText(
+                cheerio
+                    .load('<tr>a</tr><tr>b</tr>', { xml: true })
+                    .root()
+                    .toArray(),
+            ),
+        ).toBe('a b');
     });
 });
 
