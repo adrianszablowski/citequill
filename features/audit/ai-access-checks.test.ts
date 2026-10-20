@@ -152,14 +152,14 @@ describe('aiAccessChecks', () => {
         ).toEqual([]);
     });
 
-    it('leaves a cookie banner with data-nosnippet on a page without main, whose main content is the body, as Complianz renders it', () => {
+    it('leaves a cookie banner with data-nosnippet out of the main content of a page without main, as Complianz renders it', () => {
         const banner = 'We use cookies to improve your experience. '.repeat(30);
 
         const body = `<div class="cmplz-cookiebanner" role="dialog" aria-modal="true" data-nosnippet><p>${banner}</p></div><div class="content"><p>A short page.</p></div>`;
 
         expect(
             readAuditPage(`<html><body>${body}</body></html>`, url).mainText,
-        ).toContain('We use cookies');
+        ).toBe('A short page.');
 
         expect(ids('', { body })).toEqual([]);
     });

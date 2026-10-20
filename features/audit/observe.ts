@@ -332,13 +332,35 @@ const valued = new Set([
     'unavailable_after',
 ]);
 
+function directiveParts(value: string) {
+    const parts: string[] = [];
+
+    for (const part of value.split(',')) {
+        const previous = parts.at(-1);
+
+        // An RFC 850 or RFC 822 date has a comma before its day, and no
+        // directive or crawler name starts with a digit as the day does.
+        if (
+            previous !== undefined &&
+            /unavailable_after\s*:[^,]*$/i.test(previous) &&
+            /^\s*\d/.test(part)
+        ) {
+            parts[parts.length - 1] = `${previous},${part}`;
+        } else {
+            parts.push(part);
+        }
+    }
+
+    return parts;
+}
+
 function agentDirectives(
     agent: string,
     robotsMeta: string[],
     robotsHeader: string | null,
 ) {
     return [
-        ...robotsMeta.flatMap((content) => content.split(',')),
+        ...robotsMeta.flatMap(directiveParts),
         ...headerDirectives(robotsHeader ?? '', agent),
     ]
         .map((directive) => directive.trim().toLowerCase())
@@ -349,7 +371,7 @@ function headerDirectives(header: string, target: string) {
     const directives: string[] = [];
     let agent: string | null = null;
 
-    for (const part of header.split(',')) {
+    for (const part of directiveParts(header)) {
         const scoped = /^\s*([\w-]+)\s*:(.*)$/.exec(part);
         let directive = part;
 

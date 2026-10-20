@@ -30,6 +30,8 @@ function answer(hops: Hop[], { body = '', headers = {} } = {}): Fetched {
         url: last.url,
         headers: new Headers(headers),
         body,
+        bytes: 0,
+        isUtf8: true,
         isTruncated: false,
         hops,
         headersMs: 0,
@@ -43,6 +45,7 @@ function disallowing(robotsTxt: string) {
             status: 200,
             hops: [],
             body: robotsTxt,
+            bytes: 0,
         }),
     ]);
 }

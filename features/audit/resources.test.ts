@@ -49,6 +49,8 @@ function fetched(
         url: 'https://acme.com/final.png',
         headers: new Headers(headers),
         body: '',
+        bytes: 0,
+        isUtf8: true,
         isTruncated: false,
         hops: [{ url: 'https://acme.com/final.png', status }],
         headersMs: 0,

@@ -39,8 +39,8 @@ export function sitemapsFromRobots(robots: string) {
         .filter(isHttpUrl);
 }
 
-export function sitemapEntries(xml: string) {
-    const sitemap = readSitemap(xml);
+export function sitemapEntries(xml: string, isTruncated = false) {
+    const sitemap = readSitemap(xml, isTruncated);
 
     return {
         pages: sitemap.urls.map((url) => url.loc),
@@ -48,7 +48,8 @@ export function sitemapEntries(xml: string) {
     };
 }
 
-export function readSitemap(xml: string): Sitemap {
+export function readSitemap(body: string, isTruncated = false): Sitemap {
+    const xml = isTruncated ? wholeEntries(body) : body;
     let parsed: Parsed;
 
     try {
@@ -112,6 +113,8 @@ interface Parsed {
     sitemapindex?: { sitemap?: Entry[] };
 }
 
+const entryEnd = /<\/(?:[\w-]+:)?(?:url|sitemap)\s*>/g;
+
 const repeated = new Set(['url', 'sitemap', 'link', 'image', 'video']);
 
 const parser = new XMLParser({
@@ -121,6 +124,16 @@ const parser = new XMLParser({
     parseTagValue: false,
     isArray: (name) => repeated.has(name),
 });
+
+function wholeEntries(xml: string) {
+    let end = 0;
+
+    for (const match of xml.matchAll(entryEnd)) {
+        end = match.index + match[0].length;
+    }
+
+    return xml.slice(0, end);
+}
 
 function rootOf(parsed: Parsed) {
     if (parsed.urlset !== undefined) {

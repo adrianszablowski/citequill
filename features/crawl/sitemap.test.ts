@@ -152,4 +152,52 @@ describe('readSitemap', () => {
             namespace: null,
         });
     });
+
+    it('reads a cut file up to its last whole entry, wherever the cut falls', () => {
+        const xml =
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://yoursite.com/a</loc></url><url><loc>https://yoursite.com/b</loc><lastmod>2026-10-01</lastmod></url></urlset>';
+
+        for (const end of ['yoursite.com/b', '/b</lo', '/b</loc><lastm']) {
+            const cut = xml.slice(0, xml.indexOf(end) + end.length);
+
+            expect(
+                readSitemap(cut, true).urls.map(({ loc }) => loc),
+                end,
+            ).toEqual(['https://yoursite.com/a']);
+
+            expect(readSitemap(cut, true).rejected, end).toEqual([]);
+        }
+
+        expect(
+            sitemapEntries(
+                '<sitemapindex><sitemap><loc>https://yoursite.com/a.xml</loc></sitemap><sitemap><loc>https://your',
+                true,
+            ).sitemaps,
+        ).toEqual(['https://yoursite.com/a.xml']);
+    });
+
+    it('drops the entry a cut falls in after its loc, for the crawl too', () => {
+        const cut =
+            '<urlset><url><loc>https://yoursite.com/a</loc></url><url><loc>https://yoursite.com/b</loc>';
+
+        expect(sitemapEntries(cut, true).pages).toEqual([
+            'https://yoursite.com/a',
+        ]);
+
+        expect(
+            sitemapEntries(
+                '<sitemapindex><sitemap><loc>https://yoursite.com/a.xml</loc></sitemap><sitemap><loc>https://yoursite.com/b.xml</loc>',
+                true,
+            ).sitemaps,
+        ).toEqual(['https://yoursite.com/a.xml']);
+    });
+
+    it('finds the end of an entry written with a namespace prefix', () => {
+        const cut =
+            '<s:urlset xmlns:s="http://www.sitemaps.org/schemas/sitemap/0.9"><s:url><s:loc>https://yoursite.com/a</s:loc></s:url ><s:url><s:loc>https://yoursite.com/b</s:loc>';
+
+        expect(readSitemap(cut, true).urls.map(({ loc }) => loc)).toEqual([
+            'https://yoursite.com/a',
+        ]);
+    });
 });

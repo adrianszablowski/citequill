@@ -27,6 +27,8 @@ function answer(
         url: home,
         headers: new Headers(headers),
         body,
+        bytes: 0,
+        isUtf8: true,
         isTruncated: false,
         hops: [{ url: home, status }],
         headersMs: 0,

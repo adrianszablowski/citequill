@@ -1,13 +1,16 @@
+import { constants, gzipSync } from 'node:zlib';
+
 import { describe, expect, it } from 'vitest';
 
 import { siteClient } from '@/features/audit/client';
 import { firstPace } from '@/features/audit/pacing';
 import { siteHosts } from '@/features/audit/queue';
 import { readSitemaps, sitemapCap } from '@/features/audit/sitemaps';
+import { maxBytes } from '@/features/crawl/fetch';
 
 const hosts = siteHosts('acme.com', ['https://acme.com']);
 
-function site(files: Record<string, string>) {
+function site(files: Record<string, string | Uint8Array<ArrayBuffer>>) {
     const calls: string[] = [];
 
     const client = siteClient({
@@ -90,6 +93,62 @@ describe('readSitemaps', () => {
         await read(['https://other.com/sitemap.xml', root]);
 
         expect(calls).toEqual([root]);
+    });
+
+    it('unpacks a gzipped sitemap, reads it past 2 MB and keeps no body', async () => {
+        const root = 'https://acme.com/sitemap.xml.gz';
+
+        const locs = Array.from(
+            { length: 50_000 },
+            (_, i) => `https://acme.com/products/${'p'.repeat(40)}-${i}`,
+        );
+
+        const xml = urlset(locs);
+        const { read } = site({ [root]: new Uint8Array(gzipSync(xml)) });
+        const [file] = await read([root]);
+
+        expect(xml.length).toBeGreaterThan(maxBytes);
+        expect(file.sitemap.urls).toHaveLength(locs.length);
+        expect(file.sitemap.urls.at(-1)?.loc).toBe(locs.at(-1));
+
+        expect(file.fetched).toMatchObject({
+            status: 200,
+            bytes: xml.length,
+            isTruncated: false,
+        });
+
+        expect(file.fetched).not.toHaveProperty('body');
+    });
+
+    it('reads a cut gzipped sitemap up to its last whole entry and says it is cut', async () => {
+        const root = 'https://acme.com/sitemap.xml.gz';
+        const xml = urlset(['https://acme.com/a', 'https://acme.com/b']);
+
+        const packed = gzipSync(xml.slice(0, xml.lastIndexOf('</url>')), {
+            finishFlush: constants.Z_SYNC_FLUSH,
+        });
+
+        const { read } = site({ [root]: new Uint8Array(packed) });
+        const [file] = await read([root]);
+
+        expect(file.fetched).toMatchObject({ isTruncated: true });
+
+        expect(file.sitemap.urls.map(({ loc }) => loc)).toEqual([
+            'https://acme.com/a',
+        ]);
+    });
+
+    it(`reads ${sitemapCap} files of an index that lists 130 000`, async () => {
+        const root = 'https://acme.com/sitemap_index.xml';
+
+        const children = Array.from(
+            { length: 130_000 },
+            (_, i) => `https://acme.com/sitemap-${i}.xml`,
+        );
+
+        const { read } = site({ [root]: index(children) });
+
+        expect(await read([root])).toHaveLength(sitemapCap);
     });
 
     it('keeps a sitemap that did not answer as a file with no entries', async () => {

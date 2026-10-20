@@ -4,12 +4,12 @@ import {
     imagesPerUrlCap,
     lastmodSample,
     locLengthCap,
-    sitemapByteCap,
     sitemapChecks,
     sitemapEntryCap,
     sitemapNamespace,
 } from '@/features/audit/sitemap-checks';
 import type { SitemapFile } from '@/features/audit/sitemaps';
+import { sitemapByteCap } from '@/features/crawl/fetch';
 import { emptySitemap, readSitemap } from '@/features/crawl/sitemap';
 
 const root = 'https://acme.com/sitemap.xml';
@@ -22,12 +22,16 @@ function file(
         status = 200,
         finalUrl = url,
         headers = {},
+        bytes = xml.length,
+        isUtf8 = true,
         isTruncated = false,
     }: {
         url?: string;
         status?: number;
         finalUrl?: string;
         headers?: Record<string, string>;
+        bytes?: number;
+        isUtf8?: boolean;
         isTruncated?: boolean;
     } = {},
 ): SitemapFile {
@@ -38,12 +42,13 @@ function file(
             status,
             url: finalUrl,
             headers: new Headers(headers),
-            body: xml,
+            bytes,
+            isUtf8,
             isTruncated,
             hops: [{ url, status }],
             headersMs: 0,
         },
-        sitemap: status === 200 ? readSitemap(xml) : emptySitemap,
+        sitemap: status === 200 ? readSitemap(xml, isTruncated) : emptySitemap,
     };
 }
 
@@ -134,10 +139,72 @@ describe('sitemapChecks', () => {
         expect(
             checks([
                 file(urlset([]), {
-                    headers: { 'content-length': String(sitemapByteCap + 1) },
+                    bytes: sitemapByteCap + 1,
+                    isTruncated: true,
                 }),
             ]),
         ).toEqual(['sitemap-limits']);
+    });
+
+    it('reports a sitemap of 130 000 entries, each with its own lastmod, without failing', () => {
+        const many = Array.from({ length: 130_000 }, (_, i) =>
+            entry(
+                `https://acme.com/p${i}`,
+                `<lastmod>${new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString()}</lastmod>`,
+            ),
+        );
+
+        expect(checks([file(urlset(many))])).toEqual(['sitemap-limits']);
+    });
+
+    it('counts the size of a sitemap after unpacking, never its Content-Length, and lets a file of exactly 50 MB through', () => {
+        expect(
+            checks([
+                file(urlset([]), {
+                    headers: {
+                        'content-length': String(sitemapByteCap + 1),
+                        'content-encoding': 'gzip',
+                    },
+                    bytes: 1_000,
+                }),
+            ]),
+        ).toEqual([]);
+
+        expect(checks([file(urlset([]), { bytes: sitemapByteCap })])).toEqual(
+            [],
+        );
+    });
+
+    it('finds nothing in an empty urlset and calls an empty body no sitemap', () => {
+        expect(checks([file(urlset([]))])).toEqual([]);
+
+        expect(sitemapChecks([file('')], { named: [root], now })).toMatchObject(
+            [
+                {
+                    check: 'sitemap-invalid',
+                    detail: {
+                        problems: ['not a sitemap', 'not well-formed XML'],
+                    },
+                },
+            ],
+        );
+    });
+
+    it('reports a sitemap whose bytes are not UTF-8, unless the fetch cut it', () => {
+        const xml = urlset([entry('https://acme.com/a')]);
+
+        expect(
+            sitemapChecks([file(xml, { isUtf8: false })], {
+                named: [root],
+                now,
+            }),
+        ).toMatchObject([
+            { check: 'sitemap-invalid', detail: { problems: ['not UTF-8'] } },
+        ]);
+
+        expect(
+            checks([file(xml, { isUtf8: false, isTruncated: true })]),
+        ).toEqual([]);
     });
 
     it('reports a wrong namespace, a relative or overlong <loc>, broken XML and a named file that is no sitemap', () => {
@@ -169,11 +236,24 @@ describe('sitemapChecks', () => {
         ]);
     });
 
-    it('does not call a sitemap the fetch cut at 2 MB broken', () => {
+    it('does not call a sitemap the fetch cut broken', () => {
         const cut = `${urlset([entry('https://acme.com/a')]).slice(0, -12)}`;
 
         expect(checks([file(cut, { isTruncated: true })])).toEqual([]);
         expect(checks([file(cut)])).toEqual(['sitemap-invalid']);
+    });
+
+    it('judges a sitemap cut inside its last <loc> on the entries before it', () => {
+        const cut = urlset([
+            entry('https://acme.com/a'),
+            entry('https://acme.com/b'),
+        ]).slice(0, -30);
+
+        expect(checks([file(cut, { isTruncated: true })])).toEqual([]);
+
+        expect(readSitemap(cut, true).urls.map(({ loc }) => loc)).toEqual([
+            'https://acme.com/a',
+        ]);
     });
 
     it('reports a URL on another protocol or host, or above the folder of its sitemap', () => {

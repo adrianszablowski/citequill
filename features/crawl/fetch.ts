@@ -1,5 +1,6 @@
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { BlockList, isIP } from 'node:net';
+import { createGunzip } from 'node:zlib';
 
 export const userAgent = 'CitequillBot/1.0 (+https://citequill.com/bot)';
 
@@ -24,6 +25,8 @@ export const timeoutMs = 15_000;
 
 export const maxBytes = 2_000_000;
 
+export const sitemapByteCap = 50 * 1024 * 1024;
+
 export const maxHops = 10;
 
 export interface Hop {
@@ -37,6 +40,8 @@ export interface Fetched {
     url: string;
     headers: Headers;
     body: string;
+    bytes: number;
+    isUtf8: boolean;
     isTruncated: boolean;
     hops: Hop[];
     headersMs: number;
@@ -51,12 +56,18 @@ export interface FetchOptions {
     method?: 'GET' | 'HEAD';
     headers?: Record<string, string>;
     botSecret?: { value: string; hosts: string[] };
+    isSitemap?: boolean;
 }
 
 export async function fetchPublic(
     url: string,
     deps: FetchDeps = defaultDeps,
-    { method = 'GET', headers = {}, botSecret }: FetchOptions = {},
+    {
+        method = 'GET',
+        headers = {},
+        botSecret,
+        isSitemap = false,
+    }: FetchOptions = {},
 ): Promise<Fetched> {
     const signal = AbortSignal.timeout(timeoutMs);
     const hops: Hop[] = [];
@@ -110,18 +121,17 @@ export async function fetchPublic(
             await response.body?.cancel();
         }
 
-        const { body, isTruncated } =
+        const read =
             method === 'HEAD'
-                ? { body: '', isTruncated: false }
-                : await readBody(response, maxBytes);
+                ? { body: '', bytes: 0, isUtf8: true, isTruncated: false }
+                : await readBody(response, isSitemap);
 
         return {
             ok: response.ok,
             status: response.status,
             url: current.href,
             headers: response.headers,
-            body,
-            isTruncated,
+            ...read,
             hops,
             headersMs,
         };
@@ -194,6 +204,8 @@ const tlsCodes = new Set([
     'CERT_UNTRUSTED',
 ]);
 
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
 const blocked = new BlockList();
 
 for (const [address, prefix] of [
@@ -240,34 +252,100 @@ async function assertPublic(url: URL, lookup: FetchDeps['lookup']) {
     }
 }
 
-async function readBody(response: Response, limit: number) {
+async function readBody(response: Response, isSitemap: boolean) {
+    const limit = isSitemap ? sitemapByteCap : maxBytes;
+    const raw = await readBytes(response, limit);
+
+    if (raw.error !== null && !isSitemap) {
+        throw raw.error;
+    }
+
+    const read =
+        isSitemap && raw.bytes[0] === 0x1f && raw.bytes[1] === 0x8b
+            ? await gunzipped(raw.bytes, limit)
+            : { ...raw, isCut: false };
+
+    return {
+        ...decoded(read.bytes.subarray(0, limit), response.headers),
+        bytes: read.size,
+        isTruncated:
+            raw.size > limit ||
+            raw.error !== null ||
+            read.isCut ||
+            read.size > limit,
+    };
+}
+
+async function readBytes(response: Response, limit: number) {
     if (!response.body) {
-        return { body: '', isTruncated: false };
+        return { bytes: Buffer.alloc(0), size: 0, error: null };
     }
 
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let size = 0;
 
-    while (size < limit) {
-        const { done, value } = await reader.read();
+    try {
+        while (size <= limit) {
+            const { done, value } = await reader.read();
 
-        if (done) {
-            break;
+            if (done) {
+                break;
+            }
+
+            chunks.push(value);
+            size += value.byteLength;
         }
 
-        chunks.push(value);
-        size += value.byteLength;
+        await reader.cancel();
+    } catch (error) {
+        return { bytes: Buffer.concat(chunks), size, error };
     }
 
-    await reader.cancel();
+    return { bytes: Buffer.concat(chunks), size, error: null };
+}
 
-    return {
-        body: decoder(response.headers).decode(
-            Buffer.concat(chunks).subarray(0, limit),
-        ),
-        isTruncated: size > limit,
-    };
+// A gzip stream the server cut ends in Z_BUF_ERROR after giving every byte it
+// holds, and trailing bytes after the stream end in Z_DATA_ERROR, so an error
+// once output has started is a cut file, judged on what it gave.
+async function gunzipped(packed: Buffer, limit: number) {
+    const gunzip = createGunzip();
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let isCut = false;
+
+    gunzip.end(packed);
+
+    try {
+        for await (const chunk of gunzip as AsyncIterable<Buffer>) {
+            chunks.push(chunk);
+            size += chunk.byteLength;
+
+            if (size > limit) {
+                break;
+            }
+        }
+    } catch (error) {
+        isCut =
+            size > 0 || (error as { code?: unknown }).code === 'Z_BUF_ERROR';
+    }
+
+    return { bytes: Buffer.concat(chunks), size, isCut };
+}
+
+function decoded(bytes: Uint8Array, headers: Headers) {
+    const lenient = decoder(headers);
+
+    try {
+        const text = utf8.decode(bytes);
+
+        return {
+            body: lenient.encoding === 'utf-8' ? text : lenient.decode(bytes),
+            isUtf8: true,
+        };
+    } catch {
+        return { body: lenient.decode(bytes), isUtf8: false };
+    }
 }
 
 function decoder(headers: Headers) {

@@ -38,6 +38,8 @@ function fetched({
         url: last.url,
         headers: new Headers(headers),
         body,
+        bytes: 0,
+        isUtf8: true,
         isTruncated: false,
         hops,
         headersMs,

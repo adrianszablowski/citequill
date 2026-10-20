@@ -1,6 +1,6 @@
 import type { Finding } from '@/features/audit/finding';
-import type { SitemapFile } from '@/features/audit/sitemaps';
-import type { Fetched } from '@/features/crawl/fetch';
+import type { SitemapAnswer, SitemapFile } from '@/features/audit/sitemaps';
+import { sitemapByteCap } from '@/features/crawl/fetch';
 
 export interface SitemapContext {
     named: string[];
@@ -10,8 +10,6 @@ export interface SitemapContext {
 export const sitemapNamespace = 'http://www.sitemaps.org/schemas/sitemap/0.9';
 
 export const sitemapEntryCap = 50_000;
-
-export const sitemapByteCap = 50 * 1024 * 1024;
 
 export const locLengthCap = 2_048;
 
@@ -106,9 +104,10 @@ function unreachable({ url, fetched }: SitemapFile): Finding[] {
         : [{ ...site, detail: { redirectedTo: fetched.url } }];
 }
 
-function limits({ url, sitemap }: SitemapFile, fetched: Fetched): Finding[] {
-    const bytes = Number(fetched.headers.get('content-length') ?? 0);
-
+function limits(
+    { url, sitemap }: SitemapFile,
+    { bytes }: SitemapAnswer,
+): Finding[] {
     return sitemap.urls.length > sitemapEntryCap ||
         sitemap.sitemaps.length > sitemapEntryCap ||
         bytes > sitemapByteCap
@@ -127,12 +126,16 @@ function limits({ url, sitemap }: SitemapFile, fetched: Fetched): Finding[] {
         : [];
 }
 
-function invalid({ url, sitemap }: SitemapFile, fetched: Fetched): Finding[] {
+function invalid(
+    { url, sitemap }: SitemapFile,
+    fetched: SitemapAnswer,
+): Finding[] {
     const long = [...sitemap.urls, ...sitemap.sitemaps].filter(
         (entry) => entry.loc.length > locLengthCap,
     );
 
     const problems = [
+        ...(fetched.isUtf8 || fetched.isTruncated ? [] : ['not UTF-8']),
         ...(sitemap.root || fetched.isTruncated ? [] : ['not a sitemap']),
         ...(sitemap.isWellFormed || fetched.isTruncated
             ? []
@@ -201,12 +204,16 @@ function lastmod({ url, sitemap }: SitemapFile, now: number): Finding[] {
     );
 
     const counts = new Map<string, number>();
+    let mostCommon = 0;
 
     for (const date of dates) {
-        counts.set(date, (counts.get(date) ?? 0) + 1);
+        const count = (counts.get(date) ?? 0) + 1;
+
+        counts.set(date, count);
+        mostCommon = Math.max(mostCommon, count);
     }
 
-    const identical = Math.max(0, ...counts.values()) / (dates.length || 1);
+    const identical = mostCommon / (dates.length || 1);
 
     const isIdentical =
         dates.length >= lastmodSample && identical > identicalLastmodShare;

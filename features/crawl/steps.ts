@@ -6,6 +6,7 @@ import { observePage } from '@/features/audit/observe';
 import { writeSitePages } from '@/features/audit/site-pages';
 import { chunkText, pageChunks } from '@/features/crawl/budget';
 import {
+    defaultDeps,
     fetchPublic,
     fetchText,
     isHtml,
@@ -583,9 +584,9 @@ function isSameSite(url: string, origin: string) {
 }
 
 async function pagesFromSitemaps(sitemaps: string[], origin: string) {
-    const queue = [...new Set(sitemaps)];
+    let queue = [...new Set(sitemaps)];
     const seen = new Set<string>();
-    const pages: string[] = [];
+    let pages: string[] = [];
 
     while (queue.length > 0 && seen.size < sitemapCap) {
         const url = queue.shift()!;
@@ -596,18 +597,20 @@ async function pagesFromSitemaps(sitemaps: string[], origin: string) {
 
         seen.add(url);
 
-        const xml = await fetchText(url);
+        const fetched = await fetchPublic(url, defaultDeps, {
+            isSitemap: true,
+        }).catch(() => null);
 
-        if (!xml) {
+        if (!fetched?.ok) {
             continue;
         }
 
-        const entries = sitemapEntries(xml);
+        const entries = sitemapEntries(fetched.body, fetched.isTruncated);
 
-        pages.push(...entries.pages);
+        pages = pages.concat(entries.pages);
 
-        queue.push(
-            ...entries.sitemaps.filter((child) => isSameSite(child, origin)),
+        queue = queue.concat(
+            entries.sitemaps.filter((child) => isSameSite(child, origin)),
         );
     }
 

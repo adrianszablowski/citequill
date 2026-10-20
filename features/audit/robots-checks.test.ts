@@ -18,6 +18,7 @@ function file(url: string, status: number | null, body = '', redirects = 0) {
                       status,
                   })),
                   body,
+                  bytes: Buffer.byteLength(body),
               },
     );
 }

@@ -412,6 +412,39 @@ export function readAuditPage(html: string, url: string): AuditPage {
     };
 }
 
+export function srcsetUrls(srcset: string) {
+    const urls: string[] = [];
+    let index = 0;
+
+    for (;;) {
+        candidateUrl.lastIndex = index;
+
+        const [separatorsAndUrl, url] = candidateUrl.exec(srcset)!;
+
+        index += separatorsAndUrl.length;
+
+        if (url === '') {
+            return urls;
+        }
+
+        const bare = url.replace(/,+$/, '');
+
+        if (bare !== url) {
+            urls.push(bare);
+
+            continue;
+        }
+
+        const { descriptors, end } = descriptorsOf(srcset, index);
+
+        index = end;
+
+        if (hasValidDescriptors(descriptors)) {
+            urls.push(url);
+        }
+    }
+}
+
 const resourceAttributes = [
     { selector: 'script[src]', kind: 'script', attribute: 'src' },
     {
@@ -436,6 +469,12 @@ const resourceAttributes = [
 const resourceSelector = resourceAttributes
     .map(({ selector }) => selector)
     .join(', ') as cheerio.SelectorType;
+
+const candidateUrl = /[\t\n\f\r ,]*([^\t\n\f\r ]*)/y;
+
+const asciiWhitespace = /[\t\n\f\r ]/;
+
+const floatingPoint = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][-+]?\d+)?$/;
 
 const password = 'input[type="password" i]';
 
@@ -482,11 +521,60 @@ function isInDocument($: cheerio.CheerioAPI, tag: Element) {
     );
 }
 
-function srcsetUrls(srcset: string) {
-    return srcset
-        .split(',')
-        .map((candidate) => candidate.trim().split(/\s+/)[0])
-        .filter(Boolean);
+function descriptorsOf(srcset: string, start: number) {
+    const descriptors: string[] = [];
+    let descriptor = '';
+    let isInParens = false;
+    let index = start;
+
+    for (; index < srcset.length; index++) {
+        const char = srcset[index];
+
+        if (!isInParens && char === ',') {
+            index += 1;
+
+            break;
+        }
+
+        if (!isInParens && asciiWhitespace.test(char)) {
+            descriptors.push(descriptor);
+            descriptor = '';
+        } else {
+            descriptor += char;
+            isInParens = isInParens ? char !== ')' : char === '(';
+        }
+    }
+
+    return {
+        descriptors: [...descriptors, descriptor].filter(Boolean),
+        end: index,
+    };
+}
+
+function hasValidDescriptors(descriptors: string[]) {
+    const kinds = new Set<string>();
+
+    for (const descriptor of descriptors) {
+        const kind = descriptor.slice(-1);
+        const value = descriptor.slice(0, -1);
+
+        const isValid =
+            kind === 'x'
+                ? floatingPoint.test(value) && Number(value) >= 0
+                : (kind === 'w' || kind === 'h') &&
+                  /^\d+$/.test(value) &&
+                  Number(value) > 0;
+
+        if (!isValid || kinds.has(kind)) {
+            return false;
+        }
+
+        kinds.add(kind);
+    }
+
+    return kinds.has('x')
+        ? kinds.size === 1
+        : !kinds.has('h') || kinds.has('w');
 }
 
 function locatedOf($: cheerio.CheerioAPI) {

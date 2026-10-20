@@ -8,9 +8,11 @@ import {
     type Sitemap,
 } from '@/features/crawl/sitemap';
 
+export type SitemapAnswer = Omit<Fetched, 'body'>;
+
 export interface SitemapFile {
     url: string;
-    fetched: Fetched | Error | null;
+    fetched: SitemapAnswer | Error | null;
     sitemap: Sitemap;
 }
 
@@ -33,7 +35,7 @@ export async function readSitemaps(
             continue;
         }
 
-        const fetched = await client.read(url);
+        const fetched = await client.read(url, { isSitemap: true });
 
         if (fetched === null || hasStopped(client.pace())) {
             break;
@@ -42,16 +44,30 @@ export async function readSitemaps(
         const sitemap =
             fetched instanceof Error || !fetched.ok
                 ? emptySitemap
-                : readSitemap(fetched.body);
+                : readSitemap(fetched.body, fetched.isTruncated);
 
-        files.push({ url, fetched, sitemap });
+        files.push({ url, fetched: withoutBody(fetched), sitemap });
 
-        pending.push(
-            ...sitemap.sitemaps.flatMap(
-                ({ loc }) => linkTarget(loc, hosts) ?? [],
-            ),
-        );
+        for (const { loc } of sitemap.sitemaps) {
+            const child = linkTarget(loc, hosts);
+
+            if (child) {
+                pending.push(child);
+            }
+        }
     }
 
     return files;
+}
+
+function withoutBody(fetched: Fetched | Error) {
+    if (fetched instanceof Error) {
+        return fetched;
+    }
+
+    const answer: Partial<Fetched> = { ...fetched };
+
+    delete answer.body;
+
+    return answer as SitemapAnswer;
 }

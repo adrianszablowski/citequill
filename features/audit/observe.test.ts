@@ -52,6 +52,8 @@ function page(
         url: hops.at(-1)!.url,
         headers: new Headers({ 'content-type': 'text/html' }),
         body: `<html><body>${body}</body></html>`,
+        bytes: 0,
+        isUtf8: true,
         isTruncated: false,
         hops,
         headersMs: 0,
@@ -496,6 +498,92 @@ describe('googlebotDirectives', () => {
             'unavailable_after: 25 jun 2030 15:00:00 pst',
             'max-snippet: 50',
         ]);
+    });
+
+    it('reads an unavailable_after date written with a comma whole, in the meta and in the header', () => {
+        for (const date of [
+            'Friday, 25-Jun-27 15:00:00 GMT',
+            'Fri, 25 Jun 2027 15:00:00 GMT',
+            '2027-06-25T15:00:00+02:00',
+        ]) {
+            const directive = `unavailable_after: ${date}`.toLowerCase();
+
+            expect(
+                googlebotDirectives(
+                    [`noindex, unavailable_after: ${date}`],
+                    null,
+                ),
+                date,
+            ).toEqual(['noindex', directive]);
+
+            expect(
+                googlebotDirectives(
+                    [],
+                    `unavailable_after: ${date}, nosnippet`,
+                ),
+                date,
+            ).toEqual([directive, 'nosnippet']);
+        }
+    });
+
+    it('ends the date at the next directive or crawler, and keeps a date scoped to another crawler out', () => {
+        expect(
+            googlebotDirectives(
+                [],
+                'googlebot: unavailable_after: Friday, 25-Jun-27 15:00:00 GMT, noarchive, otherbot: unavailable_after: Fri, 25 Jun 2027 15:00:00 GMT, noindex',
+            ),
+        ).toEqual([
+            'unavailable_after: friday, 25-jun-27 15:00:00 gmt',
+            'noarchive',
+        ]);
+
+        expect(
+            bingbotDirectives(
+                [],
+                'googlebot: unavailable_after: Friday, 25-Jun-27 15:00:00 GMT, bingbot: max-snippet: 20',
+            ),
+        ).toEqual(['max-snippet: 20']);
+
+        expect(
+            googlebotDirectives(
+                ['unavailable_after: Friday, 25-Jun-27 15:00:00 GMT, extra'],
+                null,
+            ),
+        ).toEqual([
+            'unavailable_after: friday, 25-jun-27 15:00:00 gmt',
+            'extra',
+        ]);
+    });
+
+    it('never glues a directive it does not know onto a date', () => {
+        for (const date of [
+            '2027-06-25',
+            'Friday, 25-Jun-27 15:00:00 PST',
+            'Fri, 25 Jun 2027 15:00:00 PST',
+        ]) {
+            const directive = `unavailable_after: ${date}`.toLowerCase();
+
+            expect(
+                googlebotDirectives([`unavailable_after: ${date}, noai`], null),
+                date,
+            ).toEqual([directive, 'noai']);
+
+            expect(
+                googlebotDirectives(
+                    [],
+                    `unavailable_after: ${date}, noimageai, otherbot: noindex`,
+                ),
+                date,
+            ).toEqual([directive, 'noimageai']);
+
+            expect(
+                bingbotDirectives(
+                    [],
+                    `unavailable_after: ${date}, bingbot: noindex`,
+                ),
+                date,
+            ).toEqual([directive, 'noindex']);
+        }
     });
 });
 

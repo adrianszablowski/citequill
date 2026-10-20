@@ -21,6 +21,7 @@ function file(text: string) {
         status: 200,
         hops: [],
         body: text,
+        bytes: 0,
     });
 }
 
@@ -62,12 +63,25 @@ describe('parseRobots', () => {
 });
 
 describe('robotsFile', () => {
+    it('keeps the size of the file as it was read, never the size of its decoded text', () => {
+        expect(
+            robotsFile(robotsUrl, {
+                ok: true,
+                status: 200,
+                hops: [],
+                body: 'User-agent: *',
+                bytes: 600_000,
+            }).bytes,
+        ).toBe(600_000);
+    });
+
     it('restricts nothing when robots.txt answers 4xx, 5xx or not at all, and records the answer', () => {
         const missing = robotsFile(robotsUrl, {
             ok: false,
             status: 404,
             hops: [{ url: robotsUrl, status: 404 }],
             body: 'User-agent: *\nDisallow: /',
+            bytes: 0,
         });
 
         const down = robotsFile(robotsUrl, {
@@ -75,6 +89,7 @@ describe('robotsFile', () => {
             status: 503,
             hops: [{ url: robotsUrl, status: 503 }],
             body: '',
+            bytes: 0,
         });
 
         expect(missing).toMatchObject({ status: 404, groups: [] });
@@ -176,6 +191,7 @@ describe('blockedBy', () => {
                     status: 200,
                     hops: [],
                     body: 'User-agent: *\nDisallow: /private',
+                    bytes: 0,
                 }),
             ),
             true,

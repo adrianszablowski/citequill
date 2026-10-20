@@ -1,3 +1,5 @@
+import { gzipSync } from 'node:zlib';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -15,6 +17,7 @@ import {
     maxHops,
     phoneHeaders,
     phoneUserAgent,
+    sitemapByteCap,
     tlsErrorOf,
     userAgent,
 } from '@/features/crawl/fetch';
@@ -317,6 +320,230 @@ describe('fetchPublic', () => {
             (await fetchPublic('https://acme.com/small', deps)).isTruncated,
         ).toBe(false);
     });
+
+    it('says a body is cut when more follows a chunk that ends exactly at the cap', async () => {
+        const result = await fetchPublic(
+            'https://acme.com/',
+            fakeDeps({
+                'https://acme.com/': streamed([
+                    Buffer.alloc(maxBytes, 'x'),
+                    Buffer.from('y'),
+                ]),
+            }),
+        );
+
+        expect(result.body).toHaveLength(maxBytes);
+        expect(result.isTruncated).toBe(true);
+        expect(result.bytes).toBe(maxBytes + 1);
+    });
+
+    it('reads a sitemap up to 50 MB and unpacks a gzipped one, counting its size after unpacking', async () => {
+        const xml = '<urlset></urlset>';
+
+        const deps = fakeDeps({
+            'https://acme.com/big.xml': page('x'.repeat(maxBytes + 1000)),
+            'https://acme.com/sitemap.xml.gz': gzipped(xml),
+        });
+
+        const big = await fetchPublic('https://acme.com/big.xml', deps, {
+            isSitemap: true,
+        });
+
+        expect(big.body).toHaveLength(maxBytes + 1000);
+        expect(big.isTruncated).toBe(false);
+
+        const packed = await fetchPublic(
+            'https://acme.com/sitemap.xml.gz',
+            deps,
+            { isSitemap: true },
+        );
+
+        expect(packed).toMatchObject({
+            body: xml,
+            bytes: xml.length,
+            isTruncated: false,
+        });
+    });
+
+    it('cuts an unpacked sitemap at 50 MB and lets a file of exactly 50 MB through', async () => {
+        const deps = fakeDeps({
+            'https://acme.com/over.xml.gz': gzipped(
+                'x'.repeat(sitemapByteCap + 1),
+            ),
+            'https://acme.com/exact.xml.gz': gzipped(
+                'x'.repeat(sitemapByteCap),
+            ),
+            'https://acme.com/exact.xml': page('x'.repeat(sitemapByteCap)),
+        });
+
+        const over = await fetchPublic('https://acme.com/over.xml.gz', deps, {
+            isSitemap: true,
+        });
+
+        expect(over.body).toHaveLength(sitemapByteCap);
+        expect(over.isTruncated).toBe(true);
+        expect(over.bytes).toBeGreaterThan(sitemapByteCap);
+
+        for (const url of [
+            'https://acme.com/exact.xml.gz',
+            'https://acme.com/exact.xml',
+        ]) {
+            const exact = await fetchPublic(url, deps, { isSitemap: true });
+
+            expect(exact.body, url).toHaveLength(sitemapByteCap);
+            expect(exact.isTruncated, url).toBe(false);
+            expect(exact.bytes, url).toBe(sitemapByteCap);
+        }
+    });
+
+    it('gives what a cut gzip stream holds and says the read is cut', async () => {
+        const xml = Array.from(
+            { length: 5_000 },
+            (_, i) => `<url><loc>https://acme.com/${i}</loc></url>`,
+        ).join('');
+
+        const packed = gzipSync(xml);
+
+        const cut = await fetchPublic(
+            'https://acme.com/sitemap.xml.gz',
+            fakeDeps({
+                'https://acme.com/sitemap.xml.gz': new Response(
+                    packed.subarray(0, packed.length / 2),
+                ),
+            }),
+            { isSitemap: true },
+        );
+
+        expect(cut.isTruncated).toBe(true);
+        expect(cut.body.length).toBeGreaterThan(0);
+        expect(xml.startsWith(cut.body)).toBe(true);
+    });
+
+    it('stops unpacking a gzip bomb at the cap', async () => {
+        const member = gzipSync(Buffer.alloc(1024 * 1024));
+
+        const bomb = Buffer.concat(Array.from({ length: 200 }, () => member));
+
+        const result = await fetchPublic(
+            'https://acme.com/sitemap.xml.gz',
+            fakeDeps({ 'https://acme.com/sitemap.xml.gz': new Response(bomb) }),
+            { isSitemap: true },
+        );
+
+        expect(bomb.length).toBeLessThan(maxBytes);
+        expect(result.body).toHaveLength(sitemapByteCap);
+        expect(result.isTruncated).toBe(true);
+        expect(result.bytes).toBeLessThan(sitemapByteCap + 1024 * 1024);
+    });
+
+    it('judges a gzipped sitemap with bytes after its stream on what it gave, as a cut file', async () => {
+        const xml = sitemapXml(5_000);
+
+        const result = await fetchPublic(
+            'https://acme.com/sitemap.xml.gz',
+            fakeDeps({
+                'https://acme.com/sitemap.xml.gz': new Response(
+                    Buffer.concat([gzipSync(xml), Buffer.from('garbage')]),
+                ),
+            }),
+            { isSitemap: true },
+        );
+
+        expect(result.isTruncated).toBe(true);
+        expect(result.body.length).toBeGreaterThan(0);
+        expect(xml.startsWith(result.body)).toBe(true);
+    });
+
+    it('keeps what a sitemap gave before its answer stopped, plain or gzipped, and says the read is cut', async () => {
+        const xml = Buffer.from(sitemapXml(5_000));
+        const packed = gzipSync(xml);
+
+        for (const error of [
+            new DOMException('The operation timed out.', 'TimeoutError'),
+            Object.assign(new TypeError('terminated'), {
+                cause: Object.assign(new Error('other side closed'), {
+                    code: 'UND_ERR_SOCKET',
+                }),
+            }),
+        ]) {
+            for (const [url, body] of [
+                ['https://acme.com/sitemap.xml', xml],
+                ['https://acme.com/sitemap.xml.gz', packed],
+            ] as const) {
+                const result = await fetchPublic(
+                    url,
+                    fakeDeps({
+                        [url]: stopping(
+                            [
+                                body.subarray(0, body.length / 4),
+                                body.subarray(body.length / 4, body.length / 2),
+                            ],
+                            error,
+                        ),
+                    }),
+                    { isSitemap: true },
+                );
+
+                expect(result.isTruncated, url).toBe(true);
+                expect(result.body.length, url).toBeGreaterThan(0);
+                expect(xml.toString().startsWith(result.body), url).toBe(true);
+            }
+        }
+    });
+
+    it('fails a page whose answer stops partway', async () => {
+        await expect(
+            fetchPublic(
+                'https://acme.com/',
+                fakeDeps({
+                    'https://acme.com/': stopping(
+                        [Buffer.from('<h1>Acme</h1>')],
+                        new TypeError('terminated'),
+                    ),
+                }),
+            ),
+        ).rejects.toThrow('terminated');
+    });
+
+    it('never unpacks a page that starts with the gzip bytes', async () => {
+        const packed = gzipSync('<h1>Acme</h1>');
+
+        const result = await fetchPublic(
+            'https://acme.com/',
+            fakeDeps({ 'https://acme.com/': new Response(packed) }),
+        );
+
+        expect(result.bytes).toBe(packed.length);
+        expect(result.body).not.toContain('Acme');
+    });
+
+    it('says whether the bytes are UTF-8, a byte order mark included', async () => {
+        const deps = fakeDeps({
+            'https://acme.com/utf8.xml': new Response(
+                Buffer.from('﻿<urlset>zażółć</urlset>'),
+            ),
+            'https://acme.com/latin.xml': new Response(
+                Buffer.from('<urlset>caf\xe9</urlset>', 'latin1'),
+            ),
+        });
+
+        const utf8 = await fetchPublic('https://acme.com/utf8.xml', deps, {
+            isSitemap: true,
+        });
+
+        expect(utf8).toMatchObject({
+            body: '<urlset>zażółć</urlset>',
+            isUtf8: true,
+        });
+
+        expect(
+            (
+                await fetchPublic('https://acme.com/latin.xml', deps, {
+                    isSitemap: true,
+                })
+            ).isUtf8,
+        ).toBe(false);
+    });
 });
 
 describe('isHtml', () => {
@@ -340,6 +567,51 @@ function page(body: string) {
         status: 200,
         headers: { 'content-type': 'text/html' },
     });
+}
+
+function gzipped(body: string) {
+    return new Response(gzipSync(body), {
+        status: 200,
+        headers: { 'content-type': 'application/gzip' },
+    });
+}
+
+function streamed(chunks: Uint8Array[]) {
+    return new Response(
+        new ReadableStream({
+            start(controller) {
+                for (const chunk of chunks) {
+                    controller.enqueue(chunk);
+                }
+
+                controller.close();
+            },
+        }),
+    );
+}
+
+function stopping(chunks: Uint8Array[], error: unknown) {
+    let sent = 0;
+
+    return new Response(
+        new ReadableStream({
+            pull(controller) {
+                if (sent < chunks.length) {
+                    controller.enqueue(chunks[sent]);
+                    sent += 1;
+                } else {
+                    controller.error(error);
+                }
+            },
+        }),
+    );
+}
+
+function sitemapXml(count: number) {
+    return `<urlset>${Array.from(
+        { length: count },
+        (_, i) => `<url><loc>https://acme.com/${i}</loc></url>`,
+    ).join('')}</urlset>`;
 }
 
 function redirect(location: string, status = 302) {

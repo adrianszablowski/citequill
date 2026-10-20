@@ -178,14 +178,13 @@ function answerFindings(
     const { obeyRobots, isDisallowed, locales, now } = context;
     const findings: Finding[] = [];
     const isIndexable = row.is_indexable === true;
-    const bytes = Number(fetched.headers.get('content-length') ?? 0);
 
-    if (
-        page &&
-        (fetched.isTruncated ||
-            (!fetched.headers.has('content-encoding') && bytes > maxBytes))
-    ) {
-        findings.push({ check: 'html-over-2mb', url, detail: { bytes } });
+    if (page && fetched.bytes > maxBytes) {
+        findings.push({
+            check: 'html-over-2mb',
+            url,
+            detail: { bytes: fetched.bytes },
+        });
     }
 
     const meta = googlebotDirectives(page?.robotsMeta ?? [], null);

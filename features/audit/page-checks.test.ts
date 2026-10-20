@@ -47,10 +47,12 @@ function fetched(
     {
         hops = [{ url, status: 200 }],
         headers = {},
+        bytes = 0,
         isTruncated = false,
     }: {
         hops?: Hop[];
         headers?: Record<string, string>;
+        bytes?: number;
         isTruncated?: boolean;
     } = {},
 ): Fetched {
@@ -64,6 +66,8 @@ function fetched(
             ...headers,
         }),
         body,
+        bytes,
+        isUtf8: true,
         isTruncated,
         hops,
         headersMs: 0,
@@ -278,32 +282,36 @@ describe('checkPage', () => {
         ).toEqual(['param-duplicates']);
     });
 
-    it('reports HTML the fetch cut at 2 MB, or an uncompressed length over it', () => {
-        expect(checks(fetched(html(''), { isTruncated: true }))).toEqual([
-            'html-over-2mb',
+    it('reports HTML over 2 MB after decoding, a chunked answer with no Content-Length included', () => {
+        expect(
+            check(
+                fetched(html(''), { bytes: maxBytes + 1, isTruncated: true }),
+            ),
+        ).toMatchObject([
+            { check: 'html-over-2mb', detail: { bytes: maxBytes + 1 } },
         ]);
+
+        expect(checks(fetched(html(''), { bytes: maxBytes }))).toEqual([]);
+    });
+
+    it('never reads the size of HTML from its Content-Length', () => {
+        expect(
+            checks(
+                fetched(html(''), {
+                    headers: { 'content-length': String(maxBytes + 1) },
+                    bytes: 1_000,
+                }),
+            ),
+        ).toEqual([]);
 
         const uncompressed = fetched(html(''), {
             headers: { 'content-length': String(maxBytes + 1) },
+            bytes: 1_000,
         });
 
         uncompressed.headers.delete('content-encoding');
 
-        expect(checks(uncompressed)).toEqual([
-            'html-over-2mb',
-            'html-uncompressed',
-        ]);
-
-        expect(
-            checks(
-                fetched(html(''), {
-                    headers: {
-                        'content-length': String(maxBytes + 1),
-                        'content-encoding': 'gzip',
-                    },
-                }),
-            ),
-        ).toEqual([]);
+        expect(checks(uncompressed)).toEqual(['html-uncompressed']);
     });
 
     it('reports meta robots and X-Robots-Tag saying opposite things, never one that adds to the other', () => {
@@ -364,6 +372,39 @@ describe('checkPage', () => {
                         'x-robots-tag': 'unavailable_after: 2027-01-01',
                     },
                 }),
+            ),
+        ).toEqual([]);
+    });
+
+    it('reads an unavailable_after date written as RFC 850 or RFC 822, so a past one is reported and none is invalid', () => {
+        expect(
+            checks(
+                fetched(
+                    html(
+                        '<meta name="robots" content="unavailable_after: Thursday, 25-Jun-26 15:00:00 GMT">',
+                    ),
+                ),
+            ),
+        ).toEqual(['unavailable-after-past']);
+
+        expect(
+            checks(
+                fetched(html(''), {
+                    headers: {
+                        'x-robots-tag':
+                            'unavailable_after: Fri, 25 Jun 2027 15:00:00 GMT, follow',
+                    },
+                }),
+            ),
+        ).toEqual([]);
+
+        expect(
+            checks(
+                fetched(
+                    html(
+                        '<meta name="googlebot" content="unavailable_after: Friday, 25-Jun-27 15:00:00 GMT">',
+                    ),
+                ),
             ),
         ).toEqual([]);
     });

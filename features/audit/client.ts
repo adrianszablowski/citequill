@@ -107,7 +107,8 @@ export function siteClient({
         {
             method = 'GET',
             headers,
-        }: Pick<FetchOptions, 'method' | 'headers'> = {},
+            isSitemap,
+        }: Pick<FetchOptions, 'method' | 'headers' | 'isSitemap'> = {},
     ): Promise<Fetched | Error | null> {
         for (let attempt = 1; ; attempt += 1) {
             if (!(await waitForSlot())) {
@@ -122,6 +123,7 @@ export function siteClient({
                         method,
                         headers,
                         botSecret: { value: botSecret, hosts },
+                        isSitemap,
                     },
                 );
 

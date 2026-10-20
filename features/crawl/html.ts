@@ -1,8 +1,9 @@
 import * as cheerio from 'cheerio';
-import type { AnyNode } from 'domhandler';
+import type { AnyNode, Element } from 'domhandler';
 import TurndownService from 'turndown';
 import { tables } from 'turndown-plugin-gfm';
 
+import { hidingStyle } from '@/features/audit/hidden';
 import {
     jsonLdNodes,
     readSignals,
@@ -119,15 +120,42 @@ export function robotsMetaOf(
 }
 
 export function mainElement($: cheerio.CheerioAPI) {
+    const h1 = $('h1').first();
+    const h1Article = h1.parents('article').last();
+
     $(stripped).remove();
 
-    return ([...landmarks, 'body'] as const)
-        .map((selector) => $(selector).first())
-        .find((element) => element.html());
+    $('body [style]')
+        .filter((_, element) => hidingStyle(element.attribs.style) === 'none')
+        .remove();
+
+    const isInDocument = (element: cheerio.Cheerio<Element>) =>
+        element.parents('html').length > 0;
+
+    const body = $('body').first();
+    const longest = longestArticle($);
+
+    // An H1 outside every article stands over articles that are teasers of
+    // other posts, unless one of them holds over half of the body's text.
+    const isTeaser =
+        h1Article.length === 0 &&
+        isInDocument(h1) &&
+        2 * textLength(longest) <= textLength(body);
+
+    return [
+        ...mainLandmarks.map((selector) => $(selector).first()),
+        ...[
+            isInDocument(h1Article) ? h1Article : $([]),
+            isTeaser ? $([]) : longest,
+        ].filter((article) => textLength(article) > 0),
+        body,
+    ].find((element) => element.html());
 }
 
 export function isLandmark(element: cheerio.Cheerio<AnyNode>) {
-    return landmarks.some((selector) => element.is(selector));
+    return [...mainLandmarks, 'article'].some((selector) =>
+        element.is(selector),
+    );
 }
 
 export function absolute(href: string | null | undefined, base: URL) {
@@ -157,7 +185,7 @@ export function toMarkdown(html: string) {
         .trim();
 }
 
-const landmarks = ['main', '[role="main"]', 'article'] as const;
+const mainLandmarks = ['main', '[role="main"]'] as const;
 
 const stripped = [
     'script',
@@ -171,10 +199,12 @@ const stripped = [
     'footer',
     'aside',
     'form',
+    'dialog',
+    '[role="dialog" i]',
+    '[role="alertdialog" i]',
+    '[aria-modal="true" i]',
     '[hidden]',
-    '[aria-hidden="true"]',
-    '[style*="display:none"]',
-    '[style*="display: none"]',
+    '[aria-hidden="true" i]',
 ].join(', ');
 
 const turndown = new TurndownService({
@@ -184,6 +214,21 @@ const turndown = new TurndownService({
 });
 
 turndown.use(tables);
+
+function longestArticle($: cheerio.CheerioAPI) {
+    return $('article')
+        .toArray()
+        .map((element) => $(element))
+        .reduce(
+            (longest, article) =>
+                textLength(article) > textLength(longest) ? article : longest,
+            $('article').first(),
+        );
+}
+
+function textLength(element: cheerio.Cheerio<Element>) {
+    return element.text().replace(/\s+/g, ' ').trim().length;
+}
 
 function siteLinks($: cheerio.CheerioAPI, selector: string, base: URL) {
     return unique(

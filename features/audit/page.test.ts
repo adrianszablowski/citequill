@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { readAuditPage } from '@/features/audit/page';
+import { readAuditPage, srcsetUrls } from '@/features/audit/page';
 
 const html = `<!doctype html>
 <html lang="en-GB">
@@ -411,6 +411,18 @@ describe('readAuditPage', () => {
         });
     });
 
+    it('reads a srcset URL that holds commas whole, as a Cloudinary URL does', () => {
+        const page = readAuditPage(
+            '<html><body><img srcset="https://res.cloudinary.com/acme/image/upload/w_300,h_200,c_fill/x.jpg 300w, https://res.cloudinary.com/acme/image/upload/w_600,h_400,c_fill/x.jpg 600w" alt=""></body></html>',
+            'https://acme.com/',
+        );
+
+        expect(page.resources.map(({ url }) => url)).toEqual([
+            'https://res.cloudinary.com/acme/image/upload/w_300,h_200,c_fill/x.jpg',
+            'https://res.cloudinary.com/acme/image/upload/w_600,h_400,c_fill/x.jpg',
+        ]);
+    });
+
     it('reads every form with its absolute action and whether it asks for a password, and a password field outside any form', () => {
         const page = readAuditPage(
             '<html><body><form class="login" action="http://acme.com/login"><input type="Password"></form><form id="search"><input name="q"></form><input type="password"></body></html>',
@@ -583,6 +595,31 @@ describe('readAuditPage', () => {
         expect(page.hiddenBlocks[0].snippet).toMatch(/^<div id="seo"/);
     });
 
+    it('reads hidden blocks, images and anchors from the document, while the main text leaves out dialogs and hidden elements', () => {
+        const words = Array.from({ length: 60 }, (_, i) => `w${i}`).join(' ');
+
+        const page = readAuditPage(
+            `<html><body><div role="dialog"><img src="/cookie.png" alt="Cookie"><a href="/privacy">Privacy</a></div>
+            <article><h2>Teaser</h2></article>
+            <article><header><h1>Story</h1></header><p>The story.</p>
+            <div id="seo" style="LEFT: -9999px">${words}</div>
+            <p style="Display : None">Hidden</p></article></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(page.mainText).toBe(`The story. ${words}`);
+
+        expect(page.hiddenBlocks.map(({ selector }) => selector)).toEqual([
+            'div#seo',
+        ]);
+
+        expect(page.images.map(({ src }) => src)).toEqual([
+            'https://acme.com/cookie.png',
+        ]);
+
+        expect(page.links).toEqual(['https://acme.com/privacy']);
+    });
+
     it('takes a SimHash of the main text the body hash is taken from, and none of an empty page', () => {
         const one = readAuditPage(html, 'https://acme.com/pricing');
 
@@ -607,6 +644,72 @@ describe('readAuditPage', () => {
                 'https://acme.com/',
             ).elementCount,
         ).toBe(5);
+    });
+});
+
+describe('srcsetUrls', () => {
+    it('reads one candidate, with a descriptor or without', () => {
+        expect(srcsetUrls('/a.png')).toEqual(['/a.png']);
+        expect(srcsetUrls('  /a.png 2x  ')).toEqual(['/a.png']);
+        expect(srcsetUrls('')).toEqual([]);
+        expect(srcsetUrls(' , ,')).toEqual([]);
+    });
+
+    it('ends a candidate at the trailing commas of its URL', () => {
+        expect(srcsetUrls('/a.png, /b.png,, /c.png 3x,')).toEqual([
+            '/a.png',
+            '/b.png',
+            '/c.png',
+        ]);
+    });
+
+    it('keeps a comma inside the parentheses of a descriptor, and drops the candidate the parentheses make invalid', () => {
+        expect(srcsetUrls('/a.png (100w, 2x), /b.png 2x')).toEqual(['/b.png']);
+    });
+
+    it('ends a URL at ASCII whitespace only, so a no-break space stays in it', () => {
+        expect(srcsetUrls('/a b.png 2x,\t/c.png\n3x')).toEqual([
+            '/a b.png',
+            '/c.png',
+        ]);
+    });
+
+    it('reads the candidates whose descriptors the HTML standard accepts', () => {
+        expect(
+            srcsetUrls(
+                '/a.png 400w, /b.png 1.5x, /c.png .5x, /d.png 1e1x, /e.png 400w 300h, /f.png 0x',
+            ),
+        ).toEqual(['/a.png', '/b.png', '/c.png', '/d.png', '/e.png', '/f.png']);
+    });
+
+    it('drops a candidate whose descriptors the HTML standard refuses', () => {
+        for (const descriptors of [
+            '0w',
+            '-1x',
+            '1.5w',
+            '2X',
+            '2',
+            'big',
+            '400w 2x',
+            '1x 2x',
+            '400w 500w',
+            '300h',
+            '2x 300h',
+            '400w 300h 200h',
+        ]) {
+            expect(
+                srcsetUrls(`/a.png ${descriptors}, /b.png`),
+                descriptors,
+            ).toEqual(['/b.png']);
+        }
+    });
+
+    it('keeps every comma inside a URL, which only whitespace ends', () => {
+        expect(srcsetUrls('/a.png,/b.png 2x')).toEqual(['/a.png,/b.png']);
+
+        expect(
+            srcsetUrls('/w_300,h_200/x.jpg 300w,/w_600,h_400/x.jpg 600w'),
+        ).toEqual(['/w_300,h_200/x.jpg', '/w_600,h_400/x.jpg']);
     });
 });
 

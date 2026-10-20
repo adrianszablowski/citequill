@@ -30,13 +30,13 @@ export interface RobotsFile {
 
 export function robotsFile(
     url: string,
-    fetched: Pick<Fetched, 'ok' | 'status' | 'hops' | 'body'> | null,
+    fetched: Pick<Fetched, 'ok' | 'status' | 'hops' | 'body' | 'bytes'> | null,
 ): RobotsFile {
     return {
         url,
         status: fetched?.status ?? null,
         hops: fetched?.hops ?? [],
-        bytes: Buffer.byteLength(fetched?.body ?? ''),
+        bytes: fetched?.bytes ?? 0,
         ...(fetched?.ok
             ? parseRobots(fetched.body)
             : { groups: [], sitemaps: [] }),
