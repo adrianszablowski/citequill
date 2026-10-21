@@ -311,7 +311,9 @@ export function band(score: number): Band {
     return score >= 50 ? 'needs-work' : 'poor';
 }
 
-export function isAnswered(page: ScoredPage) {
+export function isAnswered(
+    page: Pick<ScoredPage, 'status_code' | 'redirect_to'>,
+) {
     return page.status_code === 200 && page.redirect_to === null;
 }
 

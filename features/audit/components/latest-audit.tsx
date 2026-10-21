@@ -10,9 +10,11 @@ import AuditScore from '@/features/audit/components/audit-score';
 import RunAuditForm from '@/features/audit/components/run-audit-form';
 import StopAuditForm from '@/features/audit/components/stop-audit-form';
 import {
+    cdnTestLine,
     type Changes,
     changesLine,
     formatDuration,
+    shellSentence,
     stalledMessage,
 } from '@/features/audit/format';
 import type { Audit } from '@/features/audit/queries';
@@ -77,6 +79,8 @@ export default function LatestAudit({
             },
         ];
 
+        const cdnLine = cdnTestLine(audit.cdn_test);
+
         return (
             <Card>
                 <CardHeader>
@@ -90,6 +94,9 @@ export default function LatestAudit({
                             {formatCount(queueCap)}.
                         </CardDescription>
                     )}
+                    {audit.is_shell && (
+                        <CardDescription>{shellSentence}</CardDescription>
+                    )}
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                     {audit.score !== null && (
@@ -99,6 +106,11 @@ export default function LatestAudit({
                                 checksScored={audit.checks_scored}
                                 checksTotal={audit.checks_total}
                             />
+                            {cdnLine && (
+                                <p className="text-muted-foreground">
+                                    {cdnLine}
+                                </p>
+                            )}
                             {changes && (
                                 <p className="text-muted-foreground">
                                     {changesLine(changes)}

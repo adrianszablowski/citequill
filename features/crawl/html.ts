@@ -3,6 +3,7 @@ import {
     type AnyNode,
     type Element,
     hasChildren,
+    isComment,
     isTag,
     isText,
 } from 'domhandler';
@@ -41,6 +42,9 @@ export interface PageData {
 
 export function readPage(html: string, url: string): PageData {
     const $ = cheerio.load(html);
+
+    placeStreamed($);
+
     const base = new URL(url);
     const alternates = alternatesOf($, base);
     const robots = robotsMetaOf($);
@@ -158,6 +162,43 @@ export function mainElement($: cheerio.CheerioAPI) {
     ].find((element) => element.html());
 }
 
+export function placeStreamed($: cheerio.CheerioAPI) {
+    const calls = $('script:not([src])')
+        .toArray()
+        .flatMap((script) => [...$(script).text().matchAll(streamingCall)]);
+
+    let hasMoved = false;
+
+    for (const [, name, first, second] of calls) {
+        const [segmentId, targetId] =
+            name === 'S' ? [first, second] : [second, first];
+
+        const segment = elementById($, segmentId);
+        const target = elementById($, targetId);
+
+        if (!segment || !target) {
+            continue;
+        }
+
+        $(segment).remove();
+
+        const end = name === 'S' ? target.next : fallbackEnd(target);
+
+        $(target).before($(segment).contents());
+
+        for (let node: AnyNode | null = target; node && node !== end;) {
+            const next: AnyNode | null = node.next;
+
+            $(node).remove();
+            node = next;
+        }
+
+        hasMoved = true;
+    }
+
+    return hasMoved;
+}
+
 export function isLandmark(element: cheerio.Cheerio<AnyNode>) {
     return [...mainLandmarks, 'article'].some((selector) =>
         element.is(selector),
@@ -196,6 +237,12 @@ export function toMarkdown(html: string) {
 }
 
 const mainLandmarks = ['main', '[role="main"]'] as const;
+
+const streamingCall = /(?<![\w$])\$R([SCR])\(\s*"([^"]*)"\s*,\s*"([^"]*)"/g;
+
+const boundaryOpeners = new Set(['$', '$?', '$~', '$!', '&']);
+
+const boundaryClosers = new Set(['/$', '/&']);
 
 const stripped = [
     'script',
@@ -280,6 +327,30 @@ const turndown = new TurndownService({
 });
 
 turndown.use(tables);
+
+function elementById($: cheerio.CheerioAPI, id: string) {
+    return $('[id]')
+        .toArray()
+        .find((element) => element.attribs.id === id);
+}
+
+function fallbackEnd(boundary: AnyNode) {
+    let depth = 0;
+
+    for (let node = boundary.next; node; node = node.next) {
+        if (isComment(node) && boundaryClosers.has(node.data)) {
+            if (depth === 0) {
+                return node;
+            }
+
+            depth -= 1;
+        } else if (isComment(node) && boundaryOpeners.has(node.data)) {
+            depth += 1;
+        }
+    }
+
+    return null;
+}
 
 function longestArticle($: cheerio.CheerioAPI) {
     return $('article')

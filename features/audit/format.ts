@@ -1,3 +1,4 @@
+import { type CdnOutcome, isCdnOutcome } from '@/features/audit/cdn-test';
 import { findingsPerPage } from '@/features/audit/finding';
 import type { AltState } from '@/features/audit/image-checks';
 import type { PageImage } from '@/features/audit/images';
@@ -6,6 +7,17 @@ import type { Json } from '@/lib/types/database';
 import { formatCount, formatDate } from '@/lib/utils';
 
 export const stalledMessage = 'The audit made no progress for 15 minutes.';
+
+export const shellSentence =
+    'Citequill read almost no text in the raw HTML of this site. Google renders JavaScript and some hosts send crawlers a prerendered copy, so the findings about the content may not hold for them.';
+
+export function cdnTestLine(outcome: string | null) {
+    if (outcome === null) {
+        return 'Citequill could not finish the test of AI search agents at your CDN, so it does not count in the score.';
+    }
+
+    return isCdnOutcome(outcome) ? cdnTestLines[outcome] : null;
+}
 
 export interface Changes {
     difference: number;
@@ -113,6 +125,16 @@ function isRecord(
 ): value is { [key: string]: Json | undefined } {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+const cdnTestLines = {
+    passed: null,
+    'browser-refused':
+        'Citequill could not test AI search agents at your CDN. A browser from Citequill’s address did not get the home page, which a firewall or a rate limit can cause.',
+    'bot-refused':
+        'Citequill could not test AI search agents at your CDN. A browser got the home page and CitequillBot did not, so the test cannot tell a rule against AI agents from a rule against every bot.',
+    'spoof-refused':
+        'Citequill could not test AI search agents at your CDN. A claimed Googlebot or Bingbot did not get the home page, so your CDN checks crawlers by their address and may let the real agents through.',
+} satisfies Record<CdnOutcome, string | null>;
 
 const altStates = {
     absent: 'No alt attribute',

@@ -25,6 +25,7 @@ import {
     type HreflangEntry,
     isLandmark,
     mainElement,
+    placeStreamed,
     robotsMetaOf,
     spacedText,
 } from '@/features/crawl/html';
@@ -153,6 +154,7 @@ export interface AuditPage {
     fragmentLinks: string[];
     mainText: string;
     mainContent: MainContent;
+    isShell: boolean;
     nosnippet: string | null;
     bodyHash: string | null;
     simhash: string | null;
@@ -161,12 +163,24 @@ export interface AuditPage {
 
 export const thinPageWords = 150;
 
+const shellTextLength = 200;
+
 export function readAuditPage(html: string, url: string): AuditPage {
-    const $ = cheerio.load(html, { sourceCodeLocationInfo: true });
     const base = new URL(url);
+    const served = cheerio.load(html, { sourceCodeLocationInfo: true });
+    const misplaced = misplacedOf(served, html);
+    // Google takes a page's links from the HTML as served, before it renders,
+    // so a link that stands only in a streamed boundary's fallback still counts.
+    const anchors = anchorsOf(served, base);
+
+    // A moved node keeps the offset it was served at, and the shape checks
+    // place words by offset, so the moved document is parsed again.
+    const $ = placeStreamed(served)
+        ? cheerio.load(served.html(), { sourceCodeLocationInfo: true })
+        : served;
+
     const inDocument = documentElements($);
     const located = locatedOf($);
-    const headEnd = html.search(/<\/head\s*>|<body[\s>]/i);
 
     const titles = inDocument('title').map((tag) => ({
         ...located(tag),
@@ -186,33 +200,6 @@ export function readAuditPage(html: string, url: string): AuditPage {
     const body = $('body').clone();
 
     body.find('script, style, template, noscript').remove();
-
-    const anchors = inDocument('a').map((tag): Anchor => {
-        const href = tag.attribs.href ?? null;
-
-        return {
-            ...located(tag),
-            href,
-            url: absolute(href, base),
-            text: $(tag).text().replace(/\s+/g, ' ').trim(),
-            name:
-                [
-                    tag.attribs['aria-label'],
-                    tag.attribs.title,
-                    ...$(tag)
-                        .find('img[alt]')
-                        .toArray()
-                        .map((image) => image.attribs.alt),
-                ]
-                    .map((value) => value?.trim())
-                    .find(Boolean) ?? '',
-            hasImage: $(tag).find('img').length > 0,
-            rel: (tag.attribs.rel ?? '')
-                .toLowerCase()
-                .split(/\s+/)
-                .filter(Boolean),
-        };
-    });
 
     const ogContents = (key: string) =>
         metas.flatMap(({ keys, content }) =>
@@ -303,16 +290,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
                     'content-type' &&
                     /charset=/i.test(attribs.content ?? '')),
         ),
-        misplaced:
-            headEnd < 0
-                ? []
-                : inDocument('title, meta, link, base, style')
-                      .filter(
-                          (tag) =>
-                              !isInHead($, tag) &&
-                              (tag.startIndex ?? Infinity) < headEnd,
-                      )
-                      .map(located),
+        misplaced,
         openGraph: [
             ...new Set(
                 metas.flatMap(({ keys, content }) =>
@@ -386,6 +364,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
     };
 
     const main = mainElement($);
+    const bodyText = spacedText($('body').toArray());
 
     const around =
         main && (main.is(nosnippet) ? main : main.parents(nosnippet)).last()[0];
@@ -396,6 +375,7 @@ export function readAuditPage(html: string, url: string): AuditPage {
         ...page,
         mainText,
         mainContent: mainContentOf(main, h1Tags[0]),
+        isShell: bodyText.length < shellTextLength,
         nosnippet: mainText && around ? selectorOf(around) : null,
         bodyHash: mainText
             ? createHash('sha256').update(mainText).digest('hex')
@@ -506,6 +486,51 @@ function documentElements($: cheerio.CheerioAPI) {
         $(selector)
             .toArray()
             .filter((tag) => isInDocument($, tag));
+}
+
+function misplacedOf($: cheerio.CheerioAPI, html: string) {
+    const headEnd = html.search(/<\/head\s*>|<body[\s>]/i);
+
+    return headEnd < 0
+        ? []
+        : documentElements($)('title, meta, link, base, style')
+              .filter(
+                  (tag) =>
+                      !isInHead($, tag) &&
+                      (tag.startIndex ?? Infinity) < headEnd,
+              )
+              .map(locatedOf($));
+}
+
+function anchorsOf($: cheerio.CheerioAPI, base: URL) {
+    const located = locatedOf($);
+
+    return documentElements($)('a').map((tag): Anchor => {
+        const href = tag.attribs.href ?? null;
+
+        return {
+            ...located(tag),
+            href,
+            url: absolute(href, base),
+            text: $(tag).text().replace(/\s+/g, ' ').trim(),
+            name:
+                [
+                    tag.attribs['aria-label'],
+                    tag.attribs.title,
+                    ...$(tag)
+                        .find('img[alt]')
+                        .toArray()
+                        .map((image) => image.attribs.alt),
+                ]
+                    .map((value) => value?.trim())
+                    .find(Boolean) ?? '',
+            hasImage: $(tag).find('img').length > 0,
+            rel: (tag.attribs.rel ?? '')
+                .toLowerCase()
+                .split(/\s+/)
+                .filter(Boolean),
+        };
+    });
 }
 
 function isInDocument($: cheerio.CheerioAPI, tag: Element) {

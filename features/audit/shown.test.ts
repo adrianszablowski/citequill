@@ -28,8 +28,11 @@ function entry(
             is_gated: false,
             checks_scored: 40,
             checks_total: 116,
+            score_difference: 0,
             findings_fixed: 0,
             findings_new: 0,
+            cdn_test: 'passed',
+            is_shell: false,
             ...audit,
         },
         status,
@@ -76,12 +79,13 @@ describe('shownAudit', () => {
 });
 
 describe('comparedAudits', () => {
-    it('compares the latest audit with the one before when both stand on the same checks', () => {
+    it('compares the latest audit with the one before by the difference stored on the latest', () => {
         expect(
             comparedAudits([
                 entry('finished', {
                     id: 'b',
                     score: 87,
+                    score_difference: 9,
                     findings_fixed: 12,
                     findings_new: 2,
                 }),
@@ -93,42 +97,50 @@ describe('comparedAudits', () => {
             ]),
         ).toEqual({
             since: '2026-10-03T10:00:00Z',
-            difference: 7,
+            difference: 9,
             fixed: 12,
             added: 2,
         });
     });
 
-    it('compares nothing for an audit scored before its counts were stored', () => {
+    it('compares with the last finished audit, passing over a stopped one in between', () => {
         expect(
             comparedAudits([
-                entry('finished', { findings_fixed: null, findings_new: null }),
-                entry('finished'),
+                entry('finished', { id: 'c', score_difference: -2 }),
+                entry('failed', {
+                    id: 'b',
+                    created_at: '2026-10-10T10:00:00Z',
+                }),
+                entry('finished', {
+                    id: 'a',
+                    created_at: '2026-10-03T10:00:00Z',
+                }),
             ]),
-        ).toBeNull();
+        ).toMatchObject({ since: '2026-10-03T10:00:00Z', difference: -2 });
     });
 
-    it('compares nothing when the check counts differ', () => {
-        expect(
-            comparedAudits([
-                entry('finished', { id: 'b', checks_scored: 41 }),
-                entry('finished', { id: 'a', checks_scored: 40 }),
-            ]),
-        ).toBeNull();
+    it('compares nothing for an audit scored before its comparison was stored', () => {
+        for (const stored of [
+            { score_difference: null },
+            { findings_fixed: null },
+            { findings_new: null },
+        ]) {
+            expect(
+                comparedAudits([entry('finished', stored), entry('finished')]),
+                JSON.stringify(stored),
+            ).toBeNull();
+        }
     });
 
-    it('compares nothing for a single audit, a running one or one with no score', () => {
+    it('compares nothing for a single audit, a running or stopped one, or one with no finished audit before it', () => {
         expect(comparedAudits([entry('finished')])).toBeNull();
 
         expect(
             comparedAudits([entry('running'), entry('finished')]),
         ).toBeNull();
 
-        expect(
-            comparedAudits([
-                entry('finished'),
-                entry('finished', { score: null }),
-            ]),
-        ).toBeNull();
+        expect(comparedAudits([entry('failed'), entry('finished')])).toBeNull();
+
+        expect(comparedAudits([entry('finished'), entry('failed')])).toBeNull();
     });
 });

@@ -2,6 +2,8 @@ export const topLevelPages = 10;
 
 export const variantPaths = 20;
 
+export const samplePageCount = 50;
+
 export function variantSample(urls: string[], homes: string[]) {
     return samplePages([...urls].sort(), homes, homes.length + variantPaths);
 }

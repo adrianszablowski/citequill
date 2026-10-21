@@ -3,6 +3,7 @@ import {
     readAuditPage,
     thinPageWords,
 } from '@/features/audit/page';
+import { isHtmlAnswer } from '@/features/audit/performance-checks';
 import {
     type Candidate,
     linkDepth,
@@ -112,6 +113,11 @@ export function observeRead(
         jsonld_count: page?.jsonLd.length ?? 0,
         has_microdata: page?.hasMicrodata ?? false,
         is_article: page?.isArticle ?? false,
+        is_shell:
+            fetched !== null &&
+            isHtmlAnswer(fetched) &&
+            !fetched.isTruncated &&
+            page?.isShell === true,
         in_sitemap: entry.in_sitemap,
         click_depth: entry.depth,
         page_id: pageIds.get(withoutSlash(entry.url)) ?? null,

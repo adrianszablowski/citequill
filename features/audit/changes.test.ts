@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-    type AuditEntry,
     auditChanges,
-    comparedPair,
+    auditComparison,
+    type ComparedAudit,
+    previousAudit,
 } from '@/features/audit/changes';
 
 function findings(...fingerprints: string[]) {
@@ -39,61 +40,133 @@ describe('auditChanges', () => {
     });
 });
 
-function older(
-    status: string,
-    audit: Partial<NonNullable<AuditEntry['audit']>> | null = {},
-): AuditEntry {
-    return {
+describe('previousAudit', () => {
+    const entry = (status: string, id: string | null) => ({
         run: { status },
-        audit: audit && {
-            id: 'previous',
-            created_at: '2026-10-03T10:00:00Z',
-            score: 80,
-            checks_scored: 40,
-            ...audit,
-        },
+        audit: id === null ? null : { id, is_partial: id === 'partial' },
+    });
+
+    it('takes the last earlier audit whose run finished, a partial one included', () => {
+        expect(
+            previousAudit([
+                entry('finished', 'partial'),
+                entry('finished', 'a'),
+            ]),
+        ).toEqual({ id: 'partial', is_partial: true });
+    });
+
+    it('passes over a run still running, a stopped or failed one and one that never got its audit row', () => {
+        expect(
+            previousAudit([
+                entry('running', 'running'),
+                entry('failed', 'stopped'),
+                entry('finished', null),
+                entry('finished', 'a'),
+            ]),
+        ).toEqual({ id: 'a', is_partial: false });
+    });
+
+    it('finds none for the first audit of a project or when no earlier run finished', () => {
+        expect(previousAudit([])).toBeNull();
+
+        expect(
+            previousAudit([entry('running', 'b'), entry('failed', 'a')]),
+        ).toBeNull();
+    });
+});
+
+function audit(compared: Partial<ComparedAudit> = {}): ComparedAudit {
+    return {
+        checksRun: ['title-missing', 'page-4xx'],
+        isGated: false,
+        results: [],
+        findings: [],
+        ...compared,
     };
 }
 
-describe('comparedPair', () => {
-    const latest = { score: 87, checks_scored: 40 };
+const titleMissing = {
+    check: 'title-missing',
+    pages_checked: 2,
+    pages_failed: 1,
+    pages_intended: 0,
+};
 
-    it('compares with the last earlier audit that ended when both stand on the same checks', () => {
-        expect(comparedPair(latest, [older('finished')])).toEqual({
-            previousId: 'previous',
-            since: '2026-10-03T10:00:00Z',
-            difference: 7,
+describe('auditComparison', () => {
+    it('adds the penalty of a check that ran in both audits and has results in the latest only to the latest', () => {
+        expect(
+            auditComparison(
+                audit(),
+                audit({
+                    results: [titleMissing],
+                    findings: [{ fingerprint: 'a', check: 'title-missing' }],
+                }),
+            ),
+        ).toEqual({ difference: -5, fixed: 0, added: 1 });
+    });
+
+    it('leaves a check that ran in one audit only out of the difference and both counts, as a CDN test that passed once', () => {
+        const withCdnTest = audit({
+            checksRun: ['title-missing', 'ai-cdn-blocked'],
+            results: [
+                {
+                    check: 'ai-cdn-blocked',
+                    pages_checked: 1,
+                    pages_failed: 1,
+                    pages_intended: 0,
+                },
+            ],
+            findings: [{ fingerprint: 'cdn', check: 'ai-cdn-blocked' }],
+        });
+
+        const without = audit({ checksRun: ['title-missing'] });
+
+        expect(auditComparison(withCdnTest, without)).toEqual({
+            difference: 0,
+            fixed: 0,
+            added: 0,
+        });
+
+        expect(auditComparison(without, withCdnTest)).toEqual({
+            difference: 0,
+            fixed: 0,
+            added: 0,
         });
     });
 
-    it('passes over an earlier run still running and one that never got its audit row', () => {
+    it('caps the score of each audit that was gated, and only that one', () => {
+        expect(auditComparison(audit({ isGated: true }), audit())).toEqual({
+            difference: 51,
+            fixed: 0,
+            added: 0,
+        });
+
         expect(
-            comparedPair(latest, [
-                older('running', { id: 'running' }),
-                older('failed', null),
-                older('failed', { id: 'stopped', score: 90 }),
-            ]),
-        ).toMatchObject({ previousId: 'stopped', difference: -3 });
+            auditComparison(
+                audit(),
+                audit({ isGated: true, results: [titleMissing] }),
+            ),
+        ).toMatchObject({ difference: -51 });
     });
 
-    it('compares nothing when the check counts differ', () => {
+    it('gives a difference of 0 for the same results, and counts the findings fixed and new by fingerprint', () => {
         expect(
-            comparedPair(latest, [older('finished', { checks_scored: 41 })]),
-        ).toBeNull();
-    });
-
-    it('compares nothing when either audit has no score', () => {
-        expect(
-            comparedPair({ ...latest, score: null }, [older('finished')]),
-        ).toBeNull();
-
-        expect(
-            comparedPair(latest, [older('finished', { score: null })]),
-        ).toBeNull();
-    });
-
-    it('compares nothing for the first audit of a project', () => {
-        expect(comparedPair(latest, [])).toBeNull();
-        expect(comparedPair(latest, [older('running')])).toBeNull();
+            auditComparison(
+                audit({
+                    results: [titleMissing],
+                    findings: [
+                        { fingerprint: 'kept', check: 'title-missing' },
+                        { fingerprint: 'fixed', check: 'page-4xx' },
+                    ],
+                }),
+                audit({
+                    results: [titleMissing],
+                    findings: [
+                        { fingerprint: 'kept', check: 'title-missing' },
+                        { fingerprint: 'new', check: 'title-missing' },
+                    ],
+                }),
+            ),
+        ).toEqual({ difference: 0, fixed: 1, added: 1 });
     });
 });

@@ -34,6 +34,7 @@ import {
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { type FakeQuery, fakeSupabase } from '@/lib/supabase/fake';
+import { rowsPerRead } from '@/lib/supabase/result';
 import { Constants } from '@/lib/types/database';
 
 vi.mock('@/lib/supabase/admin', () => {
@@ -2219,11 +2220,81 @@ describe('closeAudit', () => {
             expect(call(fake, table, 'delete')[0].calls).toContainEqual([
                 'in',
                 'audit_id',
-                ['older'],
+                ['stopped'],
             ]);
         }
 
         expect(finishRun).toHaveBeenCalledWith('run');
+    });
+
+    it('keeps the rows of the last finished audit beside the one that ends, and deletes those of a stopped audit between them', async () => {
+        const fake = database({
+            audits: [
+                { id: 'audit', runs: { status: 'running' } },
+                { id: 'stopped', runs: { status: 'failed' } },
+                { id: 'first', runs: { status: 'finished' } },
+                { id: 'oldest', runs: { status: 'finished' } },
+            ],
+        });
+
+        await closeAudit('project', 'run', 'audit');
+
+        for (const table of [
+            'audit_check_results',
+            'audit_findings',
+            'audit_renders',
+        ]) {
+            expect(call(fake, table, 'delete')[0].calls).toContainEqual([
+                'in',
+                'audit_id',
+                ['stopped', 'oldest'],
+            ]);
+        }
+
+        expect(
+            call(fake, 'audits', 'select').find(
+                ({ calls }) => calls[0][1] === 'id, runs(status)',
+            )!.calls,
+        ).toEqual([
+            ['select', 'id, runs(status)'],
+            ['eq', 'project_id', 'project'],
+            ['order', 'created_at', { ascending: false }],
+        ]);
+    });
+
+    it("stores whether the site is a shell from the pages this audit read and the site's home pages", async () => {
+        const shellOf = async (isHomeShell: boolean) => {
+            const fake = database({
+                sitePages: [
+                    'https://acme.com/',
+                    'https://acme.de/',
+                    'https://acme.com/a',
+                ].map((url) => ({
+                    url,
+                    status_code: 200,
+                    redirect_to: null,
+                    is_shell: url !== 'https://acme.de/' || isHomeShell,
+                })),
+            });
+
+            await closeAudit('project', 'run', 'audit');
+
+            const read = call(fake, 'site_pages', 'select').find(
+                ({ calls }) =>
+                    calls[0][1] === 'url, status_code, redirect_to, is_shell',
+            )!;
+
+            expect(read.calls.slice(1)).toEqual([
+                ['eq', 'last_audit_id', 'audit'],
+                ['order', 'url'],
+                ['range', 0, rowsPerRead - 1],
+            ]);
+
+            return call(fake, 'audits', 'update')[0].calls[0][1];
+        };
+
+        expect(await shellOf(true)).toMatchObject({ is_shell: true });
+        expect(await shellOf(false)).toMatchObject({ is_shell: false });
     });
 
     it("empties only its own frontiers on a project's first audit, with no older audit to delete", async () => {

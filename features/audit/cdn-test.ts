@@ -8,8 +8,14 @@ import {
     userAgent,
 } from '@/features/crawl/fetch';
 
-export type CdnOutcome =
-    'passed' | 'browser-refused' | 'bot-refused' | 'spoof-refused';
+export const cdnOutcomes = [
+    'passed',
+    'browser-refused',
+    'bot-refused',
+    'spoof-refused',
+] as const;
+
+export type CdnOutcome = (typeof cdnOutcomes)[number];
 
 export type ReadAs = (userAgent: string) => Promise<Fetched | Error | null>;
 
@@ -69,6 +75,10 @@ export async function runCdnTest(
         outcome: 'passed',
         findings: cdnFindings(home, answers, disallowed),
     };
+}
+
+export function isCdnOutcome(value: string): value is CdnOutcome {
+    return cdnOutcomes.some((outcome) => outcome === value);
 }
 
 export function agentVerdict(answer: Fetched | Error) {

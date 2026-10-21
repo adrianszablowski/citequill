@@ -285,6 +285,7 @@ export type Database = {
             audits: {
                 Row: {
                     cdn_test: string | null;
+                    checks_run: string[] | null;
                     checks_scored: number;
                     checks_total: number;
                     created_at: string;
@@ -297,6 +298,7 @@ export type Database = {
                     id: string;
                     is_gated: boolean;
                     is_partial: boolean;
+                    is_shell: boolean;
                     linked_hosts: Json | null;
                     pages_indexable: number;
                     pages_read: number;
@@ -312,12 +314,14 @@ export type Database = {
                     sandbox_gb_h: number;
                     sandbox_names: Json | null;
                     score: number | null;
+                    score_difference: number | null;
                     severity_1: number;
                     severity_2: number;
                     severity_3: number;
                 };
                 Insert: {
                     cdn_test?: string | null;
+                    checks_run?: string[] | null;
                     checks_scored?: number;
                     checks_total?: number;
                     created_at?: string;
@@ -330,6 +334,7 @@ export type Database = {
                     id?: string;
                     is_gated?: boolean;
                     is_partial?: boolean;
+                    is_shell?: boolean;
                     linked_hosts?: Json | null;
                     pages_indexable?: number;
                     pages_read?: number;
@@ -345,12 +350,14 @@ export type Database = {
                     sandbox_gb_h?: number;
                     sandbox_names?: Json | null;
                     score?: number | null;
+                    score_difference?: number | null;
                     severity_1?: number;
                     severity_2?: number;
                     severity_3?: number;
                 };
                 Update: {
                     cdn_test?: string | null;
+                    checks_run?: string[] | null;
                     checks_scored?: number;
                     checks_total?: number;
                     created_at?: string;
@@ -363,6 +370,7 @@ export type Database = {
                     id?: string;
                     is_gated?: boolean;
                     is_partial?: boolean;
+                    is_shell?: boolean;
                     linked_hosts?: Json | null;
                     pages_indexable?: number;
                     pages_read?: number;
@@ -378,6 +386,7 @@ export type Database = {
                     sandbox_gb_h?: number;
                     sandbox_names?: Json | null;
                     score?: number | null;
+                    score_difference?: number | null;
                     severity_1?: number;
                     severity_2?: number;
                     severity_3?: number;
@@ -795,6 +804,7 @@ export type Database = {
                     is_blocked: boolean;
                     is_gone: boolean;
                     is_indexable: boolean;
+                    is_shell: boolean;
                     jsonld_count: number;
                     last_audit_id: string | null;
                     last_seen_at: string;
@@ -827,6 +837,7 @@ export type Database = {
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;
+                    is_shell?: boolean;
                     jsonld_count?: number;
                     last_audit_id?: string | null;
                     last_seen_at?: string;
@@ -859,6 +870,7 @@ export type Database = {
                     is_blocked?: boolean;
                     is_gone?: boolean;
                     is_indexable?: boolean;
+                    is_shell?: boolean;
                     jsonld_count?: number;
                     last_audit_id?: string | null;
                     last_seen_at?: string;
@@ -993,6 +1005,7 @@ export type Database = {
             score_audit: {
                 Args: {
                     audit: string;
+                    checks_run: string[];
                     checks_scored: number;
                     checks_total: number;
                     findings_fixed?: number;
@@ -1003,6 +1016,7 @@ export type Database = {
                     questions: number;
                     results: Json;
                     score: number;
+                    score_difference?: number;
                     severity_1: number;
                     severity_2: number;
                     severity_3: number;

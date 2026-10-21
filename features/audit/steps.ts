@@ -7,6 +7,7 @@ import {
     siteClient,
 } from '@/features/audit/client';
 import { runCdnTest } from '@/features/audit/cdn-test';
+import { previousAudit } from '@/features/audit/changes';
 import { type Finding, findingRows } from '@/features/audit/finding';
 import { checkMarkdown } from '@/features/audit/markdown-checks';
 import { judgeMobile } from '@/features/audit/mobile-checks';
@@ -84,6 +85,7 @@ import {
     resourceChecks,
     scoredPageColumns,
 } from '@/features/audit/score';
+import { isShellSite } from '@/features/audit/shell';
 import { siteChecks, siteHalves } from '@/features/audit/site-checks';
 import { rowsPerWrite, writeSitePages } from '@/features/audit/site-pages';
 import { sitemapChecks } from '@/features/audit/sitemap-checks';
@@ -939,7 +941,18 @@ export async function closeAudit(
         return;
     }
 
-    const queue = await loadQueue(auditId);
+    const [queue, site, pages] = await Promise.all([
+        loadQueue(auditId),
+        loadSite(projectId),
+        all((from, to) =>
+            supabase
+                .from('site_pages')
+                .select('url, status_code, redirect_to, is_shell')
+                .eq('last_audit_id', auditId)
+                .order('url')
+                .range(from, to),
+        ),
+    ]);
 
     const { count, error } = await supabase
         .from('site_pages')
@@ -962,6 +975,7 @@ export async function closeAudit(
             .from('audits')
             .update({
                 pages_indexable: count ?? 0,
+                is_shell: isShellSite(pages, site.homes),
                 duration_s: Math.round(
                     (Date.now() - Date.parse(run.started_at)) / 1000,
                 ),
@@ -1119,8 +1133,10 @@ async function sweepAudits(projectId: string, auditId: string) {
             .order('created_at', { ascending: false }),
     );
 
-    const previous = audits.find(
-        (audit) => audit.id !== auditId && audit.runs?.status !== 'running',
+    const previous = previousAudit(
+        audits.flatMap(({ runs, ...audit }) =>
+            audit.id === auditId ? [] : [{ run: runs, audit }],
+        ),
     );
 
     const older = audits

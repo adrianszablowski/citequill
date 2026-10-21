@@ -711,6 +711,157 @@ describe('readAuditPage', () => {
     });
 });
 
+describe('readAuditPage, for the shell test', () => {
+    const text = 'Plain words a reader sees on the page. '.repeat(8);
+
+    const isShell = (body: string) =>
+        readAuditPage(
+            `<html><head><title>App</title></head><body>${body}</body></html>`,
+            'https://acme.com/',
+        ).isShell;
+
+    it('calls a body that holds only an empty root element and a script a shell', () => {
+        expect(
+            isShell('<div id="root"></div><script>render("#root")</script>'),
+        ).toBe(true);
+    });
+
+    it('calls a page a shell when its text sits only in the header, navigation, footer, an aside or a form', () => {
+        expect(isShell(`<header><p>${text}</p></header>`)).toBe(true);
+        expect(isShell(`<nav>${text}</nav>`)).toBe(true);
+        expect(isShell(`<footer>${text}</footer>`)).toBe(true);
+        expect(isShell(`<aside>${text}</aside>`)).toBe(true);
+        expect(isShell(`<form><label>${text}</label></form>`)).toBe(true);
+    });
+
+    it('leaves out text hidden by hidden, aria-hidden or an inline display none', () => {
+        expect(isShell(`<div hidden>${text}</div>`)).toBe(true);
+        expect(isShell(`<div aria-hidden="true">${text}</div>`)).toBe(true);
+        expect(isShell(`<div style="display: none">${text}</div>`)).toBe(true);
+        expect(isShell(`<div>${text}</div>`)).toBe(false);
+    });
+
+    it('calls 199 characters of text a shell and 200 not', () => {
+        expect(isShell(`<p>${'a'.repeat(199)}</p>`)).toBe(true);
+        expect(isShell(`<p>${'a'.repeat(200)}</p>`)).toBe(false);
+    });
+
+    it('reads a noscript asking for JavaScript as no text, so only a page with no other text is a shell', () => {
+        const noscript =
+            '<noscript>You need to enable JavaScript to run this app.</noscript>';
+
+        expect(
+            isShell(
+                `${noscript}<div id="root"><p>${'a'.repeat(300)}</p></div>`,
+            ),
+        ).toBe(false);
+
+        expect(isShell(`${noscript}<div id="root"></div>`)).toBe(true);
+    });
+
+    it('reads the text a call of the page moves into place by the rule of the main content', () => {
+        const streamed = (content: string) =>
+            `<main><!--$?--><template id="B:0"></template><!--/$--></main><div hidden id="S:0">${content}</div><script>$RC("B:0","S:0")</script>`;
+
+        expect(isShell(streamed(`<p>${text}</p>`))).toBe(false);
+        expect(isShell(streamed(`<nav>${text}</nav>`))).toBe(true);
+
+        expect(isShell(streamed(`<p style="display: none">${text}</p>`))).toBe(
+            true,
+        );
+    });
+
+    it('leaves out a streamed block that no call moves', () => {
+        const fallback =
+            '<main><!--$?--><template id="B:0"></template><!--/$--></main>';
+
+        expect(
+            isShell(`${fallback}<div hidden id="S:0"><p>${text}</p></div>`),
+        ).toBe(true);
+
+        expect(
+            isShell(
+                `${fallback}<div hidden id="S:0"><p>${text}</p></div><script>$RC("B:1","S:0")</script>`,
+            ),
+        ).toBe(true);
+    });
+});
+
+describe('readAuditPage, for the content React streams', () => {
+    const words = (count: number) =>
+        Array.from({ length: count }, () => 'word').join(' ');
+
+    const streamed = (segment: string) =>
+        `<html><head><title>Post</title></head><body><main><!--$?--><template id="B:0"></template><p>Loading</p><!--/$--><p>${words(30)}</p></main><div hidden id="S:0">${segment}</div><script>$RC("B:0","S:0")</script></body></html>`;
+
+    it('places an H1 that a call moved to the top of the main content before every word of it', () => {
+        const page = readAuditPage(
+            streamed('<h1>Title</h1><p>The answer.</p>'),
+            'https://acme.com/blog/post',
+        );
+
+        expect(page.mainContent.h1).toEqual({
+            wordsBefore: 0,
+            wordsThrough: 1,
+        });
+
+        expect(page.mainContent.paragraphs).toEqual([
+            { words: 2, wordsBefore: 1 },
+            { words: 30, wordsBefore: 3 },
+        ]);
+
+        expect(page.mainText).toBe(`Title The answer. ${words(30)}`);
+    });
+
+    it('keeps a link that stands only in the fallback a call replaced', () => {
+        const page = readAuditPage(
+            `<html><body><main><!--$?--><template id="B:0"></template><a href="/pricing">Pricing</a><!--/$--></main><div hidden id="S:0"><a href="/blog">Blog</a></div><script>$RC("B:0","S:0")</script></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(page.mainText).toBe('Blog');
+
+        expect(page.links).toEqual([
+            'https://acme.com/pricing',
+            'https://acme.com/blog',
+        ]);
+
+        expect(page.anchors.map(({ text }) => text)).toEqual([
+            'Pricing',
+            'Blog',
+        ]);
+    });
+
+    it('leaves the text of a streamed block that no call moves out of the main content', () => {
+        const page = readAuditPage(
+            `<html><body><main><p>Shown</p></main><div hidden id="S:0"><p>${words(200)}</p></div></body></html>`,
+            'https://acme.com/',
+        );
+
+        expect(page.mainText).toBe('Shown');
+        expect(page.wordCount).toBe(1);
+    });
+
+    it('measures the markup the site served, and finds a head element the parser moved out of the head, on a page whose content moved', () => {
+        const head =
+            '<html><head><title>Post</title><div></div><meta name="description" content="Late"></head>';
+
+        const html = `${head}<body><main><!--$?--><template id="B:0"></template><!--/$--></main><div hidden id="S:0"><p>Text</p></div><script>$RC("B:0","S:0")</script></body></html>`;
+
+        const page = readAuditPage(html, 'https://acme.com/');
+
+        expect(page.mainText).toBe('Text');
+
+        expect(page.markupLength).toBe(
+            html.replace(/<script.*?<\/script>/, '').length,
+        );
+
+        expect(page.misplaced.map(({ selector }) => selector)).toEqual([
+            'meta',
+        ]);
+    });
+});
+
 describe('srcsetUrls', () => {
     it('reads one candidate, with a descriptor or without', () => {
         expect(srcsetUrls('/a.png')).toEqual(['/a.png']);

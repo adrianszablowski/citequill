@@ -407,6 +407,73 @@ describe('observeRead, for structured data', () => {
     });
 });
 
+describe('observeRead, for the shell test', () => {
+    const url = 'https://acme.com/';
+    const shell = '<html><body><div id="root"></div></body></html>';
+
+    const isShell = (outcome: Read['outcome']) =>
+        observe({ entry: entry(url), outcome }).row.is_shell;
+
+    it('records a shell for a page that answered 200 with HTML that is one', () => {
+        expect(isShell({ ...page(url, []), body: shell })).toBe(true);
+
+        expect(
+            isShell({
+                ...page(url, []),
+                body: `<html><body><p>${'a'.repeat(200)}</p></body></html>`,
+            }),
+        ).toBe(false);
+    });
+
+    it('records no shell for an answer other than a 200 of HTML, a redirect, or no answer', () => {
+        expect(
+            isShell({
+                ...page(url, [], [{ url, status: 203 }]),
+                body: shell,
+            }),
+        ).toBe(false);
+
+        expect(
+            isShell({
+                ...page(url, [], [{ url, status: 404 }]),
+                ok: false,
+                body: shell,
+            }),
+        ).toBe(false);
+
+        expect(
+            isShell({
+                ...page(
+                    url,
+                    [],
+                    [
+                        { url, status: 301 },
+                        { url: 'https://acme.com/en', status: 200 },
+                    ],
+                ),
+                body: shell,
+            }),
+        ).toBe(false);
+
+        expect(
+            isShell({
+                ...page(url, []),
+                headers: new Headers({ 'content-type': 'application/json' }),
+                body: shell,
+            }),
+        ).toBe(false);
+
+        expect(isShell(new Error('timeout'))).toBe(false);
+        expect(isShell('blocked')).toBe(false);
+    });
+
+    it('records no shell for a page cut at the size cap, whose body it may not have read', () => {
+        expect(
+            isShell({ ...page(url, []), body: shell, isTruncated: true }),
+        ).toBe(false);
+    });
+});
+
 describe('headerAlternates', () => {
     it("reads Google's example header, each code as written, each URL absolute", () => {
         expect(

@@ -4,6 +4,7 @@ import * as cheerio from 'cheerio';
 
 import {
     mainElement,
+    placeStreamed,
     readPage,
     spacedText,
     toMarkdown,
@@ -165,6 +166,123 @@ describe('readPage', () => {
         ].join('')}<div><p>The page.</p></div></body></html>`;
 
         expect(readPage(html, 'https://acme.com/').markdown).toBe('The page.');
+    });
+
+    it('reads the content React streams where the call of the page puts it, and leaves out a streamed block no call moves', () => {
+        const html =
+            '<html><body><main><!--$?--><template id="B:0"></template><p>Loading</p><!--/$--></main><div hidden id="S:0"><h1>Pricing</h1><p>Starter costs $29.</p></div><div hidden id="S:1"><p>Never moved</p></div><script>$RC("B:0","S:0")</script></body></html>';
+
+        expect(readPage(html, 'https://acme.com/').markdown).toBe(
+            '# Pricing\n\nStarter costs $29.',
+        );
+    });
+});
+
+describe('placeStreamed', () => {
+    const placed = (body: string) => {
+        const $ = cheerio.load(`<html><body>${body}</body></html>`);
+        const hasMoved = placeStreamed($);
+
+        $('script').remove();
+
+        return {
+            hasMoved,
+            body: ($('body').html() ?? '').replace(/<!--.*?-->/g, ''),
+        };
+    };
+
+    it('puts the children of a segment in place of its placeholder, for $RS', () => {
+        expect(
+            placed(
+                '<main><p>a</p><template id="P:1"></template><p>c</p></main><div hidden id="S:1"><p>b</p><p>b2</p></div><script>$RS("S:1","P:1")</script>',
+            ),
+        ).toEqual({
+            hasMoved: true,
+            body: '<main><p>a</p><p>b</p><p>b2</p><p>c</p></main>',
+        });
+
+        expect(
+            placed(
+                '<template id="P:1"></template><div hidden id="S:1"><p>b</p></div><p>c</p><script>$RS("S:1","P:1")</script>',
+            ).body,
+        ).toBe('<p>b</p><p>c</p>');
+    });
+
+    it("replaces a boundary's fallback up to the comment that closes it, a nested boundary counted, for $RC and $RR", () => {
+        const fallback =
+            '<main><!--$?--><template id="B:0"></template><p>Loading</p><!--$--><p>Inner</p><!--/$--><p>Still loading</p><!--/$--><p>After</p></main><div hidden id="S:0"><p>Content</p></div>';
+
+        for (const call of [
+            '$RC("B:0","S:0")',
+            '$RR("B:0","S:0",[["/style.css","high"]])',
+        ]) {
+            expect(placed(`${fallback}<script>${call}</script>`), call).toEqual(
+                {
+                    hasMoved: true,
+                    body: '<main><p>Content</p><p>After</p></main>',
+                },
+            );
+        }
+    });
+
+    it("applies the calls in their order, so a segment fills a placeholder inside a boundary's content before or after that content moves", () => {
+        const page = (calls: string[]) =>
+            `<main><!--$?--><template id="B:0"></template><p>Loading</p><!--/$--></main><div hidden id="S:0"><h2>Head</h2><template id="P:1"></template></div><div hidden id="S:1"><p>Late</p></div>${calls.map((call) => `<script>${call}</script>`).join('')}`;
+
+        const rc = '$RC("B:0","S:0")';
+        const rs = '$RS("S:1","P:1")';
+
+        for (const calls of [
+            [rc, rs],
+            [rs, rc],
+        ]) {
+            expect(placed(page(calls)).body, calls.join(' ')).toBe(
+                '<main><h2>Head</h2><p>Late</p></main>',
+            );
+        }
+    });
+
+    it('moves the children of a segment whatever its tag, a table part or an svg', () => {
+        expect(
+            placed(
+                '<table><tbody><tr><td>A</td></tr><template id="P:2"></template></tbody></table><table hidden><tbody id="S:2"><tr><td>B</td></tr></tbody></table><script>$RS("S:2","P:2")</script>',
+            ).body,
+        ).toBe(
+            '<table><tbody><tr><td>A</td></tr><tr><td>B</td></tr></tbody></table><table hidden=""></table>',
+        );
+
+        expect(
+            placed(
+                '<svg><template id="P:3"></template></svg><svg aria-hidden="true" style="display:none" id="S:3"><path d="M0 0"></path></svg><script>$RS("S:3","P:3")</script>',
+            ).body,
+        ).toBe('<svg><path d="M0 0"></path></svg>');
+    });
+
+    it('moves nothing for a call whose element is missing, a definition, a call of another function or a script with a src', () => {
+        const segment = '<div hidden="" id="S:0"><p>Content</p></div>';
+        const boundary = '<main><template id="B:0"></template></main>';
+
+        for (const script of [
+            '<script>$RC("B:9","S:0")</script>',
+            '<script>$RC("B:0","S:9")</script>',
+            '<script>$RS("S:0","P:9")</script>',
+            '<script>$RC=function(a,b){a=document.getElementById(a)}</script>',
+            '<script>$RX("B:0","S:0")</script>',
+            '<script src="/react.js">$RC("B:0","S:0")</script>',
+        ]) {
+            expect(placed(`${boundary}${segment}${script}`), script).toEqual({
+                hasMoved: false,
+                body: `${boundary}${segment}`,
+            });
+        }
+    });
+
+    it('finds an element by its exact id, never by a prefix', () => {
+        expect(
+            placed(
+                '<template id="P:10"></template><template id="P:1"></template><div hidden id="S:1"><p>b</p></div><script>$RS("S:1","P:1")</script>',
+            ).body,
+        ).toBe('<template id="P:10"></template><p>b</p>');
     });
 });
 

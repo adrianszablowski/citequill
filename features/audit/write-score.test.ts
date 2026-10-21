@@ -70,45 +70,63 @@ function answerOf({ name, calls }: FakeQuery) {
         return 'previous findings';
     }
 
+    if (name === 'audit_check_results' && isOn('audit_id', 'previous')) {
+        return 'previous results';
+    }
+
     return name;
 }
 
-function previousAudit(checksScored: number) {
+function earlierAudits(checksRun: string[] | null, isGated = false) {
     return {
         'older audits': {
             data: [
                 {
                     id: 'running',
-                    created_at: '2026-10-10T10:00:00Z',
-                    score: 70,
-                    checks_scored: checksScored,
+                    is_gated: false,
+                    checks_run: checksRun,
                     runs: { status: 'running' },
                 },
                 {
+                    id: 'stopped',
+                    is_gated: false,
+                    checks_run: checksRun,
+                    runs: { status: 'failed' },
+                },
+                {
                     id: 'previous',
-                    created_at: '2026-10-03T10:00:00Z',
-                    score: 60,
-                    checks_scored: checksScored,
+                    is_gated: isGated,
+                    checks_run: checksRun,
                     runs: { status: 'finished' },
+                },
+            ],
+        },
+        'previous results': {
+            data: [
+                {
+                    check: 'page-4xx',
+                    pages_checked: 4,
+                    pages_failed: 2,
+                    pages_intended: 0,
                 },
             ],
         },
         'previous findings': {
             data: [
-                { fingerprint: 'kept' },
-                { fingerprint: 'fixed-1' },
-                { fingerprint: 'fixed-2' },
+                { fingerprint: 'kept', check: 'page-4xx' },
+                { fingerprint: 'fixed-1', check: 'page-4xx' },
+                { fingerprint: 'fixed-2', check: 'page-4xx' },
             ],
         },
     };
 }
 
-async function checksScored() {
+async function checksRun() {
     const fake = database();
 
     await writeScore(fake.client as never, request);
 
-    return scored(fake).checks_scored as number;
+    return scored(fake).checks_run as string[];
 }
 
 const request = {
@@ -209,7 +227,10 @@ describe('writeScore', () => {
 
             expect(
                 fake.queries.find(({ name }) => name === 'audits')!.calls[0],
-            ).toEqual(['select', 'robots_rules, cdn_test, created_at']);
+            ).toEqual([
+                'select',
+                'robots_rules, cdn_test, created_at, checks_run',
+            ]);
 
             return scored(fake).results.map(({ check }) => check);
         };
@@ -251,15 +272,53 @@ describe('writeScore', () => {
         );
     });
 
-    it('writes the findings fixed and new against the last earlier audit that ended on the same checks', async () => {
-        const fake = database(previousAudit(await checksScored()));
+    it('writes the checks it ran, and the comparison with the last finished audit on the checks both ran', async () => {
+        const ran = await checksRun();
+
+        expect(ran).toEqual(expect.arrayContaining(['page-4xx']));
+        expect(ran).not.toContain('ai-cdn-blocked');
+
+        const fake = database(earlierAudits(ran));
 
         await writeScore(fake.client as never, request);
 
+        expect(
+            fake.queries.find((query) => answerOf(query) === 'older audits')!
+                .calls[0],
+        ).toEqual(['select', 'id, is_gated, checks_run, runs(status)']);
+
         expect(scored(fake)).toMatchObject({
+            checks_run: ran,
+            score: 91,
+            score_difference: 91 - 83,
             findings_fixed: 2,
             findings_new: 1,
         });
+    });
+
+    it('passes over a stopped or failed audit between two finished ones', async () => {
+        const fake = database(earlierAudits(await checksRun()));
+
+        await writeScore(fake.client as never, request);
+
+        const readOf = (id: string) =>
+            fake.queries.filter(({ calls }) =>
+                calls.some(
+                    ([method, column, value]) =>
+                        method === 'eq' &&
+                        column === 'audit_id' &&
+                        value === id,
+                ),
+            );
+
+        expect(readOf('stopped')).toEqual([]);
+        expect(readOf('running')).toEqual([]);
+
+        expect(
+            readOf('previous')
+                .map(({ name }) => name)
+                .sort(),
+        ).toEqual(['audit_check_results', 'audit_findings']);
     });
 
     it('reads only the audits created before the one it scores', async () => {
@@ -278,28 +337,132 @@ describe('writeScore', () => {
             'created_at',
             '2026-10-18T10:00:00Z',
         ]);
+
+        expect(older.calls).toContainEqual([
+            'order',
+            'created_at',
+            { ascending: false },
+        ]);
     });
 
-    it('writes no counts for the first audit of a project', async () => {
+    it('scores only the checks the audit stored when it ran, so a check shipped since counts neither as passed nor in the comparison', async () => {
+        const ran = await checksRun();
+        const stored = ran.filter((check) => check !== 'canonical-to-error');
+
+        const fake = database({
+            ...earlierAudits(ran),
+            audits: {
+                data: {
+                    robots_rules: [],
+                    created_at: '2026-10-18T10:00:00Z',
+                    checks_run: stored,
+                },
+            },
+        });
+
+        await writeScore(fake.client as never, request);
+
+        const args = scored(fake);
+
+        expect(args.checks_run).toEqual(stored);
+
+        expect(args.results.map(({ check }) => check)).not.toContain(
+            'canonical-to-error',
+        );
+
+        expect(args.findings_new).toBe(0);
+    });
+
+    it("scores today's checks for an audit that stored none", async () => {
+        const fake = database({
+            audits: {
+                data: {
+                    robots_rules: [],
+                    created_at: '2026-10-18T10:00:00Z',
+                    checks_run: null,
+                },
+            },
+        });
+
+        await writeScore(fake.client as never, request);
+
+        expect(scored(fake).checks_run).toEqual(await checksRun());
+
+        expect(scored(fake).results.map(({ check }) => check)).toContain(
+            'canonical-to-error',
+        );
+    });
+
+    it('compares against the score of a gated audit capped at 49, on either side', async () => {
+        const ran = await checksRun();
+        const previousGated = database(earlierAudits(ran, true));
+
+        await writeScore(previousGated.client as never, request);
+
+        expect(scored(previousGated)).toMatchObject({
+            score: 91,
+            score_difference: 91 - 49,
+        });
+
+        const latestGated = database({
+            ...earlierAudits(ran),
+            audit_findings: {
+                data: [
+                    {
+                        id: 'finding-1',
+                        check: 'page-4xx',
+                        severity: '3',
+                        site_page_id: 'page-1',
+                        subject: null,
+                        selector: null,
+                        fingerprint: 'kept',
+                    },
+                    {
+                        id: 'finding-3',
+                        check: 'page-5xx',
+                        severity: '3',
+                        site_page_id: 'page-0',
+                        subject: null,
+                        selector: null,
+                        fingerprint: 'down',
+                    },
+                ],
+            },
+        });
+
+        await writeScore(latestGated.client as never, request);
+
+        expect(scored(latestGated)).toMatchObject({
+            is_gated: true,
+            score: 49,
+            score_difference: 49 - 83,
+        });
+    });
+
+    it('writes no comparison for the first audit of a project', async () => {
         const fake = database();
 
         await writeScore(fake.client as never, request);
 
+        expect(scored(fake).score_difference).toBeUndefined();
         expect(scored(fake).findings_fixed).toBeUndefined();
         expect(scored(fake).findings_new).toBeUndefined();
     });
 
-    it('writes no counts, and reads no earlier findings, when the earlier audit stood on other checks', async () => {
-        const fake = database(previousAudit((await checksScored()) + 1));
+    it('writes no comparison, and reads none of its rows, when the previous audit was scored before it stored the checks it ran', async () => {
+        const fake = database(earlierAudits(null));
 
         await writeScore(fake.client as never, request);
 
+        expect(scored(fake).score_difference).toBeUndefined();
         expect(scored(fake).findings_fixed).toBeUndefined();
         expect(scored(fake).findings_new).toBeUndefined();
 
         expect(
-            fake.queries.some(
-                (query) => answerOf(query) === 'previous findings',
+            fake.queries.some((query) =>
+                ['previous findings', 'previous results'].includes(
+                    answerOf(query),
+                ),
             ),
         ).toBe(false);
     });

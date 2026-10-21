@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { auditChanges, comparedPair } from '@/features/audit/changes';
+import { auditComparison, previousAudit } from '@/features/audit/changes';
 import { homePages, siteBaseUrls } from '@/features/audit/queue';
 import {
     checksRun,
@@ -32,7 +32,7 @@ export async function writeScore(
             one(
                 supabase
                     .from('audits')
-                    .select('robots_rules, cdn_test, created_at')
+                    .select('robots_rules, cdn_test, created_at, checks_run')
                     .eq('id', auditId)
                     .single(),
             ),
@@ -71,13 +71,21 @@ export async function writeScore(
         ],
     );
 
+    const today = checksRun({
+        hasCrossPageChecks,
+        hasDiscovered: audit.robots_rules !== null,
+        obeyRobots: project.obey_robots,
+        hasPassedCdnTest: audit.cdn_test === 'passed',
+    });
+
+    const stored = audit.checks_run;
+
+    const checks = stored
+        ? today.filter((check) => stored.includes(check))
+        : today;
+
     const { results, ...score } = scoreAudit({
-        checks: checksRun({
-            hasCrossPageChecks,
-            hasDiscovered: audit.robots_rules !== null,
-            obeyRobots: project.obey_robots,
-            hasPassedCdnTest: audit.cdn_test === 'passed',
-        }),
+        checks,
         pages,
         findings,
         marks,
@@ -87,38 +95,60 @@ export async function writeScore(
     const older = await one(
         supabase
             .from('audits')
-            .select('id, created_at, score, checks_scored, runs(status)')
+            .select('id, is_gated, checks_run, runs(status)')
             .eq('project_id', projectId)
             .lt('created_at', audit.created_at)
             .order('created_at', { ascending: false }),
     );
 
-    const pair = comparedPair(
-        score,
-        older.map(({ runs, ...previous }) => ({ run: runs, audit: previous })),
+    const previous = previousAudit(
+        older.map(({ runs, ...earlier }) => ({ run: runs, audit: earlier })),
     );
 
-    const changes =
-        pair &&
-        auditChanges(
-            await all((from, to) =>
+    let comparison = null;
+
+    if (previous?.checks_run) {
+        const [previousResults, previousFindings] = await Promise.all([
+            all((from, to) =>
+                supabase
+                    .from('audit_check_results')
+                    .select(
+                        'check, pages_checked, pages_failed, pages_intended',
+                    )
+                    .eq('audit_id', previous.id)
+                    .order('check')
+                    .range(from, to),
+            ),
+            all((from, to) =>
                 supabase
                     .from('audit_findings')
-                    .select('fingerprint')
-                    .eq('audit_id', pair.previousId)
+                    .select('fingerprint, check')
+                    .eq('audit_id', previous.id)
                     .order('id')
                     .range(from, to),
             ),
-            findings,
+        ]);
+
+        comparison = auditComparison(
+            {
+                checksRun: previous.checks_run,
+                isGated: previous.is_gated,
+                results: previousResults,
+                findings: previousFindings,
+            },
+            { checksRun: checks, isGated: score.is_gated, results, findings },
         );
+    }
 
     await done(
         supabase.rpc('score_audit', {
             audit: auditId,
             ...score,
             results,
-            findings_fixed: changes?.fixed,
-            findings_new: changes?.added,
+            checks_run: checks,
+            score_difference: comparison?.difference,
+            findings_fixed: comparison?.fixed,
+            findings_new: comparison?.added,
         }),
     );
 }
