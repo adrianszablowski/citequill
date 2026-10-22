@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+    canonicalLocale,
     isSameLanguage,
     languagesSkill,
     localeOf,
@@ -56,7 +57,7 @@ describe('localesFrom', () => {
                 is_default: false,
             },
             {
-                locale: 'de-de',
+                locale: 'de-DE',
                 base_url: 'https://de.acme.com',
                 is_default: false,
             },
@@ -82,7 +83,7 @@ describe('localesFrom', () => {
             ]),
         ).toEqual([
             {
-                locale: 'pl-pl',
+                locale: 'pl-PL',
                 base_url: 'https://www.acme.com',
                 is_default: true,
             },
@@ -92,6 +93,64 @@ describe('localesFrom', () => {
     it('is English at the origin when nothing says otherwise', () => {
         expect(localesFrom('https://acme.com', [])).toEqual([
             { locale: 'en', base_url: 'https://acme.com', is_default: true },
+        ]);
+    });
+
+    it('keeps one locale per canonical tag, with the base URL of the tag that already is that locale, in either order', () => {
+        const tags = [
+            { lang: 'es-419', href: 'https://acme.com/es-419/' },
+            { lang: 'es', href: 'https://acme.com/es/' },
+        ];
+
+        for (const alternates of [tags, [...tags].reverse()]) {
+            const locales = localesFrom('https://acme.com', [
+                {
+                    lang: 'en-us',
+                    alternates: [
+                        ...alternates,
+                        { lang: 'en-us', href: 'https://acme.com/' },
+                    ],
+                },
+            ]);
+
+            expect(locales, alternates[0].lang).toEqual([
+                {
+                    locale: 'es',
+                    base_url: 'https://acme.com/es',
+                    is_default: false,
+                },
+                {
+                    locale: 'en-US',
+                    base_url: 'https://acme.com',
+                    is_default: true,
+                },
+            ]);
+
+            expect(localeOf('https://acme.com/es/precios', locales)).toBe('es');
+
+            expect(localeOf('https://acme.com/es-419/precios', locales)).toBe(
+                'en-US',
+            );
+        }
+    });
+
+    it('keeps the base URL of the first tag when none of them already is the locale', () => {
+        expect(
+            localesFrom('https://acme.com', [
+                {
+                    lang: null,
+                    alternates: [
+                        { lang: 'es-419', href: 'https://acme.com/es-419/' },
+                        { lang: 'es_419', href: 'https://acme.com/es_419/' },
+                    ],
+                },
+            ]),
+        ).toEqual([
+            {
+                locale: 'es',
+                base_url: 'https://acme.com/es-419',
+                is_default: true,
+            },
         ]);
     });
 
@@ -107,6 +166,21 @@ describe('localesFrom', () => {
         ]);
 
         expect(locales.find((locale) => locale.is_default)?.locale).toBe('en');
+    });
+});
+
+describe('canonicalLocale', () => {
+    it('lowercases the language and uppercases a two-letter region', () => {
+        expect(canonicalLocale('EN-us')).toBe('en-US');
+        expect(canonicalLocale('pt_br')).toBe('pt-BR');
+        expect(canonicalLocale('pl')).toBe('pl');
+        expect(canonicalLocale('en-US')).toBe('en-US');
+    });
+
+    it('drops a region that is not two letters, and whatever follows the region', () => {
+        expect(canonicalLocale('es-419')).toBe('es');
+        expect(canonicalLocale('zh-Hant-TW')).toBe('zh');
+        expect(canonicalLocale('sr-RS-latn')).toBe('sr-RS');
     });
 });
 

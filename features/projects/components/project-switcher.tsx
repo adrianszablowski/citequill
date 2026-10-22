@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -50,9 +51,18 @@ export default function ProjectSwitcher({
                             />
                         }
                     >
-                        <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                            <FeatherIcon className="size-4" />
-                        </div>
+                        <Avatar className="rounded-lg after:rounded-lg">
+                            {current?.organization_logo_url && (
+                                <AvatarImage
+                                    src={current.organization_logo_url}
+                                    alt=""
+                                    className="rounded-lg object-contain"
+                                />
+                            )}
+                            <AvatarFallback className="rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+                                <FeatherIcon className="size-4" />
+                            </AvatarFallback>
+                        </Avatar>
                         <div className="grid flex-1 text-left text-sm/tight">
                             <span className="truncate font-medium">
                                 {current?.name}

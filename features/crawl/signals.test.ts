@@ -97,10 +97,142 @@ describe('readSignals', () => {
             emails: [],
             phones: [],
             socialLinks: [],
+            logo: null,
+            headerLogo: null,
+            sameAs: [],
             footer: '',
         });
     });
+
+    it("reads the organization's profiles from its sameAs, as absolute addresses", () => {
+        expect(signals.sameAs).toEqual(['https://x.com/acme']);
+    });
+
+    it("reads the organization's logo from JSON-LD, as a URL or an ImageObject", () => {
+        for (const logo of [
+            '"/img/logo.png"',
+            '{"@type":"ImageObject","url":"https://acme.com/img/logo.png","width":600}',
+            '{"@type":"ImageObject","contentUrl":"/img/logo.png"}',
+            '["/img/logo.png","/img/other.png"]',
+        ]) {
+            expect(
+                signalsOf(
+                    `<script type="application/ld+json">{"@context":"https://schema.org","@type":"Corporation","name":"Acme","logo":${logo}}</script><header><img src="/header.png" alt="Acme logo"></header>`,
+                ).logo,
+                logo,
+            ).toBe('https://acme.com/img/logo.png');
+        }
+    });
+
+    it("reads the header's image whose address, alternative text or class holds logo, beside the JSON-LD logo", () => {
+        for (const image of [
+            '<img src="/brand/logo-dark.svg">',
+            '<img src="/brand/a.svg" alt="Acme Logo">',
+            '<img src="/brand/a.svg" class="site-logo">',
+        ]) {
+            const read = signalsOf(
+                `<header><img src="/hero.png" alt="A team">${image}</header>`,
+            );
+
+            expect(read.headerLogo, image).toMatch(
+                /^https:\/\/acme\.com\/brand\//,
+            );
+
+            expect(read.logo).toBeNull();
+        }
+
+        expect(
+            signalsOf('<main><img src="/logo.png" alt="Logo"></main>')
+                .headerLogo,
+        ).toBeNull();
+    });
+
+    it("prefers the header's image inside a link to the home page, and reads the first header alone", () => {
+        expect(
+            signalsOf(
+                '<header><img src="/clients/logo-nike.png"><a href="/"><img src="/brand/acme.svg"></a></header>',
+            ).headerLogo,
+        ).toBe('https://acme.com/brand/acme.svg');
+
+        expect(
+            signalsOf(
+                '<header><a href="/"><img src="/brand/acme.svg"></a></header><section><header><img src="/clients/logo-nike.png"></header></section>',
+            ).headerLogo,
+        ).toBe('https://acme.com/brand/acme.svg');
+
+        expect(
+            signalsOf(
+                '<header><nav>Menu</nav></header><section><header><img src="/clients/logo-nike.png"></header></section>',
+            ).headerLogo,
+        ).toBeNull();
+    });
+
+    it('reads social links as full addresses and leaves out share and intent links', () => {
+        expect(
+            signalsOf(
+                [
+                    '<a href="//twitter.com/acme">Twitter</a>',
+                    '<a href="https://www.facebook.com/sharer/sharer.php?u=x">Share</a>',
+                    '<a href="https://twitter.com/intent/tweet?text=x">Tweet</a>',
+                    '<a href="https://www.linkedin.com/shareArticle?url=x">Share</a>',
+                    '<a href="https://www.facebook.com/acme">Facebook</a>',
+                ].join(''),
+            ).socialLinks,
+        ).toEqual([
+            'https://twitter.com/acme',
+            'https://www.facebook.com/acme',
+        ]);
+    });
+
+    it('reads the logo, the name and the profiles of an Organization subtype', () => {
+        const read = signalsOf(
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"ProfessionalService","name":"Acme Studio","logo":"/logo.png","sameAs":"https://x.com/acme"}</script>',
+        );
+
+        expect(read).toMatchObject({
+            siteName: 'Acme Studio',
+            logo: 'https://acme.com/logo.png',
+            sameAs: ['https://x.com/acme'],
+        });
+
+        expect(read.jsonLd).toHaveLength(1);
+    });
+
+    it('reads the Organization a WebSite names as its publisher, and a logo given by its @id', () => {
+        const read = signalsOf(
+            `<script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+                {"@type":"WebSite","publisher":{"@type":"Organization","name":"Acme","logo":{"@id":"https://acme.com/#logo"},"sameAs":["https://x.com/acme"]}},
+                {"@type":"ImageObject","@id":"https://acme.com/#logo","url":"https://acme.com/logo.png"}
+            ]}</script>`,
+        );
+
+        expect(read).toMatchObject({
+            logo: 'https://acme.com/logo.png',
+            sameAs: ['https://x.com/acme'],
+        });
+    });
+
+    it('reads the profiles from the Organization the logo comes from', () => {
+        const read = signalsOf(
+            `<script type="application/ld+json">[
+                {"@context":"https://schema.org","@type":"Organization","name":"Partner","sameAs":["https://x.com/partner"]},
+                {"@context":"https://schema.org","@type":"Organization","name":"Acme","logo":"/logo.png","sameAs":["https://x.com/acme"]}
+            ]</script>`,
+        );
+
+        expect(read).toMatchObject({
+            logo: 'https://acme.com/logo.png',
+            sameAs: ['https://x.com/acme'],
+        });
+    });
 });
+
+function signalsOf(body: string) {
+    return readSignals(
+        cheerio.load(`<html><body>${body}</body></html>`),
+        new URL('https://acme.com/'),
+    );
+}
 
 describe('jsonLdBlocks', () => {
     it('gives every JSON-LD script with its element and either its value or the reason it does not parse', () => {

@@ -9,7 +9,7 @@ export const getProjectList = cache(async () => {
 
     const { data, error } = await supabase
         .from('projects')
-        .select('id, name, domain')
+        .select('id, name, domain, organization_logo_url')
         .order('created_at');
 
     if (error) {
@@ -55,6 +55,24 @@ export async function getBotSecret(projectId: string) {
     return data?.bot_secret ?? null;
 }
 
+export async function getOrganization(projectId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('projects')
+        .select(
+            'name, organization_name, organization_url, organization_logo_url, organization_logo_width, organization_logo_height, organization_same_as',
+        )
+        .eq('id', projectId)
+        .maybeSingle();
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
+
 export const getProjectLocales = cache(async (projectId: string) => {
     const supabase = await createClient();
 
@@ -77,7 +95,7 @@ export const getPageKinds = cache(async (projectId: string) => {
 
     const { data, error } = await supabase
         .from('page_kinds')
-        .select('id, name, url_prefix, skills(name), authors(name)')
+        .select('id, name, url_prefix, author_id, skills(name)')
         .eq('project_id', projectId)
         .order('name');
 
@@ -93,7 +111,7 @@ export const getAuthors = cache(async (projectId: string) => {
 
     const { data, error } = await supabase
         .from('authors')
-        .select('id, name, title, url')
+        .select('id, name, title, url, same_as')
         .eq('project_id', projectId)
         .order('name');
 
@@ -103,3 +121,5 @@ export const getAuthors = cache(async (projectId: string) => {
 
     return data;
 });
+
+export type Author = Awaited<ReturnType<typeof getAuthors>>[number];

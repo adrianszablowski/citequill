@@ -1,7 +1,11 @@
 import { refresh } from 'next/cache';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { discardChanges, updatePage } from '@/features/pages/actions';
+import {
+    discardChanges,
+    startWrite,
+    updatePage,
+} from '@/features/pages/actions';
 import type { PageValues } from '@/features/pages/schema';
 import { fakeSupabase, type FakeQuery } from '@/lib/supabase/fake';
 import { createClient } from '@/lib/supabase/server';
@@ -49,6 +53,37 @@ const values: PageValues = {
 
 beforeEach(() => {
     vi.clearAllMocks();
+});
+
+describe('startWrite', () => {
+    it('stores the run with the language in its canonical form', async () => {
+        const fake = session(({ name }) =>
+            name === 'page_kinds'
+                ? { data: { id: 'kind' } }
+                : { data: { id: 'run' } },
+        );
+
+        expect(
+            await startWrite('project', {
+                topic: 'How to deload',
+                kind_id: 'kind',
+                locale: 'en-us',
+            }),
+        ).toEqual({ runId: 'run' });
+
+        expect(
+            fake.queries.find(({ name }) => name === 'runs')?.calls[0],
+        ).toEqual([
+            'insert',
+            {
+                project_id: 'project',
+                trigger: 'manual',
+                topic: 'How to deload',
+                kind_id: 'kind',
+                locale: 'en-US',
+            },
+        ]);
+    });
 });
 
 describe('updatePage', () => {

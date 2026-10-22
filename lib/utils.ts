@@ -29,6 +29,9 @@ export function pagesRead(count: number) {
         : `${formatCount(count)} pages read so far.`;
 }
 
+export const webUrlError =
+    'Give the full address, starting with https:// or http://.';
+
 export function isWebUrl(value: string) {
     try {
         return ['http:', 'https:'].includes(new URL(value).protocol);

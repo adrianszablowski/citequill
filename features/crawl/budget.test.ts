@@ -18,6 +18,9 @@ const signals: Signals = {
     emails: ['hi@acme.com'],
     phones: [],
     socialLinks: ['https://x.com/acme'],
+    logo: null,
+    headerLogo: null,
+    sameAs: [],
     footer: 'Acme Inc, Warsaw',
 };
 

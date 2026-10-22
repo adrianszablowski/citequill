@@ -41,7 +41,7 @@ The Hobby plan has one such rule and 1 000 000 function invocations a month. Pas
 
 Every answer carries `Cache-Control: private, no-cache` and a weak `ETag`, a hash of the body. A request whose `If-None-Match` matches gets 304 with the same `ETag` and `Cache-Control`. A single page also carries `Last-Modified` from its published version's `updated_at`, which moves when its `alternates` change too. No answer is cached on a CDN: Vercel's CDN stores no answer to a request with `Authorization`, and an answer marked `public` could be stored by a shared cache between the site and Citequill.
 
-On our side the answers are cached per project. The cache is cleared at once when a page is published, changed or unpublished, when a key is deleted, and when the owner edits an author, the organization, a kind or a locale in Settings, because the answers read those live.
+On our side the answers are cached per project. The cache is cleared at once when a page is published, changed or unpublished, when a key is deleted, when the owner edits an author, the organization, a kind or a locale in Settings, and when the crawl fills in the organization's empty logo or profiles, because the answers read those live.
 
 Every request runs a function on our side, so a site caches too. It refreshes a page when the webhook says the page changed, and otherwise asks no more often than every few minutes, with the `ETag` it holds.
 
@@ -77,7 +77,7 @@ A site that keeps a copy of the pages, in a build or a cache of its own, asks fo
 
 An answer holds every page that changed since the token, once, in its state now: a page object when it is live, a removal record when it is not. A client tells them apart by `status`, `published` or `unpublished`. A page unpublished and published again within one window comes back as a page object only.
 
-A page changed when its published version changed, when its `alternates` changed because another language version of it was published or unpublished, when it was unpublished, or when the owner edited in Settings an author, the organization, a kind or a locale the page shows. The token holds a time a few seconds before the server's clock, so a page can arrive twice and never not at all; a client keys pages by `id`. A token older than 30 days, or not a token at all, gets 410 with `code` `sync_token_invalid`, and the client syncs again from `start`.
+A page changed when its published version changed, when its `alternates` changed because another language version of it was published or unpublished, when it was unpublished, when the owner edited in Settings an author, the organization, a kind or a locale the page shows, or when the crawl filled in the organization's empty logo or profiles. The token holds a time a few seconds before the server's clock, so a page can arrive twice and never not at all; a client keys pages by `id`. A token older than 30 days, or not a token at all, gets 410 with `code` `sync_token_invalid`, and the client syncs again from `start`.
 
 ## Page object
 

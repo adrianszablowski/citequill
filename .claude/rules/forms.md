@@ -49,6 +49,9 @@ async function onSubmit(values: SkillValues) {
   of `isSubmitting` or `isDirty` re-renders the button alone. `SaveButton` in
   `components/save-button.tsx` is the one for a form that edits a row: disabled until dirty and while
   submitting. Only the button is disabled while submitting; a disabled input drops out of the values.
+- When the schema transforms what it parses, as a list typed one address a line, and the action
+  parses the values again, the resolver is `zodResolver(schema, undefined, { raw: true })`, so
+  `onSubmit` gets the values as typed and `control` is typed by the input alone.
 - A live value, for a preview or a count, comes from `useWatch({ control, name })` inside the
   component that renders it.
 - `useState` holds a UI mode the form does not own: a dialog open, an editor in preview.

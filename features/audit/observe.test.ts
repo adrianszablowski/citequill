@@ -92,6 +92,20 @@ describe('observeRead', () => {
         ]);
     });
 
+    it("stores the page's own lang in canonical form when no locale's base URL holds the page", () => {
+        const url = 'https://blog.acme.com/a';
+
+        const { row } = observe({
+            entry: entry(url),
+            outcome: {
+                ...page(url, []),
+                body: '<html lang="en-gb"><body></body></html>',
+            },
+        });
+
+        expect(row.locale).toBe('en-GB');
+    });
+
     it("counts the page's distinct external links and lists what the resources step checks, with the page as the one linking", () => {
         const url = 'https://acme.com/a';
 

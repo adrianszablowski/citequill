@@ -22,6 +22,7 @@ import {
     type StructuredData,
     typesOf,
 } from '@/features/audit/structured-data';
+import { logoPixels } from '@/features/publishing/logo';
 import type { Json } from '@/lib/types/database';
 
 export function structuredDataChecks(
@@ -100,8 +101,6 @@ interface PageText {
 }
 
 const articleImagePixels = 50_000;
-
-const logoPixels = 112;
 
 const droppedTypes = [
     'HowTo',

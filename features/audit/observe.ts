@@ -19,7 +19,11 @@ import {
     type HreflangEntry,
     hreflangAlternates,
 } from '@/features/crawl/html';
-import { type Locale, localeOf } from '@/features/crawl/locales';
+import {
+    canonicalLocale,
+    type Locale,
+    localeOf,
+} from '@/features/crawl/locales';
 import type { Json, TablesInsert } from '@/lib/types/database';
 
 export interface Read {
@@ -92,7 +96,9 @@ export function observeRead(
     const row: TablesInsert<'site_pages'> = {
         project_id: projectId,
         url: entry.url,
-        locale: localeOf(entry.url, locales) ?? page?.lang ?? null,
+        locale:
+            localeOf(entry.url, locales) ??
+            (page?.lang ? canonicalLocale(page.lang) : null),
         ...observation,
         is_blocked: outcome === 'blocked',
         body_hash: page?.bodyHash ?? null,

@@ -24,7 +24,7 @@ export default function BotSecret({
     const expression = `any(http.request.headers["${botSecretHeader}"][*] eq "${secret}")`;
 
     return (
-        <Card className="lg:col-span-2">
+        <Card>
             <CardHeader>
                 <CardTitle>Bot secret</CardTitle>
                 <CardDescription>

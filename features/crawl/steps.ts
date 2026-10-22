@@ -14,6 +14,7 @@ import {
 } from '@/features/crawl/fetch';
 import { type Alternate, readPage } from '@/features/crawl/html';
 import {
+    canonicalLocale,
     isSameLanguage,
     languagesSkill,
     localesFrom,
@@ -36,15 +37,19 @@ import {
 import { pageCap, rankUrls } from '@/features/crawl/rank';
 import type { Signals } from '@/features/crawl/signals';
 import { sitemapEntries, sitemapsFromRobots } from '@/features/crawl/sitemap';
+import { checkLogo } from '@/features/publishing/logo';
+import { organizationDefaults } from '@/features/publishing/organization';
+import { saveLogo, touchLivePages } from '@/features/publishing/settings';
+import { addUsage, markProgress } from '@/features/runs/steps';
 import {
     nothingFoundDescription,
     notFoundOnTheSite,
     type ProductSkillName,
 } from '@/features/skills/product-skill';
 import { starterKinds } from '@/features/skills/starter-kinds';
-import { addUsage, markProgress } from '@/features/runs/steps';
 import { createAnthropic, models } from '@/lib/anthropic';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { done, one } from '@/lib/supabase/result';
 import type { Json } from '@/lib/types/database';
 
 export const batchSize = 5;
@@ -192,12 +197,13 @@ export async function fetchPages(
     const pages = await Promise.all(
         urls.map(async (url) => {
             const page = await fetchPage(url, llmsLinks);
+            const locale = page.lang && canonicalLocale(page.lang);
 
             const { error } = await supabase.from('crawled_pages').upsert(
                 {
                     project_id: projectId,
                     url,
-                    locale: page.lang,
+                    locale,
                     title: page.title,
                     body: page.body.slice(0, bodyChars),
                     reader_body: page.readerBody?.slice(0, bodyChars) ?? null,
@@ -212,15 +218,15 @@ export async function fetchPages(
                 throw new Error(error.message);
             }
 
-            return { url, page };
+            return { url, page, locale };
         }),
     );
 
     await writeSitePages(
-        pages.map(({ url, page }) => ({
+        pages.map(({ url, page, locale }) => ({
             project_id: projectId,
             url,
-            locale: page.lang,
+            locale,
             ...observePage(page.answer),
             is_blocked: false,
         })),
@@ -246,25 +252,60 @@ export async function saveLocales(
     await markProgress(runId);
 
     const supabase = createAdminClient();
-    const locales = localesFrom(origin, pages);
 
-    const { error: deleteError } = await supabase
-        .from('project_locales')
-        .delete()
-        .eq('project_id', projectId);
+    const stored = await one(
+        supabase
+            .from('project_locales')
+            .select('locale, base_url')
+            .eq('project_id', projectId),
+    );
 
-    if (deleteError) {
-        throw new Error(deleteError.message);
-    }
+    const live = await liveLocales(
+        projectId,
+        stored.map(({ locale }) => locale),
+    );
 
-    const { error } = await supabase
-        .from('project_locales')
-        .insert(
+    const kept = new Map(
+        stored
+            .filter(({ locale }) => live.includes(locale))
+            .map(({ locale, base_url }) => [locale, base_url]),
+    );
+
+    const crawled = localesFrom(origin, pages);
+
+    const locales = [
+        ...crawled.map((locale) => ({
+            ...locale,
+            base_url: kept.get(locale.locale) ?? locale.base_url,
+        })),
+        ...[...kept]
+            .filter(([locale]) => !crawled.some((row) => row.locale === locale))
+            .map(([locale, base_url]) => ({
+                locale,
+                base_url,
+                is_default: false,
+            })),
+    ];
+
+    await done(
+        supabase.from('project_locales').upsert(
             locales.map((locale) => ({ project_id: projectId, ...locale })),
-        );
+            { onConflict: 'project_id,locale' },
+        ),
+    );
 
-    if (error) {
-        throw new Error(error.message);
+    const dropped = stored
+        .map(({ locale }) => locale)
+        .filter((locale) => !locales.some((row) => row.locale === locale));
+
+    if (dropped.length > 0) {
+        await done(
+            supabase
+                .from('project_locales')
+                .delete()
+                .eq('project_id', projectId)
+                .in('locale', dropped),
+        );
     }
 }
 
@@ -357,6 +398,66 @@ export async function nameSite(
     }
 
     return siteName;
+}
+
+export async function fillOrganization(
+    projectId: string,
+    runId: string,
+    home: string,
+) {
+    'use step';
+
+    await markProgress(runId);
+
+    const supabase = createAdminClient();
+
+    const [project, locales, [homePage]] = await Promise.all([
+        one(
+            supabase
+                .from('projects')
+                .select(
+                    'name, organization_name, organization_url, organization_logo_url, organization_same_as',
+                )
+                .eq('id', projectId)
+                .single(),
+        ),
+        loadLocales(projectId),
+        loadPages(projectId, [home]),
+    ]);
+
+    const defaults = organizationDefaults(project.name, locales);
+    const signals = homePage?.signals;
+
+    const logo = project.organization_logo_url
+        ? null
+        : await firstPassingLogo([signals?.logo, signals?.headerLogo]);
+
+    const sameAs = signals?.sameAs.length
+        ? signals.sameAs
+        : (signals?.socialLinks ?? []);
+
+    const isSameAsFilled =
+        project.organization_same_as.length === 0 && sameAs.length > 0;
+
+    const empty = {
+        ...(!project.organization_name && {
+            organization_name: defaults.name,
+        }),
+        ...(!project.organization_url && { organization_url: defaults.url }),
+        ...(isSameAsFilled && { organization_same_as: sameAs }),
+    };
+
+    if (Object.keys(empty).length > 0) {
+        await done(supabase.from('projects').update(empty).eq('id', projectId));
+    }
+
+    if (logo) {
+        await saveLogo(projectId, logo);
+    }
+
+    if (logo || isSameAsFilled) {
+        await touchLivePages(projectId);
+    }
 }
 
 export async function writeProductSkill(
@@ -504,6 +605,42 @@ async function findHome(domain: string): Promise<Home> {
     throw new FatalError(
         `The site did not answer at https://${domain} or https://www.${domain}.`,
     );
+}
+
+async function liveLocales(projectId: string, locales: string[]) {
+    const counts = await Promise.all(
+        locales.map(async (locale) => {
+            const { count, error } = await createAdminClient()
+                .from('published_pages')
+                .select('page_id, pages!inner(status)', {
+                    count: 'exact',
+                    head: true,
+                })
+                .eq('project_id', projectId)
+                .eq('locale', locale)
+                .eq('pages.status', 'published');
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            return count ? [locale] : [];
+        }),
+    );
+
+    return counts.flat();
+}
+
+async function firstPassingLogo(urls: (string | null | undefined)[]) {
+    for (const url of urls) {
+        const checked = url ? await checkLogo(url) : null;
+
+        if (checked && 'logo' in checked) {
+            return checked.logo;
+        }
+    }
+
+    return null;
 }
 
 async function loadLocales(projectId: string) {

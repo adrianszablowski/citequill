@@ -4,6 +4,7 @@ import { refresh } from 'next/cache';
 import { start } from 'workflow/api';
 
 import { getCurrentUser } from '@/features/auth/queries';
+import { canonicalLocale } from '@/features/crawl/locales';
 import {
     pageSchema,
     type PageValues,
@@ -11,6 +12,7 @@ import {
     type WritePageValues,
 } from '@/features/pages/schema';
 import { writePage } from '@/features/pages/workflow';
+import { foreignAuthorError } from '@/features/projects/schema';
 import { done, one } from '@/lib/supabase/result';
 import { createClient } from '@/lib/supabase/server';
 
@@ -43,7 +45,7 @@ export async function startWrite(projectId: string, values: WritePageValues) {
             trigger: 'manual',
             topic: parsed.data.topic,
             kind_id: parsed.data.kind_id,
-            locale: parsed.data.locale,
+            locale: canonicalLocale(parsed.data.locale),
         })
         .select('id')
         .single();
@@ -106,7 +108,7 @@ export async function updatePage(id: string, values: PageValues) {
         parsed.data.author_id &&
         !(await isProjectAuthor(supabase, id, parsed.data.author_id))
     ) {
-        return { error: foreignAuthor };
+        return { error: foreignAuthorError };
     }
 
     const { error } = await supabase
@@ -121,7 +123,7 @@ export async function updatePage(id: string, values: PageValues) {
     }
 
     if (error?.code === foreignKeyViolation) {
-        return { error: foreignAuthor };
+        return { error: foreignAuthorError };
     }
 
     if (error) {
@@ -188,8 +190,6 @@ async function isProjectAuthor(
 
     return data !== null;
 }
-
-const foreignAuthor = "Pick one of this project's authors.";
 
 const uniqueViolation = '23505';
 

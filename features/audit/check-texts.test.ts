@@ -69,4 +69,16 @@ describe('checkText', () => {
         expect(checkOf('content-stale').area).toBe('on-page');
         expect(checkText('content-stale')!.says.endsWith(notScored)).toBe(true);
     });
+
+    it("names Google's minimum logo size of 112 px in jsonld-logo-small", () => {
+        const text = checkText('jsonld-logo-small')!;
+
+        expect(text.says).toMatch(
+            /^Google asks for an organization logo of at least 112 by 112 pixels\./,
+        );
+
+        expect(text.fix).toBe(
+            'Use a logo of at least 112 by 112 pixels that looks right on a white background, and declare its real width and height.',
+        );
+    });
 });

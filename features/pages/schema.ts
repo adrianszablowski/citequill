@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 import { slugify } from '@/features/pages/draft';
-import { isWebUrl } from '@/lib/utils';
+import { isWebUrl, webUrlError } from '@/lib/utils';
 
 export const writePageSchema = z.object({
     topic: z
@@ -55,13 +55,7 @@ export const pageSchema = z.object({
     sources: z.array(
         z.object({
             title: z.string().trim().min(1, 'Give the source a title.'),
-            url: z
-                .string()
-                .trim()
-                .refine(
-                    isWebUrl,
-                    'Give the full address, starting with https:// or http://.',
-                ),
+            url: z.string().trim().refine(isWebUrl, webUrlError),
         }),
     ),
     tags: z.array(z.string().trim()).transform((tags) => tags.filter(Boolean)),

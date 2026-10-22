@@ -21,11 +21,23 @@ import {
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { pageListHref } from '@/features/pages/list-query';
-import { projectSections, sectionHref } from '@/lib/sections';
+import {
+    type ProjectSection,
+    projectSections,
+    sectionHref,
+    settingsHref,
+    settingsPages,
+} from '@/lib/sections';
 
 interface SectionNavProps {
     projectId: string;
     kinds: { id: string; name: string }[];
+}
+
+interface SubEntry {
+    title: string;
+    href: ReturnType<typeof pageListHref> | ReturnType<typeof settingsHref>;
+    isActive: boolean;
 }
 
 export default function SectionNav({
@@ -35,6 +47,21 @@ export default function SectionNav({
     const pathname = usePathname();
     const currentKind = useSearchParams().get('kind');
 
+    const subEntries: Partial<Record<ProjectSection, SubEntry[]>> = {
+        pages: kinds.map((kind) => ({
+            title: kind.name,
+            href: pageListHref(projectId, { kind: kind.id }),
+            isActive:
+                pathname.startsWith(sectionHref(projectId, 'pages')) &&
+                currentKind === kind.id,
+        })),
+        settings: settingsPages.map((page) => ({
+            title: page.title,
+            href: settingsHref(projectId, page.segment),
+            isActive: pathname === settingsHref(projectId, page.segment),
+        })),
+    };
+
     return (
         <SidebarGroup>
             <SidebarGroupContent>
@@ -43,7 +70,9 @@ export default function SectionNav({
                         const href = sectionHref(projectId, segment);
                         const isCurrent = pathname.startsWith(href);
 
-                        if (segment !== 'pages' || kinds.length === 0) {
+                        const entries = subEntries[segment] ?? [];
+
+                        if (entries.length === 0) {
                             return (
                                 <SidebarMenuItem key={segment}>
                                     <SidebarMenuButton
@@ -77,25 +106,19 @@ export default function SectionNav({
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
                                     <SidebarMenuSub>
-                                        {kinds.map((kind) => (
-                                            <SidebarMenuSubItem key={kind.id}>
+                                        {entries.map((entry) => (
+                                            <SidebarMenuSubItem
+                                                key={entry.href}
+                                            >
                                                 <SidebarMenuSubButton
-                                                    isActive={
-                                                        isCurrent &&
-                                                        currentKind === kind.id
-                                                    }
+                                                    isActive={entry.isActive}
                                                     render={
                                                         <Link
-                                                            href={pageListHref(
-                                                                projectId,
-                                                                {
-                                                                    kind: kind.id,
-                                                                },
-                                                            )}
+                                                            href={entry.href}
                                                         />
                                                     }
                                                 >
-                                                    <span>{kind.name}</span>
+                                                    <span>{entry.title}</span>
                                                     <LinkPending />
                                                 </SidebarMenuSubButton>
                                             </SidebarMenuSubItem>

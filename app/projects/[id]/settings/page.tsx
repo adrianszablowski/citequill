@@ -1,7 +1,7 @@
 import { Suspense } from 'react';
 
-import SettingsOverview from '@/features/projects/components/settings-overview';
-import SettingsOverviewSkeleton from '@/features/projects/components/settings-overview-skeleton';
+import SettingsGeneral from '@/features/projects/components/settings-general';
+import SettingsGeneralSkeleton from '@/features/projects/components/settings-general-skeleton';
 
 export default function SettingsTab({
     params,
@@ -9,11 +9,11 @@ export default function SettingsTab({
     return (
         <section className="flex flex-col gap-6">
             <p className="text-muted-foreground">
-                The crawl fills in the locales, page kinds and authors. The bot
-                secret lets the audit through your firewall.
+                The crawl fills in the locales, the page kinds, the first author
+                and the organization. What it could not find is not set yet.
             </p>
-            <Suspense fallback={<SettingsOverviewSkeleton />}>
-                <SettingsOverview params={params} />
+            <Suspense fallback={<SettingsGeneralSkeleton />}>
+                <SettingsGeneral params={params} />
             </Suspense>
         </section>
     );

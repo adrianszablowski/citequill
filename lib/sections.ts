@@ -18,8 +18,19 @@ export const projectSections = [
 
 export type ProjectSection = (typeof projectSections)[number]['segment'];
 
+export const settingsPages = [
+    { segment: '', title: 'General' },
+    { segment: '/audit', title: 'Audit' },
+] as const;
+
+export type SettingsPage = (typeof settingsPages)[number]['segment'];
+
 export function sectionHref(projectId: string, segment: ProjectSection) {
     return `/projects/${projectId}/${segment}` as const;
+}
+
+export function settingsHref(projectId: string, page: SettingsPage) {
+    return `/projects/${projectId}/settings${page}` as const;
 }
 
 export function skillHref(projectId: string, skillId: string) {

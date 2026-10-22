@@ -8,6 +8,7 @@ import {
     googleDevelopers as google,
     richResultUrl,
 } from '@/features/audit/rich-results';
+import { logoPixels } from '@/features/publishing/logo';
 
 export interface CheckText {
     name: string;
@@ -669,9 +670,9 @@ const texts: Partial<Record<CheckId, CheckText>> = {
     },
     'jsonld-logo-small': {
         name: 'The logo in the markup is small',
-        says: 'Google asks for an organization logo of at least 112 by 112 pixels.',
+        says: `Google asks for an organization logo of at least ${logoPixels} by ${logoPixels} pixels.`,
         link: richResultUrl('organization'),
-        fix: 'Use a logo of at least 112 by 112 pixels that looks right on a white background, and declare its real width and height.',
+        fix: `Use a logo of at least ${logoPixels} by ${logoPixels} pixels that looks right on a white background, and declare its real width and height.`,
     },
     'merchant-price-zero': {
         name: 'A product for sale lacks an Offer priced above zero',

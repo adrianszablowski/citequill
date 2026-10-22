@@ -14,21 +14,40 @@ export interface LocaleSource {
 export function localesFrom(origin: string, pages: LocaleSource[]): Locale[] {
     const bases = new Map<string, string>();
 
+    const isFromCanonicalTag = new Set<string>();
+
     for (const { lang, href } of pages.flatMap((page) => page.alternates)) {
-        if (lang === 'x-default' || bases.has(lang)) {
+        const locale = canonicalLocale(lang);
+        const isCanonicalTag = lang.toLowerCase() === locale.toLowerCase();
+
+        if (
+            lang === 'x-default' ||
+            isFromCanonicalTag.has(locale) ||
+            (bases.has(locale) && !isCanonicalTag)
+        ) {
             continue;
         }
 
-        bases.set(lang, baseUrl(href, lang));
+        bases.set(locale, baseUrl(href, lang));
+
+        if (isCanonicalTag) {
+            isFromCanonicalTag.add(locale);
+        }
     }
 
     if (bases.size === 0) {
         const lang = pages.find((page) => page.lang)?.lang ?? 'en';
 
-        return [{ locale: lang, base_url: origin, is_default: true }];
+        return [
+            {
+                locale: canonicalLocale(lang),
+                base_url: origin,
+                is_default: true,
+            },
+        ];
     }
 
-    const homeLang = pages[0]?.lang ?? null;
+    const homeLang = pages[0]?.lang ? canonicalLocale(pages[0].lang) : null;
 
     const defaultLocale =
         [...bases].find(([lang]) => lang === homeLang)?.[0] ??
@@ -80,6 +99,14 @@ export function languagesSkill(locales: Locale[]) {
         description: `The site's ${count} with the address of each, ${mainName} as the main one; read before writing in another language than ${mainName}.`,
         body: `The site has ${count}. The crawl read the pages in ${mainName}, so the other product skills describe the site in ${mainName}.\n\n${lines.join('\n')}`,
     };
+}
+
+export function canonicalLocale(tag: string) {
+    const [language, region = ''] = tag.split(/[-_]/);
+
+    return /^[a-z]{2}$/i.test(region)
+        ? `${language.toLowerCase()}-${region.toUpperCase()}`
+        : language.toLowerCase();
 }
 
 export function primaryLanguage(tag: string) {

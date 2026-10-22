@@ -7,6 +7,7 @@ import {
     botSecretHeader,
     chromeVersion,
     desktopUserAgent,
+    fetchBytes,
     type FetchDeps,
     fetchPublic,
     fetchText,
@@ -123,6 +124,63 @@ describe('fetchText', () => {
 
         expect(await fetchText('https://acme.com/missing', deps)).toBeNull();
         expect(await fetchText('https://acme.com/unknown', deps)).toBeNull();
+    });
+});
+
+describe('fetchBytes', () => {
+    it('gives the bytes of the answer as they came, with its status and final address', async () => {
+        const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0x00, 0xfe]);
+
+        const deps = fakeDeps({
+            'https://acme.com/logo.png': redirect(
+                'https://cdn.acme.com/logo.png',
+            ),
+            'https://cdn.acme.com/logo.png': new Response(png),
+        });
+
+        const result = await fetchBytes('https://acme.com/logo.png', deps);
+
+        expect(result.status).toBe(200);
+        expect(result.url).toBe('https://cdn.acme.com/logo.png');
+
+        expect(result.hops).toEqual([
+            { url: 'https://acme.com/logo.png', status: 302 },
+            { url: 'https://cdn.acme.com/logo.png', status: 200 },
+        ]);
+
+        expect([...result.bytes]).toEqual([...png]);
+    });
+
+    it('cuts a body over 2 MB at the cap', async () => {
+        const deps = fakeDeps({
+            'https://acme.com/logo.png': new Response(
+                new Uint8Array(maxBytes + 100_000).fill(7),
+            ),
+        });
+
+        const { bytes } = await fetchBytes('https://acme.com/logo.png', deps);
+
+        expect(bytes).toHaveLength(maxBytes);
+    });
+
+    it('refuses a private address and fails an answer that stops partway', async () => {
+        await expect(
+            fetchBytes(
+                'https://intranet.acme.com/logo.png',
+                fakeDeps({}, { 'intranet.acme.com': ['10.1.2.3'] }),
+            ),
+        ).rejects.toThrow('private address');
+
+        const deps = fakeDeps({
+            'https://acme.com/logo.png': stopping(
+                [new Uint8Array([1, 2, 3])],
+                new TypeError('terminated'),
+            ),
+        });
+
+        await expect(
+            fetchBytes('https://acme.com/logo.png', deps),
+        ).rejects.toThrow('terminated');
     });
 });
 

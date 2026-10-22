@@ -5,6 +5,7 @@ import {
     discoverPages,
     extractFacts,
     fetchPages,
+    fillOrganization,
     loadProject,
     nameSite,
     nextBatch,
@@ -71,6 +72,8 @@ export async function crawlSite(projectId: string, runId: string) {
             site.home,
             facts,
         );
+
+        await fillOrganization(projectId, runId, site.home);
 
         await Promise.all(
             productSkillNames.map((name) =>

@@ -18,6 +18,7 @@ vi.mock('@/features/crawl/steps', () => {
         planChunks: vi.fn(),
         extractFacts: vi.fn(),
         nameSite: vi.fn(async () => 'Acme'),
+        fillOrganization: vi.fn(async () => {}),
         writeProductSkill: vi.fn(async () => 'skill'),
         createStarterKinds: vi.fn(async () => {}),
     };
@@ -119,6 +120,12 @@ describe('crawlSite', () => {
                 expect.objectContaining({ site_name: url(1) }),
                 expect.objectContaining({ site_name: url(2) }),
             ]),
+        );
+
+        expect(mocked.fillOrganization).toHaveBeenCalledWith(
+            'project',
+            'run',
+            'https://acme.com/',
         );
 
         expect(

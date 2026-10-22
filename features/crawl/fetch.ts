@@ -62,80 +62,38 @@ export interface FetchOptions {
 export async function fetchPublic(
     url: string,
     deps: FetchDeps = defaultDeps,
-    {
-        method = 'GET',
-        headers = {},
-        botSecret,
-        isSitemap = false,
-    }: FetchOptions = {},
+    options: FetchOptions = {},
 ): Promise<Fetched> {
-    const signal = AbortSignal.timeout(timeoutMs);
-    const hops: Hop[] = [];
-    let current = new URL(url);
+    const { response, ...answer } = await follow(url, deps, options);
 
-    for (;;) {
-        await assertPublic(current, deps.lookup);
+    const read =
+        options.method === 'HEAD'
+            ? { body: '', bytes: 0, isUtf8: true, isTruncated: false }
+            : await readBody(response, options.isSitemap ?? false);
 
-        const sent = new Headers({
-            'user-agent': userAgent,
-            accept: 'text/html,*/*',
-            'accept-encoding': 'gzip, br',
-        });
+    return {
+        ok: response.ok,
+        status: response.status,
+        headers: response.headers,
+        ...answer,
+        ...read,
+    };
+}
 
-        for (const [name, value] of Object.entries(headers)) {
-            sent.set(name, value);
-        }
+export async function fetchBytes(url: string, deps: FetchDeps = defaultDeps) {
+    const { response, url: final, hops } = await follow(url, deps, {});
+    const raw = await readBytes(response, maxBytes);
 
-        if (botSecret?.hosts.includes(current.hostname)) {
-            sent.set(botSecretHeader, botSecret.value);
-        }
-
-        const sentAt = Date.now();
-
-        const response = await deps.fetch(current.href, {
-            method,
-            headers: sent,
-            redirect: 'manual',
-            signal,
-        });
-
-        const headersMs = Date.now() - sentAt;
-
-        hops.push({ url: current.href, status: response.status });
-
-        const location = response.headers.get('location');
-
-        if (
-            response.status >= 300 &&
-            response.status < 400 &&
-            location &&
-            hops.length <= maxHops
-        ) {
-            await response.body?.cancel();
-            current = new URL(location, current);
-
-            continue;
-        }
-
-        if (method === 'HEAD') {
-            await response.body?.cancel();
-        }
-
-        const read =
-            method === 'HEAD'
-                ? { body: '', bytes: 0, isUtf8: true, isTruncated: false }
-                : await readBody(response, isSitemap);
-
-        return {
-            ok: response.ok,
-            status: response.status,
-            url: current.href,
-            headers: response.headers,
-            ...read,
-            hops,
-            headersMs,
-        };
+    if (raw.error !== null) {
+        throw raw.error;
     }
+
+    return {
+        status: response.status,
+        url: final,
+        hops,
+        bytes: raw.bytes.subarray(0, maxBytes),
+    };
 }
 
 export async function fetchText(url: string, deps?: FetchDeps) {
@@ -233,6 +191,67 @@ for (const [address, prefix] of [
     ['ff00::', 8],
 ] as const) {
     blocked.addSubnet(address, prefix, 'ipv6');
+}
+
+async function follow(
+    url: string,
+    deps: FetchDeps,
+    { method = 'GET', headers = {}, botSecret }: FetchOptions,
+) {
+    const signal = AbortSignal.timeout(timeoutMs);
+    const hops: Hop[] = [];
+    let current = new URL(url);
+
+    for (;;) {
+        await assertPublic(current, deps.lookup);
+
+        const sent = new Headers({
+            'user-agent': userAgent,
+            accept: 'text/html,*/*',
+            'accept-encoding': 'gzip, br',
+        });
+
+        for (const [name, value] of Object.entries(headers)) {
+            sent.set(name, value);
+        }
+
+        if (botSecret?.hosts.includes(current.hostname)) {
+            sent.set(botSecretHeader, botSecret.value);
+        }
+
+        const sentAt = Date.now();
+
+        const response = await deps.fetch(current.href, {
+            method,
+            headers: sent,
+            redirect: 'manual',
+            signal,
+        });
+
+        const headersMs = Date.now() - sentAt;
+
+        hops.push({ url: current.href, status: response.status });
+
+        const location = response.headers.get('location');
+
+        if (
+            response.status >= 300 &&
+            response.status < 400 &&
+            location &&
+            hops.length <= maxHops
+        ) {
+            await response.body?.cancel();
+            current = new URL(location, current);
+
+            continue;
+        }
+
+        if (method === 'HEAD') {
+            await response.body?.cancel();
+        }
+
+        return { response, url: current.href, hops, headersMs };
+    }
 }
 
 async function assertPublic(url: URL, lookup: FetchDeps['lookup']) {
