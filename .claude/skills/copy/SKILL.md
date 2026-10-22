@@ -53,21 +53,27 @@ Every string follows the `govuk-style` skill (`~/.claude/skills/govuk-style/SKIL
 
 One word per concept:
 
-| Concept                                          | Write                                                             |
-| ------------------------------------------------ | ----------------------------------------------------------------- |
-| the customer's website                           | site; "domain" only when the domain itself is meant               |
-| a site inside Citequill                          | project                                                           |
-| the six parts of the dashboard                   | section, named Pages, Skills, Audit, Analytics, Reports, Settings |
-| the first setup of a project                     | connect, "Connect a site"                                         |
-| a page Citequill wrote and not published         | draft                                                             |
-| the file that tells the model about a site       | skill; "the product skill" for the one the crawl writes           |
-| the weekly work                                  | the weekly run, the run                                           |
-| signing in and out                               | Sign in, Sign out, Continue with Google                           |
-| a fault the audit found                          | finding                                                           |
-| how much a finding costs the score               | severity: Critical, Major, Minor, Hint, Question                  |
-| a finding the owner chose to keep                | intended; the buttons Mark as intended and Unmark                 |
-| the crawler that reads the customer's site       | CitequillBot                                                      |
-| the value that lets the audit through a firewall | bot secret; the button Regenerate the secret                      |
+| Concept                                             | Write                                                             |
+| --------------------------------------------------- | ----------------------------------------------------------------- |
+| the customer's website                              | site; "domain" only when the domain itself is meant               |
+| a site inside Citequill                             | project                                                           |
+| the six parts of the dashboard                      | section, named Pages, Skills, Audit, Analytics, Reports, Settings |
+| the first setup of a project                        | connect, "Connect a site"                                         |
+| a page Citequill wrote and not published            | draft                                                             |
+| a published page the site shows                     | live                                                              |
+| a page taken off the site after it was live         | unpublished                                                       |
+| edits saved but not yet on the site                 | unpublished changes                                               |
+| putting a page on the site or taking it off         | the buttons Publish, Publish changes, Discard changes, Unpublish  |
+| what a site reads the Content API with              | Content API key; "key" once the context is clear                  |
+| the request Citequill sends to the site on a change | webhook                                                           |
+| the file that tells the model about a site          | skill; "the product skill" for the one the crawl writes           |
+| the weekly work                                     | the weekly run, the run                                           |
+| signing in and out                                  | Sign in, Sign out, Continue with Google                           |
+| a fault the audit found                             | finding                                                           |
+| how much a finding costs the score                  | severity: Critical, Major, Minor, Hint, Question                  |
+| a finding the owner chose to keep                   | intended; the buttons Mark as intended and Unmark                 |
+| the crawler that reads the customer's site          | CitequillBot                                                      |
+| the value that lets the audit through a firewall    | bot secret; the button Regenerate the secret                      |
 
 ## Kinds of line
 
