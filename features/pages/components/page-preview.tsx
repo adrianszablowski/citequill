@@ -9,37 +9,37 @@ import {
     AccordionTrigger,
 } from '@/components/ui/accordion';
 import { pagePath, readingMinutes } from '@/features/pages/draft';
-import type { Page } from '@/features/pages/queries';
 import { renderMarkdown } from '@/features/pages/render';
-import {
-    faqItems,
-    type PageValues,
-    sourceItems,
-} from '@/features/pages/schema';
+import type { PageValues } from '@/features/pages/schema';
+import { isWebUrl } from '@/lib/utils';
 
 interface PagePreviewProps {
-    page: Page;
     control: Control<PageValues>;
+    locale: string;
+    kindName: string;
+    urlPrefix: string;
+    livePath: string | null;
 }
 
 export default function PagePreview({
-    page,
     control,
+    locale,
+    kindName,
+    urlPrefix,
+    livePath,
 }: Readonly<PagePreviewProps>) {
-    const [title, bodyMd] = useWatch({ control, name: ['title', 'body_md'] });
+    const [title, slug, bodyMd, faq, sources] = useWatch({
+        control,
+        name: ['title', 'slug', 'body_md', 'faq', 'sources'],
+    });
 
-    const html = renderMarkdown(bodyMd);
-
-    const faq = faqItems.safeParse(page.faq).data ?? [];
-
-    const sources = sourceItems.safeParse(page.sources).data ?? [];
+    const { html, wordCount } = renderMarkdown(bodyMd, locale);
 
     return (
         <article className="mx-auto prose prose-neutral dark:prose-invert prose-h2:mt-8 prose-h2:mb-3 prose-h3:mt-6 prose-h3:mb-2 prose-p:my-4 prose-p:leading-relaxed prose-ol:my-4 prose-ul:my-4 prose-li:my-1 prose-li:leading-relaxed">
             <p className="text-sm text-muted-foreground">
-                {page.page_kinds?.name ?? 'Page'} in {page.locale},{' '}
-                {readingMinutes(bodyMd)} min read, at{' '}
-                {pagePath('', page.page_kinds?.url_prefix ?? '', page.slug)}
+                {kindName} in {locale}, {readingMinutes(wordCount)} min read, at{' '}
+                {livePath ?? pagePath('', urlPrefix, slug)}
             </p>
             <h1>{title}</h1>
             <div dangerouslySetInnerHTML={{ __html: html }} />
@@ -47,11 +47,8 @@ export default function PagePreview({
                 <>
                     <h2>FAQ</h2>
                     <Accordion className="not-prose">
-                        {faq.map((item) => (
-                            <AccordionItem
-                                key={item.question}
-                                value={item.question}
-                            >
+                        {faq.map((item, index) => (
+                            <AccordionItem key={index} value={index}>
                                 <AccordionTrigger>
                                     {item.question}
                                 </AccordionTrigger>
@@ -67,11 +64,13 @@ export default function PagePreview({
                 <>
                     <h2>Sources</h2>
                     <ul>
-                        {sources.map((source) => {
-                            const host = webHost(source.url);
+                        {sources.map((source, index) => {
+                            const host = isWebUrl(source.url)
+                                ? new URL(source.url).hostname
+                                : null;
 
                             return (
-                                <li key={source.url}>
+                                <li key={index}>
                                     {host ? (
                                         <a
                                             href={source.url}
@@ -97,14 +96,4 @@ export default function PagePreview({
             )}
         </article>
     );
-}
-
-function webHost(url: string) {
-    try {
-        const { protocol, hostname } = new URL(url);
-
-        return protocol === 'https:' || protocol === 'http:' ? hostname : null;
-    } catch {
-        return null;
-    }
 }

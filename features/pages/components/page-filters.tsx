@@ -139,6 +139,6 @@ export default function PageFilters({
 const statusItems: Record<'' | (typeof pageStatuses)[number], string> = {
     '': 'Any state',
     draft: 'Draft',
-    published: 'Published',
+    published: 'Live',
     unpublished: 'Unpublished',
 };

@@ -34,10 +34,14 @@ export function pagePath(baseUrl: string, urlPrefix: string, slug: string) {
     return `${baseUrl.replace(/\/+$/, '')}/${parts.join('/')}`;
 }
 
-export function readingMinutes(markdown: string) {
-    const words = markdown.split(/\s+/).filter(Boolean).length;
+export function pageAddress(baseUrl: string, urlPrefix: string, slug: string) {
+    const url = pagePath(baseUrl, urlPrefix, slug);
 
-    return Math.max(1, Math.round(words / wordsPerMinute));
+    return { url, path: new URL(url).pathname };
+}
+
+export function readingMinutes(wordCount: number) {
+    return Math.max(1, Math.round(wordCount / wordsPerMinute));
 }
 
 export function internalLinkFindings(

@@ -61,6 +61,7 @@ interface Setup {
     obeyRobots?: boolean;
     audits?: object[];
     resources?: Record<string, unknown>[];
+    livePages?: object[];
 }
 
 function database({
@@ -77,6 +78,7 @@ function database({
         { id: 'older', runs: { status: 'finished' } },
     ],
     resources = [],
+    livePages = [],
 }: Setup = {}) {
     const answers: Record<string, (query: FakeQuery) => object> = {
         runs: () => ({ data: { status: runStatus, started_at: startedAt } }),
@@ -135,7 +137,7 @@ function database({
 
             return calls[0][2] ? { count: 0 } : { data: sitePages };
         },
-        pages: () => ({ data: [] }),
+        published_pages: () => ({ data: livePages }),
         audit_findings: () => ({ data: [] }),
         audit_marks: () => ({ data: [] }),
     };
@@ -499,6 +501,37 @@ describe('readPages', () => {
 
         expect(call(fake, 'projects', 'select')[0].calls[0][1]).toContain(
             'name',
+        );
+    });
+
+    it('gives a page the id of the live page published at its URL', async () => {
+        const url = 'https://acme.com/blog/deload';
+
+        const fake = database({
+            queue: [
+                {
+                    url,
+                    depth: 1,
+                    state: 'queued',
+                    in_sitemap: false,
+                    inbound_links: 1,
+                    linked_from: [],
+                    alternates: null,
+                },
+            ],
+            livePages: [{ page_id: 'page', url }],
+        });
+
+        answering(async (target) => notFound(target));
+
+        await readPages('project', 'run', 'audit', firstPace);
+
+        expect(call(fake, 'site_pages', 'upsert')[0].calls[0][1]).toMatchObject(
+            [{ url, page_id: 'page' }],
+        );
+
+        expect(call(fake, 'published_pages', 'select')[0].calls).toContainEqual(
+            ['eq', 'pages.status', 'published'],
         );
     });
 });

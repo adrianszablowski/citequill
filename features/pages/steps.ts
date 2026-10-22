@@ -5,8 +5,6 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { languageName } from '@/features/crawl/locales';
 import {
     internalLinkFindings,
-    pagePath,
-    readingMinutes,
     slugify,
     uniqueSlug,
 } from '@/features/pages/draft';
@@ -93,10 +91,10 @@ export async function loadWriteContext(
             ),
             one(
                 supabase
-                    .from('pages')
-                    .select('slug, locale, title, kind_id')
+                    .from('published_pages')
+                    .select('url, title, pages!inner(status)')
                     .eq('project_id', projectId)
-                    .eq('status', 'published'),
+                    .eq('pages.status', 'published'),
             ),
         ]);
 
@@ -117,29 +115,6 @@ export async function loadWriteContext(
 
     const kindSkillIds = new Set(kinds.map((candidate) => candidate.skill_id));
 
-    const publishedPages = published.flatMap((page) => {
-        const pageKind = kinds.find(
-            (candidate) => candidate.id === page.kind_id,
-        );
-
-        const pageLocale = locales.find(
-            (candidate) => candidate.locale === page.locale,
-        );
-
-        return pageLocale
-            ? [
-                  {
-                      url: pagePath(
-                          pageLocale.base_url,
-                          pageKind?.url_prefix ?? '',
-                          page.slug,
-                      ),
-                      title: page.title,
-                  },
-              ]
-            : [];
-    });
-
     return {
         context: {
             siteName: project.name,
@@ -152,7 +127,10 @@ export async function loadWriteContext(
                 (skill) => !skill.is_product && !kindSkillIds.has(skill.id),
             ),
             productSkills: skills.filter((skill) => skill.is_product),
-            sitePages: [...crawled, ...publishedPages],
+            sitePages: [
+                ...crawled,
+                ...published.map(({ url, title }) => ({ url, title })),
+            ],
         },
         kindId: kind.id,
         authorId: kind.author_id,
@@ -316,7 +294,6 @@ export async function saveDraft(
             sources: page.sources,
             tags: page.tags,
             author_id: target.authorId,
-            reading_minutes: readingMinutes(page.body_md),
             check_note: findings.length > 0 ? findings.join('\n') : null,
             run_id: runId,
         })

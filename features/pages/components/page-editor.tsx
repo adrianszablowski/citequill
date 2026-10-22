@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { EyeIcon, PencilIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { type KeyboardEvent, useRef, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, useRef, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import SaveButton from '@/components/save-button';
@@ -17,27 +17,47 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import {
-    Field,
-    FieldDescription,
     FieldError,
     FieldGroup,
     FieldLabel,
+    Field,
 } from '@/components/ui/field';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { updatePage } from '@/features/pages/actions';
+import FaqFields from '@/features/pages/components/faq-fields';
 import MarkdownToolbar from '@/features/pages/components/markdown-toolbar';
+import PageFields from '@/features/pages/components/page-fields';
 import PagePreview from '@/features/pages/components/page-preview';
+import SourceFields from '@/features/pages/components/source-fields';
 import { applyFormat, type Format } from '@/features/pages/markdown-edit';
 import type { Page } from '@/features/pages/queries';
-import { pageSchema, type PageValues } from '@/features/pages/schema';
+import {
+    pageSchema,
+    pageValues,
+    type PageValues,
+} from '@/features/pages/schema';
+import PublishingBar from '@/features/publishing/components/publishing-bar';
+import type { VersionState } from '@/features/publishing/state';
 
 interface PageEditorProps {
+    projectId: string;
     page: Page;
+    authors: { id: string; name: string }[];
+    state: VersionState;
+    block: string | null;
+    versions: ReactNode;
 }
 
-export default function PageEditor({ page }: Readonly<PageEditorProps>) {
+export default function PageEditor({
+    projectId,
+    page,
+    authors,
+    state,
+    block,
+    versions,
+}: Readonly<PageEditorProps>) {
     const router = useRouter();
+    const kindAuthorId = page.page_kinds?.author_id ?? null;
 
     const {
         control,
@@ -47,11 +67,7 @@ export default function PageEditor({ page }: Readonly<PageEditorProps>) {
         formState: { errors },
     } = useForm({
         resolver: zodResolver(pageSchema),
-        defaultValues: {
-            title: page.title,
-            excerpt: page.excerpt,
-            body_md: page.body_md,
-        },
+        defaultValues: pageValues(page, kindAuthorId),
     });
 
     const [isPreview, setIsPreview] = useState(true);
@@ -129,62 +145,52 @@ export default function PageEditor({ page }: Readonly<PageEditorProps>) {
                 </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
+                {versions}
+                <PublishingBar
+                    projectId={projectId}
+                    pageId={page.id}
+                    control={control}
+                    state={state}
+                    hasLiveVersion={page.published_pages !== null}
+                    checkNote={page.check_note}
+                    block={block}
+                    onDiscarded={(live) =>
+                        reset(
+                            pageValues(
+                                { ...live, slug: page.slug },
+                                kindAuthorId,
+                            ),
+                        )
+                    }
+                />
                 {page.check_note && !isPreview && (
                     <ul className="flex flex-col gap-1 rounded-lg border border-destructive/30 p-3 text-sm">
-                        {page.check_note.split('\n').map((finding) => (
-                            <li key={finding}>{finding}</li>
-                        ))}
+                        {page.check_note
+                            .split('\n')
+                            .filter(Boolean)
+                            .map((finding, index) => (
+                                <li key={index}>{finding}</li>
+                            ))}
                     </ul>
                 )}
-                {isPreview && <PagePreview page={page} control={control} />}
+                {isPreview && (
+                    <PagePreview
+                        control={control}
+                        locale={page.locale}
+                        kindName={page.page_kinds?.name ?? 'Page'}
+                        urlPrefix={page.page_kinds?.url_prefix ?? ''}
+                        livePath={page.published_pages?.path ?? null}
+                    />
+                )}
                 <form onSubmit={handleSubmit(onSubmit)} hidden={isPreview}>
                     <FieldGroup>
-                        <Controller
-                            name="title"
+                        <PageFields
                             control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel htmlFor="page-title">
-                                        Title
-                                    </FieldLabel>
-                                    <Input
-                                        id="page-title"
-                                        aria-invalid={fieldState.invalid}
-                                        {...field}
-                                    />
-                                    {fieldState.invalid && (
-                                        <FieldError
-                                            errors={[fieldState.error]}
-                                        />
-                                    )}
-                                </Field>
-                            )}
-                        />
-                        <Controller
-                            name="excerpt"
-                            control={control}
-                            render={({ field, fieldState }) => (
-                                <Field data-invalid={fieldState.invalid}>
-                                    <FieldLabel htmlFor="page-excerpt">
-                                        Excerpt
-                                    </FieldLabel>
-                                    <Textarea
-                                        id="page-excerpt"
-                                        aria-invalid={fieldState.invalid}
-                                        className="min-h-20"
-                                        {...field}
-                                    />
-                                    <FieldDescription>
-                                        One or two sentences for lists and link
-                                        previews, not part of the body.
-                                    </FieldDescription>
-                                    {fieldState.invalid && (
-                                        <FieldError
-                                            errors={[fieldState.error]}
-                                        />
-                                    )}
-                                </Field>
-                            )}
+                            authors={authors}
+                            isKindAuthorDefault={
+                                page.author_id === null && kindAuthorId !== null
+                            }
+                            isSlugLocked={page.published_at !== null}
                         />
                         <Controller
                             name="body_md"
@@ -221,7 +227,10 @@ export default function PageEditor({ page }: Readonly<PageEditorProps>) {
                                 </Field>
                             )}
                         />
+                        <FaqFields control={control} />
+                        <SourceFields control={control} />
                         {errors.root && <FieldError errors={[errors.root]} />}
+                        <SaveButton control={control} />
                     </FieldGroup>
                 </form>
             </CardContent>

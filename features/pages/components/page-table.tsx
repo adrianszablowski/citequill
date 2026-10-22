@@ -1,7 +1,6 @@
 import { ArrowDownIcon, ArrowUpIcon, ChevronsUpDownIcon } from 'lucide-react';
 import Link from 'next/link';
 
-import { Badge } from '@/components/ui/badge';
 import {
     Table,
     TableBody,
@@ -11,7 +10,8 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { hasFilters, pageListHref } from '@/features/pages/list-query';
-import type { PageListItem } from '@/features/pages/queries';
+import PageStateMarks from '@/features/pages/components/page-state-marks';
+import type { PageListItem, PageVersion } from '@/features/pages/queries';
 import type { PageListQuery, pageSorts } from '@/features/pages/schema';
 import { pageHref } from '@/lib/sections';
 import { formatDate } from '@/lib/utils';
@@ -19,12 +19,14 @@ import { formatDate } from '@/lib/utils';
 interface PageTableProps {
     projectId: string;
     pages: PageListItem[];
+    versions: PageVersion[];
     query: PageListQuery;
 }
 
 export default function PageTable({
     projectId,
     pages,
+    versions,
     query,
 }: Readonly<PageTableProps>) {
     if (pages.length === 0) {
@@ -91,9 +93,14 @@ export default function PageTable({
                         </TableCell>
                         <TableCell>{page.locale}</TableCell>
                         <TableCell>
-                            <Badge variant={stateVariant(page)}>
-                                {stateLabel(page)}
-                            </Badge>
+                            <PageStateMarks
+                                page={page}
+                                group={versions.filter(
+                                    (version) =>
+                                        version.translation_group_id ===
+                                        page.translation_group_id,
+                                )}
+                            />
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                             {page.published_at
@@ -113,19 +120,3 @@ export default function PageTable({
 type Sort = (typeof pageSorts)[number];
 
 const sortIcons = { asc: ArrowUpIcon, desc: ArrowDownIcon };
-
-function stateLabel(page: PageListItem) {
-    if (page.status === 'draft') {
-        return page.check_note ? 'Draft, check failed' : 'Draft';
-    }
-
-    return page.status === 'published' ? 'Published' : 'Unpublished';
-}
-
-function stateVariant(page: PageListItem) {
-    if (page.status === 'draft') {
-        return page.check_note ? 'destructive' : 'secondary';
-    }
-
-    return page.status === 'published' ? 'default' : 'outline';
-}

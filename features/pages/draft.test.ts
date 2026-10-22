@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
     internalLinkFindings,
+    pageAddress,
     pagePath,
     readingMinutes,
     slugify,
@@ -50,10 +51,19 @@ describe('pagePath', () => {
     });
 });
 
+describe('pageAddress', () => {
+    it('gives the full URL and the path on the site from the locale base', () => {
+        expect(pageAddress('https://acme.com/pl/', 'blog', 'deload')).toEqual({
+            url: 'https://acme.com/pl/blog/deload',
+            path: '/pl/blog/deload',
+        });
+    });
+});
+
 describe('readingMinutes', () => {
     it('reads 200 words a minute and never says zero', () => {
-        expect(readingMinutes('')).toBe(1);
-        expect(readingMinutes(Array(900).fill('word').join(' '))).toBe(5);
+        expect(readingMinutes(0)).toBe(1);
+        expect(readingMinutes(900)).toBe(5);
     });
 });
 

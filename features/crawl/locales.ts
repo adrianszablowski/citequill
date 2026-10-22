@@ -59,7 +59,9 @@ export function isSameLanguage(
     lang: string | null,
     locale: string | null | undefined,
 ) {
-    return !lang || !locale || primary(lang) === primary(locale);
+    return (
+        !lang || !locale || primaryLanguage(lang) === primaryLanguage(locale)
+    );
 }
 
 export function languagesSkill(locales: Locale[]) {
@@ -80,7 +82,7 @@ export function languagesSkill(locales: Locale[]) {
     };
 }
 
-function primary(tag: string) {
+export function primaryLanguage(tag: string) {
     return tag.toLowerCase().split(/[-_]/)[0];
 }
 

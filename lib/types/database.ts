@@ -413,6 +413,7 @@ export type Database = {
                     id: string;
                     name: string;
                     project_id: string;
+                    same_as: string[];
                     title: string | null;
                     url: string | null;
                 };
@@ -420,6 +421,7 @@ export type Database = {
                     id?: string;
                     name: string;
                     project_id: string;
+                    same_as?: string[];
                     title?: string | null;
                     url?: string | null;
                 };
@@ -427,6 +429,7 @@ export type Database = {
                     id?: string;
                     name?: string;
                     project_id?: string;
+                    same_as?: string[];
                     title?: string | null;
                     url?: string | null;
                 };
@@ -515,10 +518,10 @@ export type Database = {
                 Relationships: [
                     {
                         foreignKeyName: 'page_kinds_author_id_fkey';
-                        columns: ['author_id'];
+                        columns: ['author_id', 'project_id'];
                         isOneToOne: false;
                         referencedRelation: 'authors';
-                        referencedColumns: ['id'];
+                        referencedColumns: ['id', 'project_id'];
                     },
                     {
                         foreignKeyName: 'page_kinds_project_id_fkey';
@@ -539,9 +542,9 @@ export type Database = {
             pages: {
                 Row: {
                     author_id: string | null;
-                    body_html: string | null;
                     body_md: string;
                     check_note: string | null;
+                    content_hash: string;
                     created_at: string;
                     excerpt: string;
                     faq: Json;
@@ -552,7 +555,6 @@ export type Database = {
                     meta_title: string;
                     project_id: string;
                     published_at: string | null;
-                    reading_minutes: number;
                     redirect_to: string | null;
                     run_id: string | null;
                     slug: string;
@@ -566,9 +568,9 @@ export type Database = {
                 };
                 Insert: {
                     author_id?: string | null;
-                    body_html?: string | null;
                     body_md: string;
                     check_note?: string | null;
+                    content_hash?: string;
                     created_at?: string;
                     excerpt?: string;
                     faq?: Json;
@@ -579,7 +581,6 @@ export type Database = {
                     meta_title?: string;
                     project_id: string;
                     published_at?: string | null;
-                    reading_minutes?: number;
                     redirect_to?: string | null;
                     run_id?: string | null;
                     slug: string;
@@ -593,9 +594,9 @@ export type Database = {
                 };
                 Update: {
                     author_id?: string | null;
-                    body_html?: string | null;
                     body_md?: string;
                     check_note?: string | null;
+                    content_hash?: string;
                     created_at?: string;
                     excerpt?: string;
                     faq?: Json;
@@ -606,7 +607,6 @@ export type Database = {
                     meta_title?: string;
                     project_id?: string;
                     published_at?: string | null;
-                    reading_minutes?: number;
                     redirect_to?: string | null;
                     run_id?: string | null;
                     slug?: string;
@@ -621,10 +621,10 @@ export type Database = {
                 Relationships: [
                     {
                         foreignKeyName: 'pages_author_id_fkey';
-                        columns: ['author_id'];
+                        columns: ['author_id', 'project_id'];
                         isOneToOne: false;
                         referencedRelation: 'authors';
-                        referencedColumns: ['id'];
+                        referencedColumns: ['id', 'project_id'];
                     },
                     {
                         foreignKeyName: 'pages_kind_id_fkey';
@@ -689,6 +689,13 @@ export type Database = {
                     id: string;
                     name: string;
                     obey_robots: boolean;
+                    organization_logo_height: number | null;
+                    organization_logo_url: string | null;
+                    organization_logo_width: number | null;
+                    organization_name: string | null;
+                    organization_same_as: string[];
+                    organization_url: string | null;
+                    site_id: string;
                     user_id: string;
                 };
                 Insert: {
@@ -698,6 +705,13 @@ export type Database = {
                     id?: string;
                     name: string;
                     obey_robots?: boolean;
+                    organization_logo_height?: number | null;
+                    organization_logo_url?: string | null;
+                    organization_logo_width?: number | null;
+                    organization_name?: string | null;
+                    organization_same_as?: string[];
+                    organization_url?: string | null;
+                    site_id?: string;
                     user_id?: string;
                 };
                 Update: {
@@ -707,9 +721,132 @@ export type Database = {
                     id?: string;
                     name?: string;
                     obey_robots?: boolean;
+                    organization_logo_height?: number | null;
+                    organization_logo_url?: string | null;
+                    organization_logo_width?: number | null;
+                    organization_name?: string | null;
+                    organization_same_as?: string[];
+                    organization_url?: string | null;
+                    site_id?: string;
                     user_id?: string;
                 };
                 Relationships: [];
+            };
+            published_pages: {
+                Row: {
+                    author_id: string | null;
+                    body_hash: string;
+                    body_html: string;
+                    body_md: string;
+                    content_hash: string;
+                    excerpt: string;
+                    faq: Json;
+                    kind_id: string | null;
+                    locale: string;
+                    meta_description: string;
+                    meta_title: string;
+                    modified_at: string;
+                    page_id: string;
+                    path: string;
+                    project_id: string;
+                    reading_minutes: number;
+                    slug: string;
+                    sources: Json;
+                    tags: string[];
+                    text_hash: string;
+                    title: string;
+                    toc: Json;
+                    translation_group_id: string;
+                    updated_at: string;
+                    url: string;
+                    word_count: number;
+                };
+                Insert: {
+                    author_id?: string | null;
+                    body_hash: string;
+                    body_html: string;
+                    body_md: string;
+                    content_hash: string;
+                    excerpt: string;
+                    faq: Json;
+                    kind_id?: string | null;
+                    locale: string;
+                    meta_description: string;
+                    meta_title: string;
+                    modified_at: string;
+                    page_id: string;
+                    path: string;
+                    project_id: string;
+                    reading_minutes: number;
+                    slug: string;
+                    sources: Json;
+                    tags: string[];
+                    text_hash: string;
+                    title: string;
+                    toc: Json;
+                    translation_group_id: string;
+                    updated_at: string;
+                    url: string;
+                    word_count: number;
+                };
+                Update: {
+                    author_id?: string | null;
+                    body_hash?: string;
+                    body_html?: string;
+                    body_md?: string;
+                    content_hash?: string;
+                    excerpt?: string;
+                    faq?: Json;
+                    kind_id?: string | null;
+                    locale?: string;
+                    meta_description?: string;
+                    meta_title?: string;
+                    modified_at?: string;
+                    page_id?: string;
+                    path?: string;
+                    project_id?: string;
+                    reading_minutes?: number;
+                    slug?: string;
+                    sources?: Json;
+                    tags?: string[];
+                    text_hash?: string;
+                    title?: string;
+                    toc?: Json;
+                    translation_group_id?: string;
+                    updated_at?: string;
+                    url?: string;
+                    word_count?: number;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'published_pages_author_id_fkey';
+                        columns: ['author_id', 'project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'authors';
+                        referencedColumns: ['id', 'project_id'];
+                    },
+                    {
+                        foreignKeyName: 'published_pages_kind_id_fkey';
+                        columns: ['kind_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'page_kinds';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'published_pages_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: true;
+                        referencedRelation: 'pages';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'published_pages_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
             };
             runs: {
                 Row: {
@@ -1002,6 +1139,15 @@ export type Database = {
             };
             create_audit: { Args: { run: string }; Returns: string };
             is_project_owner: { Args: { project: string }; Returns: boolean };
+            page_content_hash: {
+                Args: { page: Database['public']['Tables']['pages']['Row'] };
+                Returns: string;
+            };
+            publish_pages: {
+                Args: { project: string; versions: Json };
+                Returns: Json;
+            };
+            random_site_id: { Args: never; Returns: string };
             score_audit: {
                 Args: {
                     audit: string;
@@ -1024,6 +1170,19 @@ export type Database = {
                 Returns: undefined;
             };
             stop_audit: { Args: { audit: string }; Returns: undefined };
+            touch_live_pages: {
+                Args: {
+                    author?: string;
+                    kind?: string;
+                    page_locale?: string;
+                    project: string;
+                };
+                Returns: Json;
+            };
+            unpublish_page: {
+                Args: { page: string; project: string; redirect?: string };
+                Returns: Json;
+            };
         };
         Enums: {
             audit_queue_state: 'queued' | 'read' | 'blocked';

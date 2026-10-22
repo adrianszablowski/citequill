@@ -64,3 +64,31 @@ keeps, and a submit button. It renders on the server from the parsed search para
 One button that calls an action is `<form action={action}>` in a server component, with the button
 in its own client file reading `pending` from `useFormStatus()`. Pending and result come from these
 two hooks; `useActionState` fits neither shape.
+
+## A form with no fields whose action returns an error
+
+When the action returns a sentence to show beside the button, or the form sits in a client
+component that acts on the result, `useFormStatus()` is not enough: it gives no result. The form is
+then a client component with `useForm()`, no generic and no fields:
+
+```tsx
+const {
+    control,
+    handleSubmit,
+    setError,
+    formState: { errors },
+} = useForm();
+
+async function onSubmit() {
+    const result = await publishPage(projectId, pageId);
+
+    if ('error' in result) {
+        setError('root', { message: result.error });
+    }
+}
+```
+
+- The button is `SubmitButton` from `components/submit-button.tsx`, given `control`, the label as
+  children and `pendingLabel`. It reads `isSubmitting` alone, since a form with no fields is never
+  dirty, and takes `disabled` for a reason outside the form.
+- `errors.root` shows under the button with `FieldError`.

@@ -15,7 +15,7 @@ export async function getPageList(projectId: string, query: PageListQuery) {
     let request = supabase
         .from('pages')
         .select(
-            'id, title, status, locale, check_note, published_at, updated_at',
+            'id, title, status, locale, check_note, content_hash, translation_group_id, published_at, updated_at, published_pages(content_hash, modified_at)',
             { count: 'exact' },
         )
         .eq('project_id', projectId)
@@ -63,7 +63,7 @@ export const getPage = cache(async (projectId: string, pageId: string) => {
     const { data, error } = await supabase
         .from('pages')
         .select(
-            'id, title, slug, status, locale, meta_title, meta_description, excerpt, body_md, faq, sources, tags, reading_minutes, check_note, updated_at, page_kinds(name, url_prefix)',
+            'id, title, slug, status, locale, meta_title, meta_description, excerpt, body_md, faq, sources, tags, author_id, check_note, content_hash, translation_group_id, published_at, updated_at, page_kinds(name, url_prefix, author_id), published_pages(path, url, content_hash, modified_at)',
         )
         .eq('project_id', projectId)
         .eq('id', pageId)
@@ -77,6 +77,27 @@ export const getPage = cache(async (projectId: string, pageId: string) => {
 });
 
 export type Page = NonNullable<Awaited<ReturnType<typeof getPage>>>;
+
+export async function getPageVersions(projectId: string, groupIds: string[]) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('pages')
+        .select(
+            'id, locale, status, content_hash, translation_group_id, published_pages(content_hash, modified_at)',
+        )
+        .eq('project_id', projectId)
+        .in('translation_group_id', groupIds)
+        .order('locale');
+
+    if (error) {
+        throw error;
+    }
+
+    return data;
+}
+
+export type PageVersion = Awaited<ReturnType<typeof getPageVersions>>[number];
 
 export const getWriteRuns = cache(async (projectId: string) => {
     const supabase = await createClient();

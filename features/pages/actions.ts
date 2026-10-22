@@ -1,5 +1,6 @@
 'use server';
 
+import { refresh } from 'next/cache';
 import { start } from 'workflow/api';
 
 import { getCurrentUser } from '@/features/auth/queries';
@@ -10,7 +11,7 @@ import {
     type WritePageValues,
 } from '@/features/pages/schema';
 import { writePage } from '@/features/pages/workflow';
-import { readingMinutes } from '@/features/pages/draft';
+import { done, one } from '@/lib/supabase/result';
 import { createClient } from '@/lib/supabase/server';
 
 export async function startWrite(projectId: string, values: WritePageValues) {
@@ -101,14 +102,27 @@ export async function updatePage(id: string, values: PageValues) {
 
     const supabase = await createClient();
 
+    if (
+        parsed.data.author_id &&
+        !(await isProjectAuthor(supabase, id, parsed.data.author_id))
+    ) {
+        return { error: foreignAuthor };
+    }
+
     const { error } = await supabase
         .from('pages')
-        .update({
-            ...parsed.data,
-            reading_minutes: readingMinutes(parsed.data.body_md),
-            updated_at: new Date().toISOString(),
-        })
+        .update(parsed.data)
         .eq('id', id);
+
+    if (error?.code === uniqueViolation) {
+        return {
+            error: 'Another page in this language has this slug. Pick another one.',
+        };
+    }
+
+    if (error?.code === foreignKeyViolation) {
+        return { error: foreignAuthor };
+    }
 
     if (error) {
         return { error: error.message };
@@ -116,3 +130,67 @@ export async function updatePage(id: string, values: PageValues) {
 
     return { values: parsed.data };
 }
+
+export async function discardChanges(projectId: string, pageId: string) {
+    await getCurrentUser();
+
+    const supabase = await createClient();
+
+    const { data: live, error } = await supabase
+        .from('published_pages')
+        .select(
+            'title, meta_title, meta_description, excerpt, body_md, faq, sources, tags, author_id',
+        )
+        .eq('project_id', projectId)
+        .eq('page_id', pageId)
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    if (!live) {
+        return { error: 'The page has no live version to go back to.' };
+    }
+
+    await done(
+        supabase
+            .from('pages')
+            .update(live)
+            .eq('project_id', projectId)
+            .eq('id', pageId),
+    );
+
+    refresh();
+
+    return { values: live };
+}
+
+async function isProjectAuthor(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    pageId: string,
+    authorId: string,
+) {
+    const page = await one(
+        supabase.from('pages').select('project_id').eq('id', pageId).single(),
+    );
+
+    const { data, error } = await supabase
+        .from('authors')
+        .select('id')
+        .eq('id', authorId)
+        .eq('project_id', page.project_id)
+        .maybeSingle();
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return data !== null;
+}
+
+const foreignAuthor = "Pick one of this project's authors.";
+
+const uniqueViolation = '23505';
+
+const foreignKeyViolation = '23503';

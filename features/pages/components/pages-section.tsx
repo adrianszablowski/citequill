@@ -9,7 +9,11 @@ import WritePageDialog from '@/features/pages/components/write-page-dialog';
 import WriteRunRow from '@/features/pages/components/write-run-row';
 import { pagePath } from '@/features/pages/draft';
 import { pageListHref } from '@/features/pages/list-query';
-import { getPageList, getWriteRuns } from '@/features/pages/queries';
+import {
+    getPageList,
+    getPageVersions,
+    getWriteRuns,
+} from '@/features/pages/queries';
 import { pageListQuery } from '@/features/pages/schema';
 import { getPageKinds, getProjectLocales } from '@/features/projects/queries';
 
@@ -48,6 +52,11 @@ export default async function PagesSection({
     if (!kind && kinds.length > 0) {
         redirect(pageListHref(id, { ...query, kind: kinds[0].id }));
     }
+
+    const versions = await getPageVersions(
+        id,
+        pages.map((page) => page.translation_group_id),
+    );
 
     const mainLocale =
         locales.find((locale) => locale.is_default) ?? locales[0];
@@ -102,7 +111,12 @@ export default async function PagesSection({
                 query={query}
                 locales={locales.map((locale) => locale.locale)}
             />
-            <PageTable projectId={id} pages={pages} query={query} />
+            <PageTable
+                projectId={id}
+                pages={pages}
+                versions={versions}
+                query={query}
+            />
             <PagePagination
                 query={query}
                 total={total}

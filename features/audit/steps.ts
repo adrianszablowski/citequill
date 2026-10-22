@@ -92,7 +92,6 @@ import { sitemapChecks } from '@/features/audit/sitemap-checks';
 import { readSitemaps } from '@/features/audit/sitemaps';
 import { writeScore } from '@/features/audit/write-score';
 import { type Fetched, phoneHeaders } from '@/features/crawl/fetch';
-import { pagePath } from '@/features/pages/draft';
 import { finishRun, markProgress } from '@/features/runs/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { all, done, one } from '@/lib/supabase/result';
@@ -276,7 +275,7 @@ export async function readPages(
         await readBatch(client, batch, blockedBy(files, site.obeyRobots))
     ).sort((a, b) => batch.indexOf(a.entry) - batch.indexOf(b.entry));
 
-    const pageIds = await loadPageIds(projectId, site.locales);
+    const pageIds = await loadPageIds(projectId);
 
     const observed = reads.map((read) =>
         observeRead(read, {
@@ -1004,8 +1003,6 @@ export async function closeAudit(
     await finishRun(runId);
 }
 
-type Site = Awaited<ReturnType<typeof loadSite>>;
-
 interface Probe {
     url: string;
     method: 'GET' | 'HEAD';
@@ -1168,35 +1165,16 @@ async function sweepAudits(projectId: string, auditId: string) {
     }
 }
 
-async function loadPageIds(projectId: string, locales: Site['locales']) {
+async function loadPageIds(projectId: string) {
     const pages = await one(
         createAdminClient()
-            .from('pages')
-            .select('id, slug, locale, page_kinds(url_prefix)')
+            .from('published_pages')
+            .select('page_id, url, pages!inner(status)')
             .eq('project_id', projectId)
-            .eq('status', 'published'),
+            .eq('pages.status', 'published'),
     );
 
-    return new Map(
-        pages.flatMap((page) => {
-            const locale = locales.find(
-                (candidate) => candidate.locale === page.locale,
-            );
-
-            return locale
-                ? [
-                      [
-                          pagePath(
-                              locale.base_url,
-                              page.page_kinds?.url_prefix ?? '',
-                              page.slug,
-                          ),
-                          page.id,
-                      ] as const,
-                  ]
-                : [];
-        }),
-    );
+    return new Map(pages.map((page) => [page.url, page.page_id]));
 }
 
 interface ResourceCheck {
