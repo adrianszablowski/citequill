@@ -22,6 +22,7 @@ interface PublishFormProps {
     label: string;
     checkNote: string | null;
     block: string | null;
+    onPublished: (notice: string | null) => void;
 }
 
 export default function PublishForm({
@@ -30,6 +31,7 @@ export default function PublishForm({
     label,
     checkNote,
     block,
+    onPublished,
 }: Readonly<PublishFormProps>) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -47,6 +49,7 @@ export default function PublishForm({
             setError('root', { message: result.error });
         } else {
             setIsOpen(false);
+            onPublished(result.notice);
         }
     }
 

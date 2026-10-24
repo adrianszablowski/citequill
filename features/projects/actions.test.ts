@@ -36,7 +36,7 @@ vi.mock('@/features/publishing/logo', () => {
 });
 
 vi.mock('@/features/publishing/settings', () => {
-    return { saveLogo: vi.fn(), touchLivePages: vi.fn() };
+    return { saveLogo: vi.fn(), touchLivePages: vi.fn(async () => null) };
 });
 
 function database(answer: object) {
@@ -158,6 +158,7 @@ describe('updateOrganization', () => {
                     'https://x.com/acme\nhttps://www.linkedin.com/company/acme',
             },
             warning: null,
+            notice: null,
         });
 
         expect(written(fake)).toEqual([
@@ -389,7 +390,9 @@ describe('updateAuthor', () => {
     it('updates the author of the project and moves the live pages that name the author', async () => {
         const fake = stored({ ...author, title: null, same_as: [] });
 
-        expect(await updateAuthor('project', 'author', author)).toEqual({});
+        expect(await updateAuthor('project', 'author', author)).toEqual({
+            notice: null,
+        });
 
         expect(fake.queries[0].calls).toEqual([
             ['select', 'name, title, url, same_as'],
@@ -416,10 +419,20 @@ describe('updateAuthor', () => {
                 ...author,
                 name: ' Jane Doe ',
             }),
-        ).toEqual({});
+        ).toEqual({ notice: null });
 
         expect(fake.writes()).toEqual([]);
         expect(touchLivePages).not.toHaveBeenCalled();
+    });
+
+    it('passes on the sentence of an after-publish run that did not start', async () => {
+        stored({ ...author, title: null, same_as: [] });
+
+        vi.mocked(touchLivePages).mockResolvedValueOnce('The change is saved.');
+
+        expect(await updateAuthor('project', 'author', author)).toEqual({
+            notice: 'The change is saved.',
+        });
     });
 
     it('says the author is gone when the project has no such author, and moves no page', async () => {

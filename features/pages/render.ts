@@ -1,11 +1,14 @@
 import type { Element, Root, RootContent } from 'hast';
+import type { Nodes, Paragraph, Parent, Root as MarkdownRoot } from 'mdast';
 import rehypeSanitize, { type Options as Schema } from 'rehype-sanitize';
 import rehypeSlug from 'rehype-slug';
 import rehypeStringify from 'rehype-stringify';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import remarkRehype from 'remark-rehype';
+import remarkStringify from 'remark-stringify';
 import { unified } from 'unified';
+import { SKIP, visit } from 'unist-util-visit';
 
 import { primaryLanguage } from '@/features/crawl/locales';
 
@@ -44,6 +47,100 @@ export function renderMarkdown(markdown: string, locale: string) {
             .split(/\s+/)
             .filter((word) => /[\p{L}\p{N}]/u.test(word)).length,
     };
+}
+
+export function cleanMarkdown(markdown: string) {
+    return unified()
+        .use(remarkParse)
+        .use(remarkGfm)
+        .use(dropUnsafe)
+        .use(remarkStringify)
+        .processSync(markdown)
+        .toString();
+}
+
+function dropUnsafe() {
+    return (tree: MarkdownRoot) => {
+        const unsafe = new Set<string>();
+
+        visit(tree, 'definition', (node) => {
+            if (!isLinkScheme(node.url)) {
+                unsafe.add(node.identifier);
+            }
+        });
+
+        visit(tree, (node: Nodes, index, parent: Parent | undefined) => {
+            if (!parent || index === undefined) {
+                return;
+            }
+
+            if (isDropped(node, unsafe)) {
+                parent.children.splice(index, 1);
+
+                return [SKIP, index];
+            }
+
+            if (
+                (node.type === 'link' && !isLinkScheme(node.url)) ||
+                (node.type === 'linkReference' && unsafe.has(node.identifier))
+            ) {
+                parent.children.splice(index, 1, ...node.children);
+
+                return [SKIP, index];
+            }
+
+            if (node.type === 'heading' && node.depth === 1) {
+                node.depth = 2;
+            }
+
+            if (node.type === 'listItem') {
+                node.checked = null;
+            }
+        });
+
+        visit(tree, 'paragraph', (node, index, parent) => {
+            const [first, last] = [node.children.at(0), node.children.at(-1)];
+
+            if (first?.type === 'text') {
+                first.value = first.value.trimStart();
+            }
+
+            if (last?.type === 'text') {
+                last.value = last.value.trimEnd();
+            }
+
+            if (parent && index !== undefined && isEmpty(node)) {
+                parent.children.splice(index, 1);
+
+                return [SKIP, index];
+            }
+        });
+    };
+}
+
+function isEmpty(paragraph: Paragraph) {
+    return paragraph.children.every(
+        (child) => child.type === 'text' && child.value === '',
+    );
+}
+
+function isDropped(node: Nodes, unsafe: Set<string>) {
+    return (
+        node.type === 'html' ||
+        node.type === 'image' ||
+        node.type === 'imageReference' ||
+        (node.type === 'definition' && unsafe.has(node.identifier))
+    );
+}
+
+function isLinkScheme(url: string) {
+    const colon = url.indexOf(':');
+
+    return (
+        colon === -1 ||
+        /[/?#]/.test(url.slice(0, colon)) ||
+        linkSchemes.includes(url.slice(0, colon).toLowerCase())
+    );
 }
 
 function demoteTitles() {
@@ -107,6 +204,8 @@ const remarkFootnoteLabel = 'footnote-label';
 
 const footnoteLabelId = 'user-content-footnote-label';
 
+const linkSchemes = ['http', 'https', 'mailto', 'tel'];
+
 const schema: Schema = {
     tagNames: [
         'a',
@@ -156,7 +255,7 @@ const schema: Schema = {
         thead: ['table'],
         tr: ['table'],
     },
-    protocols: { href: ['http', 'https', 'mailto', 'tel'] },
+    protocols: { href: linkSchemes },
     // A customer's site links to a heading as #heading, so the ids keep the
     // form rehype-slug gives them, with no prefix.
     clobberPrefix: '',

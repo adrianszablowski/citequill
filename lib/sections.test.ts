@@ -43,7 +43,7 @@ describe('sectionHref', () => {
 });
 
 describe('settingsPages', () => {
-    it('lists General and Audit, with General at the bare Settings address', () => {
+    it('lists General, Integration and Audit, with General at the bare Settings address', () => {
         expect(
             settingsPages.map((page) => [
                 page.title,
@@ -51,6 +51,7 @@ describe('settingsPages', () => {
             ]),
         ).toEqual([
             ['General', '/projects/abc/settings'],
+            ['Integration', '/projects/abc/settings/integration'],
             ['Audit', '/projects/abc/settings/audit'],
         ]);
     });

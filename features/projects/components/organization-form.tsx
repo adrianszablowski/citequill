@@ -45,6 +45,7 @@ export default function OrganizationForm({
     warning,
 }: Readonly<OrganizationFormProps>) {
     const [checkWarning, setCheckWarning] = useState<string | null>(null);
+    const [notice, setNotice] = useState<string | null>(null);
 
     const {
         control,
@@ -63,6 +64,7 @@ export default function OrganizationForm({
         if ('values' in result) {
             reset(result.values);
             setCheckWarning(result.warning ?? null);
+            setNotice(result.notice ?? null);
         } else {
             setError(result.field ?? 'root', { message: result.error });
         }
@@ -207,6 +209,11 @@ export default function OrganizationForm({
                         />
                         {errors.root && <FieldError errors={[errors.root]} />}
                         <SaveButton control={control} />
+                        {notice && (
+                            <p className="text-sm text-amber-700 dark:text-amber-400">
+                                {notice}
+                            </p>
+                        )}
                     </FieldGroup>
                 </form>
             </CardContent>

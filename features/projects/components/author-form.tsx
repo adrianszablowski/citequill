@@ -1,6 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 import SaveButton from '@/components/save-button';
@@ -28,10 +29,13 @@ export default function AuthorForm({
     author,
     onSaved,
 }: Readonly<AuthorFormProps>) {
+    const [notice, setNotice] = useState<string | null>(null);
+
     const {
         control,
         handleSubmit,
         setError,
+        reset,
         formState: { errors },
     } = useForm({
         resolver: zodResolver(authorSchema, undefined, { raw: true }),
@@ -45,6 +49,9 @@ export default function AuthorForm({
 
         if ('error' in result) {
             setError('root', { message: result.error });
+        } else if ('notice' in result && typeof result.notice === 'string') {
+            reset(values);
+            setNotice(result.notice);
         } else {
             onSaved();
         }
@@ -150,6 +157,11 @@ export default function AuthorForm({
                     >
                         Add the author
                     </SubmitButton>
+                )}
+                {notice && (
+                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                        {notice}
+                    </p>
                 )}
             </FieldGroup>
         </form>

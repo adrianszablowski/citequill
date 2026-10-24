@@ -90,6 +90,96 @@ describe('localesFrom', () => {
         ]);
     });
 
+    it('skips an hreflang or an html lang whose language is not 2 or 3 letters, so no such value becomes a locale', () => {
+        expect(
+            localesFrom('https://acme.com', [
+                {
+                    lang: 'fr',
+                    alternates: [
+                        { lang: 'english', href: 'https://acme.com/' },
+                        { lang: 'en.us', href: 'https://acme.com/us/' },
+                        { lang: 'fr', href: 'https://acme.com/fr/' },
+                    ],
+                },
+            ]),
+        ).toEqual([
+            { locale: 'fr', base_url: 'https://acme.com/fr', is_default: true },
+        ]);
+
+        expect(
+            localesFrom('https://acme.com', [
+                { lang: null, alternates: [] },
+                { lang: 'english', alternates: [] },
+                { lang: 'de', alternates: [] },
+            ]),
+        ).toEqual([
+            { locale: 'de', base_url: 'https://acme.com', is_default: true },
+        ]);
+    });
+
+    it("takes English at the origin as the main language when the home page's lang is no language tag, never another page's or the first hreflang", () => {
+        expect(
+            localesFrom('https://acme.com', [
+                {
+                    lang: 'english',
+                    alternates: [
+                        { lang: 'english', href: 'https://acme.com/' },
+                        { lang: 'fr', href: 'https://acme.com/fr/' },
+                    ],
+                },
+            ]),
+        ).toEqual([
+            {
+                locale: 'fr',
+                base_url: 'https://acme.com/fr',
+                is_default: false,
+            },
+            { locale: 'en', base_url: 'https://acme.com', is_default: true },
+        ]);
+
+        expect(
+            localesFrom('https://acme.com', [
+                { lang: 'english', alternates: [] },
+                { lang: 'de', alternates: [] },
+            ]),
+        ).toEqual([
+            { locale: 'en', base_url: 'https://acme.com', is_default: true },
+        ]);
+
+        expect(
+            localesFrom('https://acme.com', [
+                { lang: 'polski', alternates: [] },
+            ]),
+        ).toEqual([
+            { locale: 'en', base_url: 'https://acme.com', is_default: true },
+        ]);
+    });
+
+    it("keeps the hreflang locale at the origin as the main language when the home page's lang is no language tag", () => {
+        expect(
+            localesFrom('https://acme.com', [
+                {
+                    lang: 'english',
+                    alternates: [
+                        { lang: 'en-us', href: 'https://acme.com/' },
+                        { lang: 'fr', href: 'https://acme.com/fr/' },
+                    ],
+                },
+            ]),
+        ).toEqual([
+            {
+                locale: 'en-US',
+                base_url: 'https://acme.com',
+                is_default: true,
+            },
+            {
+                locale: 'fr',
+                base_url: 'https://acme.com/fr',
+                is_default: false,
+            },
+        ]);
+    });
+
     it('is English at the origin when nothing says otherwise', () => {
         expect(localesFrom('https://acme.com', [])).toEqual([
             { locale: 'en', base_url: 'https://acme.com', is_default: true },

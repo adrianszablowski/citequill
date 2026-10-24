@@ -38,11 +38,13 @@ import {
 interface UnpublishDialogProps {
     projectId: string;
     pageId: string;
+    onUnpublished: (notice: string | null) => void;
 }
 
 export default function UnpublishDialog({
     projectId,
     pageId,
+    onUnpublished,
 }: Readonly<UnpublishDialogProps>) {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -67,6 +69,7 @@ export default function UnpublishDialog({
         } else {
             reset();
             setIsOpen(false);
+            onUnpublished(result.notice);
         }
     }
 

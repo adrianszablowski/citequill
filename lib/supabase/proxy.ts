@@ -1,9 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
-const publicPages = ['/', '/bot'];
+const publicPages = ['/', '/bot', '/docs'];
 
-const publicPrefixes = ['/login', '/auth/'];
+const publicPrefixes = ['/login', '/auth/', '/docs/'];
 
 export async function updateSession(request: NextRequest) {
     let response = NextResponse.next({ request });

@@ -836,6 +836,13 @@ export type Database = {
                         foreignKeyName: 'published_pages_page_id_fkey';
                         columns: ['page_id'];
                         isOneToOne: true;
+                        referencedRelation: 'api_versions';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'published_pages_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: true;
                         referencedRelation: 'pages';
                         referencedColumns: ['id'];
                     },
@@ -913,6 +920,44 @@ export type Database = {
                     },
                     {
                         foreignKeyName: 'runs_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            site_keys: {
+                Row: {
+                    created_at: string;
+                    id: string;
+                    key_hash: string;
+                    key_hint: string;
+                    last_used_on: string | null;
+                    name: string;
+                    project_id: string;
+                };
+                Insert: {
+                    created_at?: string;
+                    id?: string;
+                    key_hash: string;
+                    key_hint: string;
+                    last_used_on?: string | null;
+                    name: string;
+                    project_id: string;
+                };
+                Update: {
+                    created_at?: string;
+                    id?: string;
+                    key_hash?: string;
+                    key_hint?: string;
+                    last_used_on?: string | null;
+                    name?: string;
+                    project_id?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'site_keys_project_id_fkey';
                         columns: ['project_id'];
                         isOneToOne: false;
                         referencedRelation: 'projects';
@@ -1032,6 +1077,13 @@ export type Database = {
                         foreignKeyName: 'site_pages_page_id_fkey';
                         columns: ['page_id'];
                         isOneToOne: false;
+                        referencedRelation: 'api_versions';
+                        referencedColumns: ['id'];
+                    },
+                    {
+                        foreignKeyName: 'site_pages_page_id_fkey';
+                        columns: ['page_id'];
+                        isOneToOne: false;
                         referencedRelation: 'pages';
                         referencedColumns: ['id'];
                     },
@@ -1084,7 +1136,52 @@ export type Database = {
             };
         };
         Views: {
-            [_ in never]: never;
+            api_versions: {
+                Row: {
+                    alternates: Json | null;
+                    author_name: string | null;
+                    author_same_as: string[] | null;
+                    author_title: string | null;
+                    author_url: string | null;
+                    body_html: string | null;
+                    body_md: string | null;
+                    excerpt: string | null;
+                    faq: Json | null;
+                    host: string | null;
+                    id: string | null;
+                    kind: string | null;
+                    kind_url_prefix: string | null;
+                    locale: string | null;
+                    locale_base_url: string | null;
+                    meta_description: string | null;
+                    meta_title: string | null;
+                    modified_at: string | null;
+                    path: string | null;
+                    project_id: string | null;
+                    published_at: string | null;
+                    reading_minutes: number | null;
+                    redirect_to: string | null;
+                    slug: string | null;
+                    sources: Json | null;
+                    status: Database['public']['Enums']['page_status'] | null;
+                    tags: string[] | null;
+                    title: string | null;
+                    toc: Json | null;
+                    unpublished_at: string | null;
+                    updated_at: string | null;
+                    url: string | null;
+                    word_count: number | null;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'pages_project_id_fkey';
+                        columns: ['project_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'projects';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
         };
         Functions: {
             add_run_usage: {
@@ -1095,6 +1192,236 @@ export type Database = {
                     run: string;
                 };
                 Returns: undefined;
+            };
+            api_host_sitemap: {
+                Args: {
+                    after_id?: string;
+                    after_published_at?: string;
+                    page_limit?: number;
+                    site: string;
+                    sitemap_host: string;
+                };
+                Returns: {
+                    alternates: Json;
+                    id: string;
+                    modified_at: string;
+                    published_at: string;
+                    url: string;
+                }[];
+            };
+            api_key_project: {
+                Args: { secret_hash: string };
+                Returns: {
+                    project_id: string;
+                    site_id: string;
+                }[];
+            };
+            api_page: {
+                Args: {
+                    page_locale: string;
+                    page_slug: string;
+                    secret_hash: string;
+                    site: string;
+                };
+                Returns: {
+                    alternates: Json | null;
+                    author_name: string | null;
+                    author_same_as: string[] | null;
+                    author_title: string | null;
+                    author_url: string | null;
+                    body_html: string | null;
+                    body_md: string | null;
+                    excerpt: string | null;
+                    faq: Json | null;
+                    host: string | null;
+                    id: string | null;
+                    kind: string | null;
+                    kind_url_prefix: string | null;
+                    locale: string | null;
+                    locale_base_url: string | null;
+                    meta_description: string | null;
+                    meta_title: string | null;
+                    modified_at: string | null;
+                    path: string | null;
+                    project_id: string | null;
+                    published_at: string | null;
+                    reading_minutes: number | null;
+                    redirect_to: string | null;
+                    slug: string | null;
+                    sources: Json | null;
+                    status: Database['public']['Enums']['page_status'] | null;
+                    tags: string[] | null;
+                    title: string | null;
+                    toc: Json | null;
+                    unpublished_at: string | null;
+                    updated_at: string | null;
+                    url: string | null;
+                    word_count: number | null;
+                }[];
+                SetofOptions: {
+                    from: '*';
+                    to: 'api_versions';
+                    isOneToOne: false;
+                    isSetofReturn: true;
+                };
+            };
+            api_pages: {
+                Args: {
+                    after_id?: string;
+                    after_published_at?: string;
+                    kind_name?: string;
+                    page_limit?: number;
+                    page_locale?: string;
+                    secret_hash: string;
+                    site: string;
+                };
+                Returns: {
+                    alternates: Json | null;
+                    author_name: string | null;
+                    author_same_as: string[] | null;
+                    author_title: string | null;
+                    author_url: string | null;
+                    body_html: string | null;
+                    body_md: string | null;
+                    excerpt: string | null;
+                    faq: Json | null;
+                    host: string | null;
+                    id: string | null;
+                    kind: string | null;
+                    kind_url_prefix: string | null;
+                    locale: string | null;
+                    locale_base_url: string | null;
+                    meta_description: string | null;
+                    meta_title: string | null;
+                    modified_at: string | null;
+                    path: string | null;
+                    project_id: string | null;
+                    published_at: string | null;
+                    reading_minutes: number | null;
+                    redirect_to: string | null;
+                    slug: string | null;
+                    sources: Json | null;
+                    status: Database['public']['Enums']['page_status'] | null;
+                    tags: string[] | null;
+                    title: string | null;
+                    toc: Json | null;
+                    unpublished_at: string | null;
+                    updated_at: string | null;
+                    url: string | null;
+                    word_count: number | null;
+                }[];
+                SetofOptions: {
+                    from: '*';
+                    to: 'api_versions';
+                    isOneToOne: false;
+                    isSetofReturn: true;
+                };
+            };
+            api_project: {
+                Args: { secret_hash: string; site: string };
+                Returns: string;
+            };
+            api_redirects: {
+                Args: {
+                    after_id?: string;
+                    after_unpublished_at?: string;
+                    page_limit?: number;
+                    secret_hash: string;
+                    site: string;
+                };
+                Returns: {
+                    id: string;
+                    locale: string;
+                    path: string;
+                    redirect_to: string;
+                    unpublished_at: string;
+                    url: string;
+                }[];
+            };
+            api_site: {
+                Args: { secret_hash: string; site: string };
+                Returns: {
+                    locales: Json;
+                    organization_logo_height: number;
+                    organization_logo_url: string;
+                    organization_logo_width: number;
+                    organization_name: string;
+                    organization_same_as: string[];
+                    organization_url: string;
+                    project_name: string;
+                }[];
+            };
+            api_site_exists: { Args: { site: string }; Returns: boolean };
+            api_sitemap: {
+                Args: {
+                    after_id?: string;
+                    after_published_at?: string;
+                    page_limit?: number;
+                    secret_hash: string;
+                    site: string;
+                };
+                Returns: {
+                    alternates: Json;
+                    id: string;
+                    modified_at: string;
+                    published_at: string;
+                    url: string;
+                }[];
+            };
+            api_sitemap_project: {
+                Args: { site: string; sitemap_host: string };
+                Returns: string;
+            };
+            api_sync: {
+                Args: {
+                    after_id?: string;
+                    after_updated_at?: string;
+                    page_limit?: number;
+                    secret_hash: string;
+                    since: string;
+                    site: string;
+                };
+                Returns: {
+                    alternates: Json | null;
+                    author_name: string | null;
+                    author_same_as: string[] | null;
+                    author_title: string | null;
+                    author_url: string | null;
+                    body_html: string | null;
+                    body_md: string | null;
+                    excerpt: string | null;
+                    faq: Json | null;
+                    host: string | null;
+                    id: string | null;
+                    kind: string | null;
+                    kind_url_prefix: string | null;
+                    locale: string | null;
+                    locale_base_url: string | null;
+                    meta_description: string | null;
+                    meta_title: string | null;
+                    modified_at: string | null;
+                    path: string | null;
+                    project_id: string | null;
+                    published_at: string | null;
+                    reading_minutes: number | null;
+                    redirect_to: string | null;
+                    slug: string | null;
+                    sources: Json | null;
+                    status: Database['public']['Enums']['page_status'] | null;
+                    tags: string[] | null;
+                    title: string | null;
+                    toc: Json | null;
+                    unpublished_at: string | null;
+                    updated_at: string | null;
+                    url: string | null;
+                    word_count: number | null;
+                }[];
+                SetofOptions: {
+                    from: '*';
+                    to: 'api_versions';
+                    isOneToOne: false;
+                    isSetofReturn: true;
+                };
             };
             audit_check_list: {
                 Args: { audit: string; locale?: string };

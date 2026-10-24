@@ -14,11 +14,12 @@ vi.mock('@/features/crawl/steps', () => {
         discoverPages: vi.fn(),
         nextBatch: vi.fn(),
         fetchPages: vi.fn(),
-        saveLocales: vi.fn(async () => {}),
+        saveLocales: vi.fn(async () => false),
         planChunks: vi.fn(),
         extractFacts: vi.fn(),
-        nameSite: vi.fn(async () => 'Acme'),
-        fillOrganization: vi.fn(async () => {}),
+        nameSite: vi.fn(async () => ({ siteName: 'Acme', shouldMove: false })),
+        fillOrganization: vi.fn(async () => false),
+        moveLivePages: vi.fn(async () => {}),
         writeProductSkill: vi.fn(async () => 'skill'),
         createStarterKinds: vi.fn(async () => {}),
     };
@@ -148,8 +149,41 @@ describe('crawlSite', () => {
             'Jane',
         );
 
+        expect(mocked.moveLivePages).not.toHaveBeenCalled();
         expect(runs.finishRun).toHaveBeenCalledWith('run');
         expect(runs.failRun).not.toHaveBeenCalled();
+    });
+
+    it('moves the live pages in a step of its own right after each step that says they move', async () => {
+        mocked.saveLocales.mockResolvedValueOnce(true);
+
+        mocked.nameSite.mockResolvedValueOnce({
+            siteName: 'Acme',
+            shouldMove: true,
+        });
+
+        mocked.fillOrganization.mockResolvedValueOnce(true);
+
+        await crawlSite('project', 'run');
+
+        const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+            fn.mock.invocationCallOrder;
+
+        const [afterLocales, afterName, afterFill] = order(
+            mocked.moveLivePages,
+        );
+
+        expect(mocked.moveLivePages.mock.calls).toEqual([
+            ['project', 'run'],
+            ['project', 'run'],
+            ['project', 'run'],
+        ]);
+
+        expect(afterLocales).toBeGreaterThan(order(mocked.saveLocales)[0]);
+        expect(afterLocales).toBeLessThan(order(mocked.planChunks)[0]);
+        expect(afterName).toBeGreaterThan(order(mocked.nameSite)[0]);
+        expect(afterName).toBeLessThan(order(mocked.fillOrganization)[0]);
+        expect(afterFill).toBeGreaterThan(order(mocked.fillOrganization)[0]);
     });
 
     it('stops at the page cap', async () => {

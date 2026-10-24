@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { startAfterPublish } from '@/features/publishing/after-publish';
 import { saveLogo, touchLivePages } from '@/features/publishing/settings';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fakeSupabase } from '@/lib/supabase/fake';
@@ -10,6 +11,10 @@ vi.mock('server-only', () => {
 
 vi.mock('@/lib/supabase/admin', () => {
     return { createAdminClient: vi.fn() };
+});
+
+vi.mock('@/features/publishing/after-publish', () => {
+    return { startAfterPublish: vi.fn(async () => null) };
 });
 
 function database(answer: object = {}) {
@@ -71,7 +76,7 @@ describe('saveLogo', () => {
 
 describe('touchLivePages', () => {
     it('moves every live page of the project, or the pages that name an author', async () => {
-        const fake = database();
+        const fake = database({ data: [] });
 
         await touchLivePages('project');
         await touchLivePages('project', 'author');
@@ -86,5 +91,23 @@ describe('touchLivePages', () => {
                 [['rpc', { project: 'project', author: 'author' }]],
             ],
         ]);
+    });
+
+    it('starts the after-publish run when it moved a page, and passes on what it says', async () => {
+        database({ data: [{ id: 'page' }] });
+
+        vi.mocked(startAfterPublish).mockResolvedValueOnce(
+            'The change is saved.',
+        );
+
+        expect(await touchLivePages('project')).toBe('The change is saved.');
+        expect(startAfterPublish).toHaveBeenCalledWith('project', 'settings');
+    });
+
+    it('starts no run when no live page shows the change', async () => {
+        database({ data: [] });
+
+        expect(await touchLivePages('project', 'author')).toBeNull();
+        expect(startAfterPublish).not.toHaveBeenCalled();
     });
 });

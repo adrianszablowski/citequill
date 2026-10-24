@@ -6,6 +6,7 @@ import * as z from 'zod';
 
 import { readingMinutes } from '@/features/pages/draft';
 import { renderMarkdown } from '@/features/pages/render';
+import { startAfterPublish } from '@/features/publishing/after-publish';
 import { publishCheck } from '@/features/publishing/check';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { one } from '@/lib/supabase/result';
@@ -75,7 +76,12 @@ export async function publish(projectId: string, pageIds: string[]) {
         };
     }
 
-    return publishResult.parse(data);
+    const published = publishResult.parse(data);
+
+    return {
+        ...published,
+        notice: await startAfterPublish(projectId, 'publish'),
+    };
 }
 
 export async function unpublish(
@@ -98,7 +104,12 @@ export async function unpublish(
         };
     }
 
-    return unpublishResult.parse(data);
+    const unpublished = unpublishResult.parse(data);
+
+    return {
+        ...unpublished,
+        notice: await startAfterPublish(projectId, 'unpublish'),
+    };
 }
 
 // The keys are the messages publish_pages and unpublish_page raise in

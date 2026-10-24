@@ -18,6 +18,12 @@ describe('isPublicPath', () => {
         expect(isPublicPath('/bot/secret')).toBe(false);
     });
 
+    it('lets the documentation through, its reference included', () => {
+        expect(isPublicPath('/docs')).toBe(true);
+        expect(isPublicPath('/docs/reference')).toBe(true);
+        expect(isPublicPath('/docsx')).toBe(false);
+    });
+
     it('sends the dashboard to sign in', () => {
         expect(isPublicPath('/projects')).toBe(false);
     });

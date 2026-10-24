@@ -14,10 +14,10 @@ import {
 } from '@/features/crawl/fetch';
 import { type Alternate, readPage } from '@/features/crawl/html';
 import {
-    canonicalLocale,
     isSameLanguage,
     languagesSkill,
     localesFrom,
+    validLocale,
 } from '@/features/crawl/locales';
 import { linksFromLlmsText } from '@/features/crawl/markdown-source';
 import { fetchPage } from '@/features/crawl/page';
@@ -197,7 +197,7 @@ export async function fetchPages(
     const pages = await Promise.all(
         urls.map(async (url) => {
             const page = await fetchPage(url, llmsLinks);
-            const locale = page.lang && canonicalLocale(page.lang);
+            const locale = validLocale(page.lang);
 
             const { error } = await supabase.from('crawled_pages').upsert(
                 {
@@ -253,12 +253,21 @@ export async function saveLocales(
 
     const supabase = createAdminClient();
 
-    const stored = await one(
-        supabase
-            .from('project_locales')
-            .select('locale, base_url')
-            .eq('project_id', projectId),
-    );
+    const [stored, project] = await Promise.all([
+        one(
+            supabase
+                .from('project_locales')
+                .select('locale, base_url, is_default')
+                .eq('project_id', projectId),
+        ),
+        one(
+            supabase
+                .from('projects')
+                .select('name, organization_url')
+                .eq('id', projectId)
+                .single(),
+        ),
+    ]);
 
     const live = await liveLocales(
         projectId,
@@ -307,6 +316,24 @@ export async function saveLocales(
                 .in('locale', dropped),
         );
     }
+
+    const [before, after] = [stored, locales].map((rows) =>
+        rows.find((row) => row.is_default),
+    );
+
+    if (!before) {
+        return false;
+    }
+
+    const isDefaultMoved =
+        before.locale !== after?.locale &&
+        live.some((locale) => [before.locale, after?.locale].includes(locale));
+
+    const [oldUrl, newUrl] = [stored, locales].map(
+        (rows) => organizationDefaults(project.name, rows).url,
+    );
+
+    return isDefaultMoved || (!project.organization_url && oldUrl !== newUrl);
 }
 
 export async function planChunks(
@@ -381,23 +408,35 @@ export async function nameSite(
 
     await markProgress(runId);
 
-    const [homePage] = await loadPages(projectId, [home]);
+    const supabase = createAdminClient();
+
+    const [[homePage], project] = await Promise.all([
+        loadPages(projectId, [home]),
+        one(
+            supabase
+                .from('projects')
+                .select('name, organization_name')
+                .eq('id', projectId)
+                .single(),
+        ),
+    ]);
 
     const siteName =
         homePage?.signals?.siteName ||
         mergeFacts(parts).site_name.trim() ||
         domain;
 
-    const { error } = await createAdminClient()
-        .from('projects')
-        .update({ name: siteName })
-        .eq('id', projectId);
+    await done(
+        supabase
+            .from('projects')
+            .update({ name: siteName })
+            .eq('id', projectId),
+    );
 
-    if (error) {
-        throw new Error(error.message);
-    }
-
-    return siteName;
+    return {
+        siteName,
+        shouldMove: !project.organization_name && project.name !== siteName,
+    };
 }
 
 export async function fillOrganization(
@@ -455,8 +494,18 @@ export async function fillOrganization(
         await saveLogo(projectId, logo);
     }
 
-    if (logo || isSameAsFilled) {
-        await touchLivePages(projectId);
+    return Boolean(logo) || isSameAsFilled;
+}
+
+export async function moveLivePages(projectId: string, runId: string) {
+    'use step';
+
+    await markProgress(runId);
+
+    const unannounced = await touchLivePages(projectId);
+
+    if (unannounced) {
+        console.error(unannounced);
     }
 }
 

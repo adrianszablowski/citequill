@@ -17,11 +17,15 @@ export function localesFrom(origin: string, pages: LocaleSource[]): Locale[] {
     const isFromCanonicalTag = new Set<string>();
 
     for (const { lang, href } of pages.flatMap((page) => page.alternates)) {
-        const locale = canonicalLocale(lang);
+        const locale = validLocale(lang);
+
+        if (!locale) {
+            continue;
+        }
+
         const isCanonicalTag = lang.toLowerCase() === locale.toLowerCase();
 
         if (
-            lang === 'x-default' ||
             isFromCanonicalTag.has(locale) ||
             (bases.has(locale) && !isCanonicalTag)
         ) {
@@ -35,24 +39,35 @@ export function localesFrom(origin: string, pages: LocaleSource[]): Locale[] {
         }
     }
 
-    if (bases.size === 0) {
-        const lang = pages.find((page) => page.lang)?.lang ?? 'en';
+    const homeTag = pages[0]?.lang ?? null;
+    const homeLang = validLocale(homeTag);
+    const isHomeMistagged = Boolean(homeTag) && !homeLang;
 
+    if (bases.size === 0) {
         return [
             {
-                locale: canonicalLocale(lang),
+                locale: isHomeMistagged
+                    ? 'en'
+                    : (pages
+                          .map((page) => validLocale(page.lang))
+                          .find(Boolean) ?? 'en'),
                 base_url: origin,
                 is_default: true,
             },
         ];
     }
 
-    const homeLang = pages[0]?.lang ? canonicalLocale(pages[0].lang) : null;
+    const atOrigin = [...bases].find(([, base]) => base === origin)?.[0];
 
-    const defaultLocale =
-        [...bases].find(([lang]) => lang === homeLang)?.[0] ??
-        [...bases].find(([, base]) => base === origin)?.[0] ??
-        [...bases.keys()][0];
+    if (isHomeMistagged && !atOrigin) {
+        bases.set('en', origin);
+    }
+
+    const defaultLocale = isHomeMistagged
+        ? (atOrigin ?? 'en')
+        : ([...bases].find(([lang]) => lang === homeLang)?.[0] ??
+          atOrigin ??
+          [...bases.keys()][0]);
 
     return [...bases].map(([locale, base_url]) => ({
         locale,
@@ -107,6 +122,12 @@ export function canonicalLocale(tag: string) {
     return /^[a-z]{2}$/i.test(region)
         ? `${language.toLowerCase()}-${region.toUpperCase()}`
         : language.toLowerCase();
+}
+
+export function validLocale(tag: string | null) {
+    return tag && /^[a-z]{2,3}$/.test(primaryLanguage(tag))
+        ? canonicalLocale(tag)
+        : null;
 }
 
 export function primaryLanguage(tag: string) {

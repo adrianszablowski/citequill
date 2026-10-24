@@ -6,8 +6,11 @@ import { defaultDeps } from '@/features/crawl/fetch';
 import type { Signals } from '@/features/crawl/signals';
 import {
     discoverPages,
+    fetchPages,
     fillOrganization,
     frontierCap,
+    moveLivePages,
+    nameSite,
     saveLocales,
 } from '@/features/crawl/steps';
 import { createAdminClient } from '@/lib/supabase/admin';
@@ -106,6 +109,39 @@ describe('discoverPages', () => {
     });
 });
 
+describe('fetchPages', () => {
+    it('writes a page\'s locale only from a lang whose language is 2 or 3 letters, so lang="english" is no locale', async () => {
+        const fake = fakeSupabase(({ name }: FakeQuery) =>
+            name === 'site_pages' ? { data: [] } : {},
+        );
+
+        vi.mocked(createAdminClient).mockReturnValue(fake.client as never);
+
+        serve({
+            'https://acme.com/about': () => html('english'),
+            'https://acme.com/de/uber': () => html('de-de'),
+        });
+
+        await fetchPages(
+            'project',
+            'run',
+            ['https://acme.com/about', 'https://acme.com/de/uber'],
+            [],
+        );
+
+        type Row = { locale: unknown };
+
+        const locales = (table: string) =>
+            fake.queries
+                .filter(({ name }) => name === table)
+                .flatMap(({ calls }) => calls[0][1] as Row | Row[])
+                .map(({ locale }) => locale);
+
+        expect(locales('crawled_pages')).toEqual([null, 'de-DE']);
+        expect(locales('site_pages')).toEqual([null, 'de-DE']);
+    });
+});
+
 describe('fillOrganization', () => {
     const empty = {
         name: 'Acme',
@@ -156,7 +192,7 @@ describe('fillOrganization', () => {
             .map(({ calls }) => calls[0]);
     }
 
-    it("fills every empty field: the project's name, the main origin, the checked logo and the social profiles, then moves the live pages", async () => {
+    it("fills every empty field: the project's name, the main origin, the checked logo and the social profiles, and says the live pages move", async () => {
         serve({
             'https://acme.com/logo.svg': () =>
                 new Response('<svg viewBox="0 0 240 60"></svg>'),
@@ -164,7 +200,9 @@ describe('fillOrganization', () => {
 
         const fake = database(empty);
 
-        await fillOrganization('project', 'run', 'https://acme.com/');
+        expect(
+            await fillOrganization('project', 'run', 'https://acme.com/'),
+        ).toBe(true);
 
         expect(writes(fake)).toEqual([
             [
@@ -183,7 +221,6 @@ describe('fillOrganization', () => {
                     organization_logo_height: 60,
                 },
             ],
-            ['rpc', { project: 'project', author: undefined }],
         ]);
     });
 
@@ -199,7 +236,9 @@ describe('fillOrganization', () => {
             sameAs: ['https://www.linkedin.com/company/acme'],
         });
 
-        await fillOrganization('project', 'run', 'https://acme.com/');
+        expect(
+            await fillOrganization('project', 'run', 'https://acme.com/'),
+        ).toBe(true);
 
         expect(writes(fake)).toEqual([
             [
@@ -220,11 +259,10 @@ describe('fillOrganization', () => {
                     organization_logo_height: 80,
                 },
             ],
-            ['rpc', { project: 'project', author: undefined }],
         ]);
     });
 
-    it('leaves the logo empty when no logo passes its check, and moves the live pages for the profiles alone', async () => {
+    it('leaves the logo empty when no logo passes its check, and says the live pages move for the profiles alone', async () => {
         serve({});
 
         const fake = database(
@@ -232,11 +270,12 @@ describe('fillOrganization', () => {
             { ...signals, headerLogo: 'https://acme.com/header.png' },
         );
 
-        await fillOrganization('project', 'run', 'https://acme.com/');
+        expect(
+            await fillOrganization('project', 'run', 'https://acme.com/'),
+        ).toBe(true);
 
         expect(writes(fake)).toEqual([
             ['update', { organization_same_as: ['https://x.com/acme'] }],
-            ['rpc', { project: 'project', author: undefined }],
         ]);
     });
 
@@ -245,7 +284,9 @@ describe('fillOrganization', () => {
 
         const fake = database(empty, null);
 
-        await fillOrganization('project', 'run', 'https://acme.com/');
+        expect(
+            await fillOrganization('project', 'run', 'https://acme.com/'),
+        ).toBe(false);
 
         expect(writes(fake)).toEqual([
             [
@@ -271,19 +312,86 @@ describe('fillOrganization', () => {
             organization_same_as: ['https://x.com/acme'],
         });
 
-        await fillOrganization('project', 'run', 'https://acme.com/');
+        expect(
+            await fillOrganization('project', 'run', 'https://acme.com/'),
+        ).toBe(false);
 
         expect(fake.writes()).toEqual([]);
         expect(defaultDeps.fetch).not.toHaveBeenCalled();
     });
 });
 
+describe('nameSite', () => {
+    function database(project: object) {
+        const fake = fakeSupabase(({ name, calls }) => {
+            if (name === 'crawled_pages') {
+                return {
+                    data: [
+                        {
+                            url: 'https://acme.com/',
+                            signals: { siteName: 'Acme Shop' },
+                        },
+                    ],
+                };
+            }
+
+            return calls[0][0] === 'select' ? { data: project } : {};
+        });
+
+        vi.mocked(createAdminClient).mockReturnValue(fake.client as never);
+
+        return fake;
+    }
+
+    it("says the live pages move when the publisher's name is the project's and the name changed, and moves none itself", async () => {
+        const fake = database({ name: 'Acme', organization_name: null });
+
+        expect(
+            await nameSite(
+                'project',
+                'run',
+                'acme.com',
+                'https://acme.com/',
+                [],
+            ),
+        ).toEqual({ siteName: 'Acme Shop', shouldMove: true });
+
+        expect(fake.writes()).toEqual(['update projects']);
+    });
+
+    it('says no live page moves when the organization has a name of its own, or the name stays', async () => {
+        for (const project of [
+            { name: 'Acme', organization_name: 'Acme Inc.' },
+            { name: 'Acme Shop', organization_name: null },
+        ]) {
+            database(project);
+
+            expect(
+                await nameSite(
+                    'project',
+                    'run',
+                    'acme.com',
+                    'https://acme.com/',
+                    [],
+                ),
+            ).toEqual({ siteName: 'Acme Shop', shouldMove: false });
+        }
+    });
+});
+
 describe('saveLocales', () => {
     function database(
-        stored: { locale: string; base_url: string }[],
+        stored: { locale: string; base_url: string; is_default?: boolean }[],
         live: string[],
+        organizationUrl: string | null = 'https://acme.com',
     ) {
         const fake = fakeSupabase(({ name, calls }: FakeQuery) => {
+            if (name === 'projects') {
+                return {
+                    data: { name: 'Acme', organization_url: organizationUrl },
+                };
+            }
+
             if (name === 'published_pages') {
                 const locale = calls.find(
                     ([method, column]) =>
@@ -318,6 +426,8 @@ describe('saveLocales', () => {
             links: [],
         },
     ];
+
+    const english = { locale: 'en', is_default: true };
 
     it('keeps the base URL of a locale that has live pages, and a locale with live pages the site no longer lists', async () => {
         const fake = database(
@@ -393,6 +503,134 @@ describe('saveLocales', () => {
             ['in', 'locale', ['fr']],
         ]);
     });
+
+    it('says the live pages move when the default locale changes while the old one has live pages, because it decides x-default, and moves none itself', async () => {
+        const fake = database(
+            [
+                {
+                    locale: 'pl',
+                    base_url: 'https://acme.com',
+                    is_default: true,
+                },
+                {
+                    locale: 'en',
+                    base_url: 'https://acme.com',
+                    is_default: false,
+                },
+            ],
+            ['pl'],
+        );
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(true);
+
+        expect(fake.queries.map(({ name }) => name)).not.toContain(
+            'touch_live_pages',
+        );
+    });
+
+    it('says the live pages move when the new default locale has live pages', async () => {
+        database(
+            [
+                {
+                    locale: 'pl',
+                    base_url: 'https://acme.com',
+                    is_default: true,
+                },
+                { locale: 'en', base_url: 'https://acme.com' },
+            ],
+            ['en'],
+        );
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(true);
+    });
+
+    it('says no live page moves when the default locale changes and neither it nor the old one has a live page', async () => {
+        database(
+            [
+                {
+                    locale: 'pl',
+                    base_url: 'https://acme.com',
+                    is_default: true,
+                },
+                { locale: 'en', base_url: 'https://acme.com' },
+            ],
+            ['it'],
+        );
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(false);
+    });
+
+    it("says the live pages move when the default base URL's origin changes while the organization has no URL, because it is the publisher's URL", async () => {
+        database([{ ...english, base_url: 'https://www.acme.com' }], [], null);
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(true);
+    });
+
+    it('says no live page moves when only the default base URL changes and the organization has a URL of its own', async () => {
+        database([{ ...english, base_url: 'https://www.acme.com' }], []);
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(false);
+    });
+
+    it('says no live page moves when only the prefix of the default base URL changes', async () => {
+        database([{ ...english, base_url: 'https://acme.com/en' }], [], null);
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(false);
+    });
+
+    it('says no live page moves when the default locale and its base URL stay', async () => {
+        database(
+            [
+                { ...english, base_url: 'https://acme.com' },
+                { locale: 'pl', base_url: 'https://pl.acme.com' },
+            ],
+            ['en', 'pl'],
+            null,
+        );
+
+        expect(
+            await saveLocales('project', 'run', 'https://acme.com', pages),
+        ).toBe(false);
+    });
+});
+
+describe('moveLivePages', () => {
+    it('touches the live pages again when its first touch failed, because the Workflow runs the step again by itself', async () => {
+        let attempt = 0;
+
+        const fake = fakeSupabase(() => {
+            attempt += 1;
+
+            return attempt === 1
+                ? { error: { message: 'The database did not answer.' } }
+                : { data: [] };
+        });
+
+        vi.mocked(createAdminClient).mockReturnValue(fake.client as never);
+
+        await expect(moveLivePages('project', 'run')).rejects.toThrow(
+            'The database did not answer.',
+        );
+
+        await moveLivePages('project', 'run');
+
+        expect(fake.queries.map(({ calls }) => calls)).toEqual([
+            [['rpc', { project: 'project', author: undefined }]],
+            [['rpc', { project: 'project', author: undefined }]],
+        ]);
+    });
 });
 
 function serve(files: Record<string, () => Response>) {
@@ -415,4 +653,13 @@ function urlset(locs: string[]) {
     return `<urlset>${locs
         .map((loc) => `<url><loc>${loc}</loc></url>`)
         .join('')}</urlset>`;
+}
+
+function html(lang: string) {
+    return new Response(
+        `<html lang="${lang}"><body><h1>Acme</h1></body></html>`,
+        {
+            headers: { 'content-type': 'text/html' },
+        },
+    );
 }

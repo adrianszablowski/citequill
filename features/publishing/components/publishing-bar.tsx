@@ -1,6 +1,6 @@
 'use client';
 
-import type { ComponentProps } from 'react';
+import { type ComponentProps, useState } from 'react';
 import { type Control, useFormState } from 'react-hook-form';
 
 import DiscardChangesForm from '@/features/pages/components/discard-changes-form';
@@ -31,6 +31,7 @@ export default function PublishingBar({
     onDiscarded,
 }: Readonly<PublishingBarProps>) {
     const { isDirty } = useFormState({ control });
+    const [notice, setNotice] = useState<string | null>(null);
 
     return (
         <div className="flex flex-col gap-2">
@@ -56,6 +57,7 @@ export default function PublishingBar({
                                 key={button}
                                 projectId={projectId}
                                 pageId={pageId}
+                                onUnpublished={setNotice}
                             />
                         );
                     }
@@ -72,10 +74,16 @@ export default function PublishingBar({
                             }
                             checkNote={checkNote}
                             block={isDirty ? unsavedEdits : block}
+                            onPublished={setNotice}
                         />
                     );
                 })}
             </div>
+            {notice && (
+                <p className="text-sm text-amber-700 dark:text-amber-400">
+                    {notice}
+                </p>
+            )}
             {state === 'changed' && !hasLiveVersion && (
                 <p className="text-sm text-muted-foreground">
                     The page has no published version yet, so there is nothing

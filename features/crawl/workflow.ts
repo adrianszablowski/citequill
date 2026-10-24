@@ -7,6 +7,7 @@ import {
     fetchPages,
     fillOrganization,
     loadProject,
+    moveLivePages,
     nameSite,
     nextBatch,
     type PageMeta,
@@ -57,7 +58,9 @@ export async function crawlSite(projectId: string, runId: string) {
             ];
         }
 
-        await saveLocales(projectId, runId, site.origin, pages);
+        if (await saveLocales(projectId, runId, site.origin, pages)) {
+            await moveLivePages(projectId, runId);
+        }
 
         const chunks = await planChunks(projectId, runId);
 
@@ -65,7 +68,7 @@ export async function crawlSite(projectId: string, runId: string) {
             chunks.map((urls) => extractFacts(projectId, runId, urls)),
         );
 
-        const siteName = await nameSite(
+        const { siteName, shouldMove } = await nameSite(
             projectId,
             runId,
             domain,
@@ -73,7 +76,13 @@ export async function crawlSite(projectId: string, runId: string) {
             facts,
         );
 
-        await fillOrganization(projectId, runId, site.home);
+        if (shouldMove) {
+            await moveLivePages(projectId, runId);
+        }
+
+        if (await fillOrganization(projectId, runId, site.home)) {
+            await moveLivePages(projectId, runId);
+        }
 
         await Promise.all(
             productSkillNames.map((name) =>

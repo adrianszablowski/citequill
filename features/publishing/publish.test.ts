@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderMarkdown } from '@/features/pages/render';
+import { startAfterPublish } from '@/features/publishing/after-publish';
 import { publish, unpublish } from '@/features/publishing/publish';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { fakeSupabase } from '@/lib/supabase/fake';
@@ -13,6 +14,10 @@ vi.mock('server-only', () => {
 
 vi.mock('@/lib/supabase/admin', () => {
     return { createAdminClient: vi.fn() };
+});
+
+vi.mock('@/features/publishing/after-publish', () => {
+    return { startAfterPublish: vi.fn(async () => null) };
 });
 
 const body = '# Deload\n\nRest a week.[^1]\n\n[^1]: A study.';
@@ -118,7 +123,24 @@ describe('publish', () => {
     it('returns the pages of the action and the live versions whose alternates changed', async () => {
         database();
 
-        expect(await publish('project', ['page'])).toEqual(published);
+        expect(await publish('project', ['page'])).toEqual({
+            ...published,
+            notice: null,
+        });
+
+        expect(startAfterPublish).toHaveBeenCalledWith('project', 'publish');
+    });
+
+    it('keeps the page live and says so when the after-publish run does not start', async () => {
+        const fake = database();
+
+        vi.mocked(startAfterPublish).mockResolvedValueOnce('The page is live.');
+
+        expect(await publish('project', ['page'])).toMatchObject({
+            notice: 'The page is live.',
+        });
+
+        expect(fake.writes()).toEqual(['rpc publish_pages']);
     });
 
     it('writes nothing when the check refuses the page', async () => {
@@ -163,6 +185,8 @@ describe('publish', () => {
             expect(await publish('project', ['page'])).toEqual({
                 error: sentence,
             });
+
+            expect(startAfterPublish).not.toHaveBeenCalled();
         },
     );
 });
@@ -185,7 +209,12 @@ describe('unpublish', () => {
     it('sends unpublish_page no redirect for a 410, and returns what it touched', async () => {
         const fake = database({ rpc: { data: removed } });
 
-        expect(await unpublish('project', 'page', null)).toEqual(removed);
+        expect(await unpublish('project', 'page', null)).toEqual({
+            ...removed,
+            notice: null,
+        });
+
+        expect(startAfterPublish).toHaveBeenCalledWith('project', 'unpublish');
 
         expect(fake.queries[0]).toEqual({
             name: 'unpublish_page',

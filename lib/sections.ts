@@ -20,6 +20,7 @@ export type ProjectSection = (typeof projectSections)[number]['segment'];
 
 export const settingsPages = [
     { segment: '', title: 'General' },
+    { segment: '/integration', title: 'Integration' },
     { segment: '/audit', title: 'Audit' },
 ] as const;
 

@@ -132,9 +132,10 @@ export async function updateOrganization(
         await saveLogo(projectId, newLogo);
     }
 
-    if (isOwnersChanged || newLogo !== undefined) {
-        await touchLivePages(projectId);
-    }
+    const notice =
+        isOwnersChanged || newLogo !== undefined
+            ? await touchLivePages(projectId)
+            : null;
 
     refresh();
 
@@ -146,6 +147,7 @@ export async function updateOrganization(
             organization_same_as: same_as,
         }),
         warning: 'error' in checked ? checked.error : null,
+        notice,
     };
 }
 
@@ -202,7 +204,7 @@ export async function updateAuthor(
     }
 
     if (JSON.stringify(stored) === JSON.stringify(parsed.data)) {
-        return {};
+        return { notice: null };
     }
 
     const updated = await one(
@@ -218,10 +220,11 @@ export async function updateAuthor(
         return { error: authorGone };
     }
 
-    await touchLivePages(projectId, authorId);
+    const notice = await touchLivePages(projectId, authorId);
+
     refresh();
 
-    return {};
+    return { notice };
 }
 
 export async function deleteAuthor(projectId: string, authorId: string) {

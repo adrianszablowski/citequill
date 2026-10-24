@@ -1,6 +1,6 @@
 # Content API
 
-The customer's site reads published pages from here. Citequill tells the site of every change through a webhook and tells search engines through IndexNow. The API assumes that the site can send an HTTP request from its server or its build and insert HTML or markdown; all the SEO and GEO logic is on our side. A site that cannot, a hosted builder such as Shopify, Wix or Webflow, WordPress, or a plain HTML site with no build step, waits for the push connectors in the backlog of [`decisions.md`](decisions.md). Base URL: `https://citequill.com/api/v1`. The API runs with no session and no cookies.
+The customer's site reads published pages from here. Citequill tells the site of every change through a webhook and tells search engines through IndexNow. The API assumes that the site can send an HTTP request from its server or its build and insert HTML or markdown; all the SEO and GEO logic is on our side. A site that cannot, a hosted builder such as Shopify, Wix or Webflow, a WordPress site without PHP of its own in its theme or a plugin, or a plain HTML site with no build step, waits for the push connectors in the backlog of [`decisions.md`](decisions.md). Base URL: `https://citequill.com/api/v1`. The API runs with no session and no cookies.
 
 The API, the sitemaps and the webhook show only live pages: pages whose `status` is `published`. A page unpublished after its first publication keeps its published version, but no answer shows it as a page.
 
@@ -14,11 +14,11 @@ A key is `cq_sk_`, then 32 random bytes in Base62, padded to 43 characters, then
 
 ## Errors
 
-An error is an RFC 9457 problem, `application/problem+json`, with `type` (the URL of its page in the guide), `title`, `status`, `detail` and `code`, a stable string a client may branch on; `detail` is for people and may change.
+An error is an RFC 9457 problem, `application/problem+json`, with `type` (the URL of its entry in the guide, `https://citequill.com/docs#<code>`), `title`, `status`, `detail` and `code`, a stable string a client may branch on; `detail` is for people and may change. A parameter the endpoint does not take is unknown, so a misspelled `limit` gets 400.
 
 | Request                                                                     | Status | `code`               |
 | --------------------------------------------------------------------------- | ------ | -------------------- |
-| no `Authorization` header                                                   | 401    | `missing_key`        |
+| no `Authorization` header, or one that is not `Bearer` and a token          | 401    | `missing_key`        |
 | a key that does not exist, was deleted or fails its checksum                | 401    | `invalid_key`        |
 | a valid key on another project's path                                       | 403    | `wrong_site`         |
 | a malformed or unknown parameter                                            | 400    | `invalid_parameter`  |
@@ -26,9 +26,11 @@ An error is an RFC 9457 problem, `application/problem+json`, with `type` (the UR
 | no page with that locale and slug was ever published                        | 404    | `page_not_found`     |
 | a `siteId` no project has, on a path that takes no key                      | 404    | `site_not_found`     |
 | a host that is not among the project's locales                              | 404    | `host_not_found`     |
+| a sitemap file past the last file of the host                               | 404    | `sitemap_not_found`  |
 | a page that is unpublished                                                  | 410    | `page_unpublished`   |
 | a sync token older than 30 days, or not a token at all                      | 410    | `sync_token_invalid` |
 | more than 600 requests in a minute from one IP address, from the firewall   | 429    | none                 |
+| a fault Citequill did not foresee, such as a database it cannot reach       | 500    | `server_error`       |
 | any request while Vercel has paused the deployment, `503 DEPLOYMENT_PAUSED` | 503    | none                 |
 
 A 401 carries `WWW-Authenticate: Bearer realm="citequill"`, and an `invalid_key` adds `error="invalid_token"`. The 429 and the 503 come from Vercel before our code runs, so they carry Vercel's own body, not a problem. The 429 carries `Retry-After`.
@@ -39,9 +41,9 @@ The Hobby plan has one such rule and 1 000 000 function invocations a month. Pas
 
 ## Caching
 
-Every answer carries `Cache-Control: private, no-cache` and a weak `ETag`, a hash of the body. A request whose `If-None-Match` matches gets 304 with the same `ETag` and `Cache-Control`. A single page also carries `Last-Modified` from its published version's `updated_at`, which moves when its `alternates` change too. No answer is cached on a CDN: Vercel's CDN stores no answer to a request with `Authorization`, and an answer marked `public` could be stored by a shared cache between the site and Citequill.
+Every answer of a project's paths, under `/sites/{siteId}`, carries `Cache-Control: private, no-cache` and a weak `ETag`, a hash of the body. A problem and a `server_error` carry them too. A request whose `If-None-Match` matches gets 304 with the same `ETag` and `Cache-Control`. A single page also carries `Last-Modified` from its published version's `updated_at`, which moves when its `alternates` change too. No answer is cached on a CDN: Vercel's CDN stores no answer to a request with `Authorization`, and an answer marked `public` could be stored by a shared cache between the site and Citequill.
 
-On our side the answers are cached per project. The cache is cleared at once when a page is published, changed or unpublished, when a key is deleted, when the owner edits an author, the organization, a kind or a locale in Settings, and when the crawl fills in the organization's empty logo or profiles, because the answers read those live.
+On our side the answers are cached per project, each for at most 15 minutes, in a cache that every instance of a region shares. Citequill clears the cache for every instance after a change: when a page is published, changed or unpublished, when a key is deleted, when the owner edits an author, the organization, a kind or a locale in Settings, and when a crawl changes what a live page shows, as steps 4 and 6 of the crawl in [`workflow.md`](workflow.md) say, because the answers read those live. The Server Action that deletes a key clears at once. Every other clear runs in the after-publish run, which starts after the action and tries a failed step again later, so no code bounds how soon it comes. When a clear fails, an answer is at most 15 minutes older than the change, because every entry expires on its own by then. When a read through the cache fails with an error, the API logs it and reads the database without the cache, so a cache that fails with an error never fails an answer. The key is checked on every request and never cached, so a deleted key stops working at once.
 
 Every request runs a function on our side, so a site caches too. It refreshes a page when the webhook says the page changed, and otherwise asks no more often than every few minutes, with the `ETag` it holds.
 
@@ -55,7 +57,7 @@ Every request runs a function on our side, so a site caches too. It refreshes a 
 
 | Method and path                               | Returns                                                                                                                                                                                                                                                                          |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /sites/{siteId}/pages`                   | the live pages, newest first publication first, filters `locale` and `kind` (the kind's name); `limit` 20 by default and 50 at most, a larger value lowered to 50; `cursor` from the previous answer; `{ pages, nextCursor }`, and the next page also as `Link: <…>; rel="next"` |
+| `GET /sites/{siteId}/pages`                   | the live pages, newest first publication first, filters `locale` and `kind` (the kind's name); `limit` 20 by default and 25 at most, a larger value lowered to 25; `cursor` from the previous answer; `{ pages, nextCursor }`, and the next page also as `Link: <…>; rel="next"` |
 | `GET /sites/{siteId}/pages?sync=…`            | the changes since a sync token, in the section below                                                                                                                                                                                                                             |
 | `GET /sites/{siteId}/pages/{locale}/{slug}`   | one live page; 410 `page_unpublished` when it is unpublished, with what to answer; 404 `page_not_found` when no page with that locale and slug was ever published                                                                                                                |
 | `GET /sites/{siteId}/redirects`               | a removal record for every unpublished page, in the shape below, newest `unpublishedAt` first; `limit` 500 by default and 1 000 at most, with the cursor and `Link` of the list                                                                                                  |
@@ -69,7 +71,13 @@ A cursor is opaque: it holds the order's key, the id and the filters, so a clien
 
 A removal record, in `/redirects` and in the sync, is `{ id, locale, path, url, status: "unpublished", unpublishedAt, redirect }`. `path` and `url` are the address the page was published under. `redirect` is `{ status: 301, to }`, where `to` is an absolute URL, or `null` when the page answers 410.
 
-The 410 for an unpublished page carries the page's `redirect` as an extension member of the problem. A site that renders on request answers its visitor with 301 and `redirect.to`, or with 410 when `redirect` is `null`, so it needs one call. An unpublished page is in neither the list nor the sitemaps. It is in `/redirects` for as long as it stays unpublished.
+The 410 for an unpublished page carries the page's `redirect` as an extension member of the problem. A site that renders on request answers its visitor with 301 and `redirect.to`, or with 410 when `redirect` is `null`, so it needs one call.
+
+A Next.js page cannot answer 410, so the guide's Next.js recipe has two files. Its page reads the single page and works alone: it answers an unpublished page with `notFound()`, a 404, or with `permanentRedirect()` to `redirect.to`, a 308, which search engines treat as a 301. It keeps the API's status with the body for 5 minutes, through `unstable_cache`, so a 410 replaces a kept 200. A 404 and a failure throw and are never kept, so a page published for the first time shows at once, and an outage keeps the last answer the page kept, or answers 500 for a page it never kept. Its `proxy.ts` adds the 410 and the 301. On each server it reads `/redirects` with the key, every page of it, at most every 5 minutes and only when a request comes. It keeps the set in memory, keeps the last set when a read fails, and answers before the page renders.
+
+So a page unpublished since the page last read it gets the old page for up to 5 minutes, and once more to the first visitor after them, while the kept answer refreshes. Then it gets the proxy's 410 or 301 once the proxy has read again, else the page's 404 or 308. Without the proxy it gets the old page as long, then the 404 or the 308. A page published again since the proxy's last read still gets the 301 or the 410 until the proxy's next read.
+
+An unpublished page is in neither the list nor the sitemaps. It is in `/redirects` for as long as it stays unpublished.
 
 ## Sync
 
@@ -77,7 +85,7 @@ A site that keeps a copy of the pages, in a build or a cache of its own, asks fo
 
 An answer holds every page that changed since the token, once, in its state now: a page object when it is live, a removal record when it is not. A client tells them apart by `status`, `published` or `unpublished`. A page unpublished and published again within one window comes back as a page object only.
 
-A page changed when its published version changed, when its `alternates` changed because another language version of it was published or unpublished, when it was unpublished, when the owner edited in Settings an author, the organization, a kind or a locale the page shows, or when the crawl filled in the organization's empty logo or profiles. The token holds a time a few seconds before the server's clock, so a page can arrive twice and never not at all; a client keys pages by `id`. A token older than 30 days, or not a token at all, gets 410 with `code` `sync_token_invalid`, and the client syncs again from `start`.
+A page changed when its published version changed, when its `alternates` changed because another language version of it was published or unpublished, when it was unpublished, when the owner edited in Settings an author, the organization, a kind or a locale the page shows, or when a crawl changed what the page shows, as steps 4 and 6 of the crawl in [`workflow.md`](workflow.md) say. The token holds a time 5 seconds before our server, by its own clock, read the database for the last page, which a cached answer keeps from when it was made, so a page can arrive twice and never not at all; a client keys pages by `id`. A token older than 30 days, or not a token at all, gets 410 with `code` `sync_token_invalid`, and the client syncs again from `start`.
 
 ## Page object
 
@@ -95,7 +103,7 @@ A page changed when its published version changed, when its `alternates` changed
 | `metaTitle`                      | `<title>`                                                                                                                                                                                                                                                                                                                                                                                             |
 | `metaDescription`                | meta description                                                                                                                                                                                                                                                                                                                                                                                      |
 | `excerpt`                        | one paragraph for lists and Open Graph                                                                                                                                                                                                                                                                                                                                                                |
-| `body`                           | `{ markdown, html }`, both from the same source and cleaned alike: the markdown has raw HTML removed, only the link schemes of the HTML kept and a `#` heading demoted to `##`; the HTML keeps the contract below                                                                                                                                                                                     |
+| `body`                           | `{ markdown, html }`, both from the same source and cleaned alike: the markdown has raw HTML and images removed, only the link schemes of the HTML kept and a `#` heading demoted to `##`; the HTML keeps the contract below                                                                                                                                                                          |
 | `toc`                            | list of `{ id, text, level }` from the headings of `body.html`, the footnotes heading left out, for a table of contents                                                                                                                                                                                                                                                                               |
 | `faq`                            | list of `{ question, answer }`                                                                                                                                                                                                                                                                                                                                                                        |
 | `sources`                        | list of `{ title, url }` from the research                                                                                                                                                                                                                                                                                                                                                            |
@@ -110,7 +118,7 @@ A page changed when its published version changed, when its `alternates` changed
 
 A page has no image. Google advises against a logo or an image with text as an article's image, so neither stands in, and the template keeps its own default `og:image`. An image per page waits in the backlog. Related pages for internal linking wait in the backlog too, as a new field once they have a rule.
 
-The template inserts `body.html`, which the guide recommends, or renders `body.markdown`, and renders `faq` and `sources` after it where it wants them, because the body holds neither. It puts `jsonLd` in `<script type="application/ld+json">`, `alternates` in `<link>` tags and `openGraph` in `<meta property>` tags. So that the JSON-LD stays true, it shows what the JSON-LD says: the H1 equal to `title`, the byline linked to `author.url`, `publishedAt`, `updatedAt` when it differs, and `breadcrumbs`. It computes nothing itself.
+The template inserts `body.html`, which the guide recommends, or renders `body.markdown`, and renders `faq` and `sources` after it where it wants them, because the body holds neither. It puts `jsonLd` in `<script type="application/ld+json">`, `alternates` in `<link>` tags and `openGraph` in `<meta property>` tags, and escapes `<` in `jsonLd` as `\u003c`, so no value can close the script tag. So that the JSON-LD stays true, it shows what the JSON-LD says: the H1 equal to `title`, the byline linked to `author.url`, `publishedAt`, `updatedAt` when it differs, and `breadcrumbs`. It computes nothing itself.
 
 ## Body HTML
 
@@ -131,15 +139,15 @@ A template styles the body through a wrapper, the way `prose` does. A site may s
 
 `GET /sitemaps/{host}.xml` is a ready sitemap for one host of the project, with no key, because it holds only URLs that are public anyway. The site names it in the robots.txt of that host, `Sitemap: https://citequill.com/api/v1/sites/{siteId}/sitemaps/{host}.xml`, and Google accepts a sitemap on another host named so, without Search Console. Each host gets its own file, because a host's robots.txt vouches only for its own URLs. A `<url>` has `loc`, `lastmod` and an `xhtml:link` for every alternate, the page itself and `x-default` included, all of them live.
 
-One XML file stays under 4 MB and under 50 000 URLs, whichever comes first, because Vercel refuses an answer over 4.5 MB. When a host's pages fit in one file, `{host}.xml` is that `urlset`. When they do not, `{host}.xml` is a sitemap index of `/sitemaps/{host}/1.xml`, `/sitemaps/{host}/2.xml` and so on. An unknown `siteId` or a host outside the project's locales gets 404.
+One XML file holds at most 4 000 000 bytes and 50 000 URLs, whichever comes first, because Vercel refuses an answer over 4.5 MB. When a host's pages fit in one file, `{host}.xml` is that `urlset`. When they do not, `{host}.xml` is a sitemap index of `/sitemaps/{host}/1.xml`, `/sitemaps/{host}/2.xml` and so on. File 1 also answers when one file holds the host's pages, and a number past the last file gets 404. An unknown `siteId` gets 404 `site_not_found`, and a host outside the project's locales 404 `host_not_found`. A host among the locales with no live page gets an empty `urlset`.
 
 ## The guide
 
-The documentation is public pages at `citequill.com/docs`, in English, with the guide and the reference, which Scalar renders from `openapi.json`. The reference sends no live requests, because a key belongs on a server and `v1` sends no CORS headers. Settings link to the documentation and show every example with the project's `siteId`.
+The documentation is public pages at `citequill.com/docs`, in English, with the guide and the reference at `citequill.com/docs/reference`, which Scalar renders from `openapi.json`. The page loads one pinned version of Scalar's bundle from jsDelivr, which the browser checks against its SHA-384 hash with Subresource Integrity, and no fonts. Its `Content-Security-Policy` lets it run that bundle and its own start script alone, and fetch only the OpenAPI document. The reference has its test request and client buttons turned off, because a key belongs on a server. Settings link to the documentation and show every example with the project's `siteId`.
 
 The guide starts with one `curl` request. Then it gives one recipe per kind of site:
 
-- server code that reads the API when a page is requested, with examples in Next.js, PHP and Python
+- server code that reads the API when a page is requested, with examples in PHP, Python and Next.js, the last as a page and a proxy
 - a build that reads the API, and the webhook that starts the next build through a deploy hook
 - hosted builders, with what works today and what waits for the push connectors
 
@@ -176,7 +184,7 @@ Citequill sends one `POST` per publishing action, the way [Standard Webhooks](ht
 
 - `type` is `page.published`, `page.updated`, `page.unpublished` or `webhook.test`. A publication sends `page.published` when a page of the action was not live before, a page published again after Unpublish included, and `page.updated` when every page of it was. Unpublish sends `page.unpublished`.
 - `data.pages` lists the pages the action published, changed or unpublished: all the group's versions when the action published a group. An unpublished page adds its `redirect`, the same object as in a removal record. `data.updated` lists only the live versions outside the action whose `alternates` it changed.
-- An edit in Settings of an author, the organization, a kind or a locale sends one `page.updated` with `data.pages` empty and the live pages it touches in `data.updated`. `webhook.test` has `data: { pages: [], updated: [] }`.
+- An edit in Settings of an author, the organization, a kind or a locale sends one `page.updated` with `data.pages` empty and the live pages it touches in `data.updated`. So does a crawl that changes what the live pages show with no publish, as steps 4 and 6 of the crawl in [`workflow.md`](workflow.md) say. A site that rebuilds on the webhook would otherwise miss the change. `webhook.test` has `data: { pages: [], updated: [] }`.
 - The headers are `webhook-id`, the event's id, the same on every attempt and on Redeliver, so a receiver drops a duplicate; `webhook-timestamp`, in Unix seconds; and `webhook-signature`, `v1,` and the base64 HMAC-SHA256 of `id.timestamp.body`. The HMAC key is the secret's bytes, base64-decoded after `whsec_`. Each attempt and each Redeliver is signed again with its own `webhook-timestamp`; the body and `webhook-id` stay the same. A receiver refuses a timestamp more than 5 minutes off its clock, which stops a replay.
 - The secret is `whsec_` and 32 random bytes in base64, shown once in Settings. Rotate the secret shows a new one, and both sign every delivery for 24 hours, so a receiver switches with no failed delivery. During a rotation `webhook-signature` holds both signatures, separated by a space: `v1,<sig1> v1,<sig2>`.
 - The payload is thin: the receiver reads the page from the API.

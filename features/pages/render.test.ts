@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderMarkdown } from '@/features/pages/render';
+import { cleanMarkdown, renderMarkdown } from '@/features/pages/render';
 
 function html(markdown: string, locale = 'en') {
     return renderMarkdown(markdown, locale).html;
@@ -187,5 +187,73 @@ describe('renderMarkdown', () => {
             toc: [],
             wordCount: 0,
         });
+    });
+});
+
+describe('cleanMarkdown', () => {
+    it("drops a task list's checkbox, as the HTML does", () => {
+        expect(cleanMarkdown('- [x] done\n- [ ] todo\n')).toBe(
+            '* done\n* todo\n',
+        );
+    });
+
+    it('leaves no stray space or empty paragraph where an image was', () => {
+        expect(cleanMarkdown('Hello ![a](b.png)\n\n![c](d.png)\n\nNext.')).toBe(
+            'Hello\n\nNext.\n',
+        );
+    });
+
+    it('demotes a # heading to ##', () => {
+        expect(cleanMarkdown('# Deload\n\nRest a week.')).toBe(
+            '## Deload\n\nRest a week.\n',
+        );
+    });
+
+    it('drops raw HTML, block and inline', () => {
+        const clean = cleanMarkdown(
+            '<script>alert(1)</script>\n\nRest <b>a week</b>.',
+        );
+
+        expect(clean).not.toContain('<');
+        expect(clean).toContain('Rest a week.');
+    });
+
+    it('keeps the text of a link whose scheme the HTML does not allow', () => {
+        expect(cleanMarkdown('[Run](javascript:alert(1)) now.')).toBe(
+            'Run now.\n',
+        );
+
+        expect(cleanMarkdown('[Run][x] now.\n\n[x]: javascript:alert(1)')).toBe(
+            'Run now.\n',
+        );
+    });
+
+    it('keeps http, https, mailto, tel, relative and fragment links', () => {
+        const clean = cleanMarkdown(
+            '[a](https://acme.com) [b](mailto:a@acme.com) [c](tel:+48123) [d](/pricing) [e](#faq)',
+        );
+
+        for (const url of [
+            'https://acme.com',
+            'mailto:a@acme.com',
+            'tel:+48123',
+            '/pricing',
+            '#faq',
+        ]) {
+            expect(clean).toContain(`(${url})`);
+        }
+    });
+
+    it('drops images, as the HTML does', () => {
+        expect(cleanMarkdown('Look ![a chart](https://acme.com/a.png).')).toBe(
+            'Look .\n',
+        );
+    });
+
+    it('keeps tables and footnotes', () => {
+        const clean = cleanMarkdown(`| a |\n| - |\n| 1 |\n\n${footnoted}`);
+
+        expect(clean).toContain('| a |');
+        expect(clean).toContain('[^1]: A study from 2024.');
     });
 });
